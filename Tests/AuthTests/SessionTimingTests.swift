@@ -5,7 +5,7 @@ import Helpers
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 @Suite
 struct SessionTimingTests {
@@ -154,16 +154,17 @@ struct SessionTimingTests {
         Self.body(expiresIn: "3600", expiresAt: "1750003600")
       )
     }
+    var configuration = AuthClient.Configuration(
+      url: clientURL,
+      storageKey: uniqueStorageKey(),
+      storage: InMemoryAuthStorage(),
+      autoRefresh: .manual,
+      observesAppLifecycle: false,
+      http: .init(transport: transport)
+    )
+    configuration.now = { now }
     let sut = try AuthClient(
-      configuration: .init(
-        url: clientURL,
-        storageKey: uniqueStorageKey(),
-        storage: InMemoryAuthStorage(),
-        autoRefresh: .manual,
-        observesAppLifecycle: false,
-        http: .init(transport: transport),
-        now: { now }
-      )
+      configuration: configuration
     )
 
     let session = try await sut.signIn(email: "user@example.com", password: "secret")

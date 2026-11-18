@@ -126,7 +126,8 @@ struct StorageBucketPathTests {
   @Test(
     arguments: operations,
     [
-      ("/folder//my file+#?%.png/", "folder/my file+#?%.png", "folder/my%20file%2B%23%3F%25.png"),
+      ("/folder//my file+#?%.png", "folder/my file+#?%.png", "folder/my%20file%2B%23%3F%25.png"),
+      ("/folder//sub/", "folder/sub/", "folder/sub/"),
       ("café/文件.png", "café/文件.png", "caf%C3%A9/%E6%96%87%E4%BB%B6.png"),
     ]
   )
@@ -153,8 +154,8 @@ struct StorageBucketPathTests {
 
   @Test(
     arguments: operations.filter { $0.name != "list" && $0.name != "publicURL" },
-    ["", "/", "a/../b.png", "./a.png"])
-  func refusesAnInvalidPathBeforeSending(operation: Operation, input: String) async throws {
+    ["a/../b.png", "./a.png", "a/./b.png", ".."])
+  func refusesADotSegmentBeforeSending(operation: Operation, input: String) async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
     let bucket = try makeSUT(response: operation.response, requests: requests, bodies: bodies)

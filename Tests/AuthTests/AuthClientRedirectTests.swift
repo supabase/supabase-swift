@@ -11,6 +11,13 @@ import Testing
 struct AuthClientRedirectTests {
   private let race = Race()
   private let callback = URL(string: "com.example.app://callback?code=one-time-code")!
+  /// Tokens of another account, as a crafted link carries them.
+  private static let attackerLink = URL(
+    string: """
+      com.example.app://callback#access_token=attacker-access&refresh_token=attacker-refresh\
+      &expires_in=3600&token_type=bearer
+      """
+  )!
 
   init() {
     race.answerSignIn { [race] body in
@@ -152,7 +159,7 @@ struct AuthClientRedirectTests {
   @Test
   func implicitRecoveryLinkCommitsOnce() async throws {
     race.answerUser(User(fromMockNamed: "user"))
-    let client = race.makeClient()
+    let client = race.makeClient(acceptsImplicitTokens: true)
     let link = URL(
       string: """
         com.example.app://callback#access_token=implicit-access&refresh_token=implicit-refresh\
@@ -172,6 +179,56 @@ struct AuthClientRedirectTests {
     }
 
     #expect(events == [.passwordRecovery])
+  }
+
+  @Test
+  func anImplicitRedirectIsRefusedByDefault() async throws {
+    race.answerUser(User(fromMockNamed: "user"))
+    let client = race.makeClient()
+    let events = try await events(on: client) {
+      await #expect {
+        try await client.handleRedirect(Self.attackerLink)
+      } throws: { ($0 as? AuthError)?.kind == .oauthFlowFailed }
+    }
+
+    #expect(events.isEmpty)
+    #expect(client.currentSession?.accessToken == "sentinel-access")
+    #expect(userRequestCount() == 0)
+    #expect(await race.relaunch().currentSession?.accessToken == "sentinel-access")
+  }
+
+  @Test
+  func anImplicitCallbackIsRefusedByDefault() async throws {
+    race.answerUser(User(fromMockNamed: "user"))
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in Self.attackerLink }
+
+    await #expect {
+      try await client.signInWithOAuth(.github, presenter: presenter)
+    } throws: { ($0 as? AuthError)?.kind == .oauthFlowFailed }
+
+    #expect(client.currentSession == nil)
+    #expect(userRequestCount() == 0)
+    #expect(try pendingFlowCount() == 0)
+  }
+
+  @Test(arguments: [
+    "https://attacker.example/callback?code=c",
+    "com.example.other://callback?code=c",
+    "com.example.app://elsewhere?code=c",
+  ])
+  func aCallbackThatDoesNotReachTheRedirectURLIsRefused(callback: String) async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("coded")) }
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in URL(string: callback)! }
+
+    await #expect {
+      try await client.signInWithOAuth(.github, presenter: presenter)
+    } throws: { ($0 as? AuthError)?.kind == .oauthFlowFailed }
+
+    #expect(client.currentSession == nil)
+    #expect(race.requestCount(grantType: "pkce") == 0)
+    #expect(try pendingFlowCount() == 0)
   }
 
   @Test
@@ -664,12 +721,12 @@ struct AuthClientRedirectTests {
 
   @Test(
     arguments: [
-      ("myapp://cb", "The callback URL is not an auth redirect."),
+      ("com.example.app://callback", "The callback URL is not an auth redirect."),
       (
-        "myapp://cb#message=Confirm&sb=",
+        "com.example.app://callback#message=Confirm&sb=",
         "The callback URL reports a pending email change, not a session."
       ),
-      ("myapp://cb?error=access_denied&error_description=x", "x"),
+      ("com.example.app://callback?error=access_denied&error_description=x", "x"),
     ]
   )
   func aCallbackWithoutASessionThrowsAndRemovesTheFlow(
@@ -730,7 +787,7 @@ struct AuthClientRedirectTests {
     let client = race.makeClient()
     let presenter = ClosurePresenter { _, _ in
       await presented.pass()
-      return URL(string: "myapp://cb?code=c")!
+      return URL(string: "com.example.app://callback?code=c")!
     }
 
     let signIn = Task { try await client.signInWithOAuth(.github, presenter: presenter) }
@@ -746,7 +803,7 @@ struct AuthClientRedirectTests {
   func anImplicitRedirectAfterASignOutDiscardsTheSession() async throws {
     let gate = Gate()
     race.answerSignOut()
-    let client = race.makeClient()
+    let client = race.makeClient(acceptsImplicitTokens: true)
     try await client.signIn(email: "a@example.com", password: "secret")
     race.answerUser(through: gate, Race.user(nickname: "implicit"))
 
@@ -769,7 +826,7 @@ struct AuthClientRedirectTests {
   func aTransportErrorInThePresentedExchangeKeepsTheFlow() async throws {
     race.answerCodeExchange { throw URLError(.timedOut) }
     let client = race.makeClient()
-    let presenter = ClosurePresenter { _, _ in URL(string: "myapp://cb?code=c")! }
+    let presenter = ClosurePresenter { _, _ in URL(string: "com.example.app://callback?code=c")! }
 
     await #expect {
       try await client.signInWithOAuth(.github, presenter: presenter)
@@ -779,9 +836,9 @@ struct AuthClientRedirectTests {
   }
 
   @Test
-  func anImplicitCallbackSignsInAndRemovesTheFlow() async throws {
+  func anAcceptedImplicitCallbackSignsInAndRemovesTheFlow() async throws {
     race.answerUser(User(fromMockNamed: "user"))
-    let client = race.makeClient()
+    let client = race.makeClient(acceptsImplicitTokens: true)
     let presenter = ClosurePresenter { _, _ in
       URL(
         string: """
@@ -891,7 +948,7 @@ struct AuthClientRedirectTests {
   func signOutForgetsHandledRedirects() async throws {
     race.answerUser(User(fromMockNamed: "user"))
     race.answerSignOut()
-    let client = race.makeClient()
+    let client = race.makeClient(acceptsImplicitTokens: true)
     let link = URL(
       string: """
         com.example.app://callback#access_token=implicit-access&refresh_token=implicit-refresh\

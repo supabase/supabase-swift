@@ -15,11 +15,11 @@
   import Foundation
   import Logging
   import OSLog
-  @_spi(Experimental) import Supabase
+  @_spi(Experimental) @_spi(Testing) import Supabase
   import TestHelpers
   import Testing
   @testable import Helpers
-  @testable import Realtime
+  @_spi(Testing) @testable import Realtime
   @Suite(
     .serialized,
     .mainSerialExecutorSerialized,
@@ -32,35 +32,30 @@
     let client: SupabaseClient
     let client2: SupabaseClient
     init() async throws {
-      client = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL)!,
-        supabaseKey: DotEnv.supabasePublishableKey,
-        configuration: SupabaseClient.Configuration(
-          auth: .init(storage: InMemoryTestStorage()),
-          global: .init(
-            logger: Logging.Logger(label: "client1") {
-              OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-            },
-            clock: testClock
-          )
-        )
-      )
-      client2 = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL)!,
-        supabaseKey: DotEnv.supabasePublishableKey,
-        configuration: SupabaseClient.Configuration(
-          auth: .init(storage: InMemoryTestStorage()),
-          global: .init(
-            logger: Logging.Logger(label: "client2") {
-              OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-            },
-            clock: testClock
-          )
-        )
-      )
+      client = try Self.makeClient(label: "client1", clock: testClock)
+      client2 = try Self.makeClient(label: "client2", clock: testClock)
       _ = try? await client.from("key_value_storage").delete().neq("key", value: UUID().uuidString)
         .execute()
     }
+    private static func makeClient(label: String, clock: TestClock<Duration>) throws
+      -> SupabaseClient
+    {
+      var global = SupabaseClient.Configuration.Global(
+        logger: Logging.Logger(label: label) {
+          OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
+        }
+      )
+      global.clock = clock
+      return try SupabaseClient(
+        supabaseURL: URL(string: DotEnv.supabaseURL)!,
+        supabaseKey: DotEnv.supabasePublishableKey,
+        configuration: SupabaseClient.Configuration(
+          auth: .init(storage: InMemoryTestStorage()),
+          global: global
+        )
+      )
+    }
+
     deinit {
       let client = client
       let client2 = client2
@@ -304,18 +299,19 @@
       // A heartbeat goes out only when the test advances `clock`, so no heartbeat can start
       // while `late` registers.
       let clock = TestClock<Duration>()
+      var configuration = RealtimeClient.Configuration(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        headers: [
+          .apikey: DotEnv.supabasePublishableKey,
+          .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
+        ],
+        heartbeatInterval: .seconds(1),
+        disconnectOnEmptyChannelsAfter: .seconds(3600),
+        observesAppLifecycle: false
+      )
+      configuration.clock = clock
       let realtime = try RealtimeClient(
-        configuration: RealtimeClient.Configuration(
-          url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
-          headers: [
-            .apikey: DotEnv.supabasePublishableKey,
-            .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
-          ],
-          heartbeatInterval: .seconds(1),
-          disconnectOnEmptyChannelsAfter: .seconds(3600),
-          observesAppLifecycle: false,
-          clock: clock
-        )
+        configuration: configuration
       )
       try await realtime.connect()
 
@@ -607,23 +603,8 @@
         // Dropping the stream removes the binding, so it must outlive the subscribe.
         let changes = await channel.postgresChanges(
           event: .insert, schema: "public", table: "no_such_table")
-        let events = await channel.events()
 
-        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
-        #expect(error?.kind == .server)
-        #expect(error?.isRetryable == false)
-        #expect(await channel.status == .failed)
-
-        let event = try await withTimeout(.seconds(5)) {
-          await events.first(where: {
-            if case .postgresChangesFailed = $0 { true } else { false }
-          })
-        }
-        guard case .postgresChangesFailed(let reason)? = event else {
-          Issue.record("Expected postgresChangesFailed, got \(String(describing: event))")
-          return
-        }
-        #expect(reason.contains("no_such_table"))
+        try await expectSubscribeRefused(channel, containing: "no_such_table")
         withExtendedLifetime(changes) {}
       }
     }
@@ -808,7 +789,10 @@
         let changes = try await channel.postgresChanges(
           of: KeyValueStorage.self,
           event: .insert,
-          where: { $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) }
+          // `!raw("not.eq.x")` renders `key=eq.x`, so the server gets plain conditions.
+          where: {
+            $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) && !$0.key.raw("not.eq.\(matchedKey)")
+          }
         )
         let events = await channel.events()
 
@@ -834,6 +818,67 @@
 
         await channel.unsubscribe()
       }
+    }
+
+    /// A filter the server refuses.
+    enum RefusedFilter: CaseIterable, Sendable {
+      case unsupportedOperator, jsonPath, doubleNegation, missingValue, segmentWithoutColumn,
+        emptySegment
+
+      /// The filter, and the part of the server's message that names what it refuses.
+      var refusal:
+        (filter: (KeyValueStorage.Columns) -> _PostgrestFilter<KeyValueStorage>, part: String)
+      {
+        switch self {
+        case .unsupportedOperator:  // key=like(all).{a%}
+          ({ $0.key.likeAllOf(["a%"]) }, "like(all)")
+        case .jsonPath:  // value->>"k"=eq.x
+          ({ $0.value.jsonText("k").eq("x") }, "invalid column for filter value->>")
+        case .doubleNegation:  // key=not.not.eq.a
+          ({ $0.key.raw("not.not.eq.a") }, #"Error parsing `filter` params: ["not", "eq.a"]"#)
+        case .missingValue:  // key=eq
+          ({ $0.key.raw("eq") }, #"Error parsing `filter` params: ["eq"]"#)
+        case .segmentWithoutColumn:  // key=eq.a,undefined
+          ({ $0.key.raw("eq.a,undefined") }, #"Error parsing `filter` params: ["undefined"]"#)
+        case .emptySegment:  // key=eq.a,
+          ({ $0.key.raw("eq.a,") }, "filter must not contain empty segments")
+        }
+      }
+    }
+
+    /// The SDK sends every typed filter the Realtime grammar can write and lets the server judge
+    /// it. The server refuses a bad filter after the join reply, so `subscribe()` throws the
+    /// server's message.
+    @Test(arguments: RefusedFilter.allCases)
+    func aTypedFilterTheServerRefusesFailsTheSubscribe(_ refused: RefusedFilter) async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-typed-refused-filter")
+        let changes = try await channel.postgresChanges(
+          of: KeyValueStorage.self, event: .insert, where: refused.refusal.filter)
+
+        try await expectSubscribeRefused(channel, containing: refused.refusal.part)
+        withExtendedLifetime(changes) {}
+        await client.realtime.removeChannel(channel)
+      }
+    }
+
+    /// A live query whose filter the server refuses ends with the server's error.
+    @Test
+    func streamEndsWithTheServerErrorForAFilterTheServerRefuses() async throws {
+      let client = client
+      let stream = client.stream(
+        of: KeyValueStorage.self, where: { $0.value.jsonText("k").eq("x") })
+
+      let error = await #expect(throws: RealtimeError.self) {
+        try await withTimeout(.seconds(20)) {
+          for try await _ in stream {}
+        }
+      }
+      #expect(error?.kind == .server)
+      #expect(error?.message.contains("invalid column for filter value->>") == true)
     }
 
     @Test
@@ -1206,16 +1251,13 @@
         let anaStates = await ana.presenceStates()
         try await bob.track(["name": "Bob"] as JSONObject)
 
-        let (first, withBob) = try await withTimeout(.seconds(5)) {
-          () async -> (PresenceState?, PresenceState?) in
-          var states = anaStates.makeAsyncIterator()
-          let first = await states.next()
-          while let state = await states.next() {
-            if state.entries["bob"] != nil { return (first, state) }
-          }
-          return (first, nil)
+        // The stream keeps only the latest state, so the replayed state may be skipped when Bob's
+        // arrives first. Wait for the state with Bob and check that it still has Ana.
+        let withBob = try await withTimeout(.seconds(5)) { () async -> PresenceState? in
+          for await state in anaStates where state.entries["bob"] != nil { return state }
+          return nil
         }
-        #expect(first?.entries["ana"] != nil)
+        #expect(withBob?.entries["ana"] != nil)
         #expect(withBob?.entries["bob"]?.first?.payload == ["name": "Bob"])
 
         await ana.unsubscribe()
@@ -1362,16 +1404,17 @@
     @Test
     func httpSendSendsTheConfiguredHeaders() async throws {
       let recorder = HeaderRecorder()
+      var global = SupabaseClient.Configuration.Global(
+        headers: [HTTPField.Name("X-Integration-Test")!: "httpSend"],
+        http: .init(middlewares: [recorder])
+      )
+      global.clock = testClock
       let client = try SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
-          global: .init(
-            headers: [HTTPField.Name("X-Integration-Test")!: "httpSend"],
-            http: .init(middlewares: [recorder]),
-            clock: testClock
-          )
+          global: global
         )
       )
 
@@ -1439,14 +1482,15 @@
     private func makeRealtimeClient(
       accessToken: @escaping @Sendable () async throws -> String?
     ) throws -> RealtimeClient {
-      try RealtimeClient(
-        configuration: RealtimeClient.Configuration(
-          url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
-          headers: [.apikey: DotEnv.supabasePublishableKey],
-          observesAppLifecycle: false,
-          accessToken: accessToken,
-          clock: testClock
-        )
+      var configuration = RealtimeClient.Configuration(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        headers: [.apikey: DotEnv.supabasePublishableKey],
+        observesAppLifecycle: false,
+        accessToken: accessToken
+      )
+      configuration.clock = testClock
+      return try RealtimeClient(
+        configuration: configuration
       )
     }
 
@@ -1473,6 +1517,32 @@
           try await Task.sleep(for: .milliseconds(50))
         }
       }
+    }
+
+    /// Expects the server to refuse the channel's Postgres changes binding: `subscribe()` throws a
+    /// `.server` error that is not retryable, the channel ends `failed`, and `events()` carries
+    /// the server's message.
+    private func expectSubscribeRefused(
+      _ channel: RealtimeChannel, containing part: String
+    ) async throws {
+      let events = await channel.events()
+
+      let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+      #expect(error?.kind == .server)
+      #expect(error?.isRetryable == false)
+      #expect(error?.message.contains(part) == true, "\(String(describing: error))")
+      #expect(await channel.status == .failed)
+
+      let event = try await withTimeout(.seconds(5)) {
+        await events.first(where: {
+          if case .postgresChangesFailed = $0 { true } else { false }
+        })
+      }
+      guard case .postgresChangesFailed(let reason)? = event else {
+        Issue.record("Expected postgresChangesFailed, got \(String(describing: event))")
+        return
+      }
+      #expect(reason.contains(part))
     }
 
     private func subscribeMany(_ channels: [RealtimeChannel]) async throws {

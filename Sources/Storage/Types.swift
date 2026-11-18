@@ -9,7 +9,9 @@ public import HTTPTypes
 /// let files = try await storage.from("avatars").list(options: options)
 /// ```
 ///
-/// A `nil` field takes the server default: the first 100 entries, sorted by name ascending.
+/// A `nil` field is left out of the request, so Storage applies its own default: the first 100
+/// entries, sorted by name ascending. An ``order`` without a ``sortBy`` sorts by
+/// ``ObjectSortColumn/name``, because Storage needs a column for every order.
 ///
 /// ## Topics
 ///
@@ -31,16 +33,16 @@ public import HTTPTypes
 /// - ``versions``
 /// - ``deleteMarkers``
 public struct ListOptions: Sendable {
-  /// Maximum number of entries to return. Defaults to `100`.
+  /// Maximum number of entries to return. When `nil`, Storage returns up to 100.
   public var limit: Int?
 
-  /// Zero-based offset used for paginating results. Defaults to `0`.
+  /// Zero-based offset used for paginating results. When `nil`, Storage starts at `0`.
   public var offset: Int?
 
-  /// The column to sort by. Defaults to ``ObjectSortColumn/name``.
+  /// The column to sort by. When `nil`, Storage sorts by ``ObjectSortColumn/name``.
   public var sortBy: ObjectSortColumn?
 
-  /// The sort direction. Defaults to ``SortOrder/ascending``.
+  /// The sort direction. When `nil`, Storage sorts in ``SortOrder/ascending`` order.
   public var order: SortOrder?
 
   /// A substring filter applied to names within the listed folder.
@@ -190,13 +192,14 @@ public struct UploadOptions: Sendable {
   public var cacheControl: CacheControl
 
   /// When `true`, ``StorageBucket/upload(path:data:options:progress:)`` overwrites an existing
-  /// file at the same path. When `false` (the default), it throws
-  /// ``StorageError/Code/keyAlreadyExists``.
+  /// file at the same path. When `false`, it throws ``StorageError/Code/keyAlreadyExists``.
+  /// When `nil` (the default), the SDK sends no `x-upsert` header and Storage applies its own
+  /// default, which does not overwrite.
   ///
   /// ``StorageBucket/update(path:data:options:progress:)`` always overwrites and ignores this
   /// flag, and ``StorageBucket/uploadToSignedURL(path:token:data:options:progress:)`` takes it
   /// from the token.
-  public var upsert: Bool
+  public var upsert: Bool?
 
   /// Arbitrary key-value metadata to attach to the uploaded object. You can later use this to
   /// filter or search for files.
@@ -211,13 +214,14 @@ public struct UploadOptions: Sendable {
   /// - Parameters:
   ///   - contentType: MIME type for the `Content-Type` header. Inferred from the extension when `nil`.
   ///   - cacheControl: The `Cache-Control` header to store with the object. Defaults to one hour.
-  ///   - upsert: Whether to overwrite an existing file. Defaults to `false`.
+  ///   - upsert: Whether to overwrite an existing file. When `nil`, Storage decides, and it does
+  ///     not overwrite.
   ///   - metadata: Arbitrary metadata key-value pairs to attach to the object.
   ///   - headers: Extra HTTP headers for the upload request.
   public init(
     contentType: String? = nil,
     cacheControl: CacheControl = .maxAge(.seconds(3600)),
-    upsert: Bool = false,
+    upsert: Bool? = nil,
     metadata: JSONObject? = nil,
     headers: HTTPFields = [:]
   ) {
@@ -554,7 +558,7 @@ public struct UploadedObject: Hashable, Sendable {
   /// upload, which Storage answers without one.
   public var id: UUID?
 
-  /// The normalized file path within the bucket, as provided to the upload call.
+  /// The file path within the bucket, normalized as the gateway stores it.
   public var path: String
 
   /// The full storage key including the bucket name, e.g. `"avatars/user123.png"`.

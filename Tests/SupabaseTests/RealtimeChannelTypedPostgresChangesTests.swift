@@ -74,6 +74,9 @@ struct RealtimeChannelTypedPostgresChangesTests {
       (c.title.raw("eq.milk"), "title=eq.milk"),
       (!c.title.raw("eq.milk"), "title=not.eq.milk"),
       (c.title.raw("not.ilike.%milk%"), "title=not.ilike.%milk%"),
+      (!c.title.raw("not.eq.milk"), "title=eq.milk"),
+      (c.title.raw("not.not.eq.milk"), "title=not.not.eq.milk"),
+      (c.title.raw("eq.a,"), "title=eq.a,"),
       (c.priority.raw("in.(1,2)"), "priority=in.(1,2)"),
       (Filter.raw("title", "isdistinct.milk"), "title=isdistinct.milk"),
       (
@@ -81,6 +84,14 @@ struct RealtimeChannelTypedPostgresChangesTests {
         "id=eq.1,is_done=is.false,priority=not.gt.3"
       ),
       (c.id.eq(1) && (c.priority.gt(3) && c.title.eq("x")), "id=eq.1,priority=gt.3,title=eq.x"),
+      // The server judges operators, columns, and the raw form. The SDK only renders them.
+      (c.tags.contains(["home"]), "tags=cs.{home}"),
+      (!c.tags.contains(["home"]), "tags=not.cs.{home}"),
+      (c.title.likeAllOf(["a%"]), "title=like(all).{a%}"),
+      (c.data.jsonText("k").eq("x"), #"data->>"k"=eq.x"#),
+      (c.tags.raw("cs.{home}"), "tags=cs.{home}"),
+      (c.title.raw("eq"), "title=eq"),
+      (Filter.raw("priority::text", "eq.1"), "priority::text=eq.1"),
     ]
   }()
 
@@ -96,19 +107,12 @@ struct RealtimeChannelTypedPostgresChangesTests {
       (c.id.eq(1) && (c.id.eq(2) || c.id.eq(3)), "cannot use `||`"),
       (!(c.id.eq(1) && c.id.eq(2)), "cannot negate a group"),
       (!(c.id.eq(1) || c.id.eq(2)), "cannot negate a group"),
-      (c.tags.contains(["home"]), "do not support the `cs` operator"),
-      (c.title.likeAllOf(["a%"]), "do not support the `like(all)` operator"),
-      (c.data.jsonText("k").eq("x"), "JSON path"),
       (c.data.eq(.number(JSONNumber("1e-400")!)), "has no wire form"),
-      (c.tags.raw("cs.{home}"), "do not support the `cs` operator"),
-      (c.title.raw("eq"), "is not in the `operator.value` form"),
-      (!c.title.raw("not.eq.milk"), "cannot negate `title=not.eq.milk` again"),
-      (Filter.raw("priority::text", "eq.1"), "cast `priority::text`"),
     ]
   }()
 
   @Test(arguments: rejections)
-  func rejectsFiltersRealtimeCannotRun(filter: Filter, reason: String) {
+  func rejectsFiltersTheRealtimeGrammarCannotWrite(filter: Filter, reason: String) {
     #expect {
       try filter.realtimeConditions()
     } throws: { error in
@@ -117,7 +121,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
   }
 
   @Test
-  func throwsAnInvalidRequestForAFilterRealtimeCannotRun() async throws {
+  func throwsAnInvalidRequestForAFilterTheRealtimeGrammarCannotWrite() async throws {
     let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!)
@@ -194,6 +198,55 @@ struct RealtimeChannelTypedPostgresChangesTests {
           dueDate: Date(timeIntervalSince1970: 1_793_439_000), tags: ["home"]
         )
     )
+  }
+
+  @Test
+  func decodesRowsWithTheClientTypedRowDecoderByDefault() async throws {
+    var configuration = RealtimeClient.Configuration(
+      url: URL(string: "https://localhost:54321/realtime/v1")!)
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    configuration.typedRowDecoder = decoder
+    let client = try RealtimeClient(configuration: configuration)
+    let channel = await client.channel("todos")
+
+    let changes = try await channel.postgresChanges(of: RealtimeTodo.self, event: .insert)
+
+    await client.installSubscribedRecord(
+      of: channel,
+      serverChanges: [
+        PostgresJoinConfig(event: .insert, schema: "public", table: "todos", id: 1)
+      ])
+    await client.apply(
+      .frame(
+        RealtimeMessage(
+          joinRef: nil,
+          ref: nil,
+          topic: "realtime:todos",
+          event: ChannelEvent.postgresChanges,
+          payload: [
+            "ids": [1],
+            "data": [
+              "type": "INSERT",
+              "schema": "public",
+              "table": "todos",
+              "commit_timestamp": "2026-10-30T12:00:00.000Z",
+              "record": [
+                "id": 1, "title": "milk", "is_done": false, "priority": 5, "due_date": 1000,
+              ],
+            ],
+          ]
+        )
+      ))
+    await client.finishStreams(of: channel)
+
+    var received: [TypedPostgresChange<RealtimeTodo>] = []
+    for await change in changes {
+      received.append(change)
+    }
+
+    #expect(try received.first?.row().dueDate == Date(timeIntervalSince1970: 1_000))
   }
 
   @Test

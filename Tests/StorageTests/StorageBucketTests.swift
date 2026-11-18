@@ -211,11 +211,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 83" \
+      	--header "Content-Length: 19" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	--data "{\"prefix\":\"folder\"}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -237,11 +237,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 89" \
+      	--header "Content-Length: 52" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"asc\"}}" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -264,11 +264,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 84" \
+      	--header "Content-Length: 61" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -291,11 +291,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 90" \
+      	--header "Content-Length: 67" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"desc\"}}" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"desc\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -318,11 +318,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 84" \
+      	--header "Content-Length: 72" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":10,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	--data "{\"offset\":10,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -345,11 +345,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 82" \
+      	--header "Content-Length: 71" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":50,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	--data "{\"limit\":50,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -402,7 +402,7 @@ struct StorageBucketTests {
 
     #expect(
       String(decoding: try #require(body.value), as: UTF8.self)
-        == #"{"deleteMarkers":"only","exactMatch":true,"limit":100,"noncurrentVersions":"include","offset":0,"prefix":"folder\/a.txt","search":"a","sortBy":{"column":"last_accessed_at","order":"asc"}}"#
+        == #"{"deleteMarkers":"only","exactMatch":true,"noncurrentVersions":"include","prefix":"folder\/a.txt","search":"a","sortBy":{"column":"last_accessed_at"}}"#
     )
   }
 
@@ -595,22 +595,25 @@ struct StorageBucketTests {
         == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
   }
 
-  @Test(arguments: [Duration.zero, .milliseconds(999), .seconds(-5)])
-  func createSignedURLRejectsLessThanOneSecondBeforeSending(expiresIn: Duration) async throws {
-    let storage = try makeFailingSUT {
-      Issue.record("A request was sent"); throw URLError(.badURL)
-    }
+  @Test(arguments: [
+    (Duration.zero, 0), (.milliseconds(999), 0), (.seconds(-5), -5), (.milliseconds(1500), 1),
+  ])
+  func createSignedURLSendsTheWholeSecondsOfAnyExpiry(expiresIn: Duration, seconds: Int)
+    async throws
+  {
+    let body = LockIsolated<Data?>(nil)
+    let single = try makeBodyCapturingSUT(
+      body: body, response: #"{"signedURL":"/object/sign/bucket/file.txt?token=t"}"#)
+    _ = try await single.from("bucket").createSignedURL(path: "file.txt", expiresIn: expiresIn)
+    #expect(
+      String(decoding: try #require(body.value), as: UTF8.self) == #"{"expiresIn":\#(seconds)}"#)
 
-    await #expect {
-      try await storage.from("bucket").createSignedURL(path: "file.txt", expiresIn: expiresIn)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
-    await #expect {
-      try await storage.from("bucket").createSignedURLs(paths: ["file.txt"], expiresIn: expiresIn)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
+    body.setValue(nil)
+    let batch = try makeBodyCapturingSUT(body: body, response: "[]")
+    _ = try await batch.from("bucket").createSignedURLs(paths: ["file.txt"], expiresIn: expiresIn)
+    #expect(
+      String(decoding: try #require(body.value), as: UTF8.self).contains(
+        #""expiresIn":\#(seconds)"#))
   }
 
   @Test
@@ -1026,7 +1029,6 @@ struct StorageBucketTests {
       	--header "Content-Type: image/png" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "x-upsert: false" \
       	--data "hello world!
       " \
       	"http://localhost:54321/storage/v1/object/bucket/file.txt"
@@ -1222,7 +1224,7 @@ struct StorageBucketTests {
   }
 
   @Test
-  func getPublicURLCollapsesRepeatedAndTrailingSlashes() throws {
+  func getPublicURLCollapsesRepeatedSlashesAndKeepsATrailingOne() throws {
     let storage = try makeSUT()
 
     let publicURL = try storage.from("bucket")
@@ -1230,17 +1232,17 @@ struct StorageBucketTests {
 
     #expect(
       publicURL.absoluteString
-        == "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
+        == "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png/"
     )
   }
 
   @Test
-  func downloadCollapsesRepeatedAndTrailingSlashes() async throws {
+  func downloadCollapsesRepeatedSlashesAndKeepsATrailingOne() async throws {
     let storage = try makeSUT()
 
     transport.stub(
       .get,
-      url.appendingPathComponent("object/bucket/folder/file.txt"),
+      url.appendingPathComponent("object/bucket/folder/file.txt/"),
       data: Data("hello world".utf8)
     )
 
@@ -1263,7 +1265,7 @@ struct StorageBucketTests {
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
     #expect(sent.sourceKey == "folder/a.png")
-    #expect(sent.destinationKey == "folder/b.png")
+    #expect(sent.destinationKey == "folder/b.png/")
   }
 
   @Test
@@ -1280,7 +1282,7 @@ struct StorageBucketTests {
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
     #expect(sent.sourceKey == "folder/a.png")
-    #expect(sent.destinationKey == "folder/b.png")
+    #expect(sent.destinationKey == "folder/b.png/")
   }
 
   @Test
@@ -1294,7 +1296,7 @@ struct StorageBucketTests {
     try await storage.from("bucket").remove(paths: ["/folder//a.png", "b.png/"])
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.prefixes == ["folder/a.png", "b.png"])
+    #expect(sent.prefixes == ["folder/a.png", "b.png/"])
   }
 
   @Test
@@ -1309,7 +1311,7 @@ struct StorageBucketTests {
       .createSignedURLs(paths: ["/folder//a.png", "b.png/"], expiresIn: .seconds(60))
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.paths == ["folder/a.png", "b.png"])
+    #expect(sent.paths == ["folder/a.png", "b.png/"])
   }
 
   @Test
@@ -1323,7 +1325,7 @@ struct StorageBucketTests {
     _ = try await storage.from("bucket").list(path: "/folder//nested/")
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.prefix == "folder/nested")
+    #expect(sent.prefix == "folder/nested/")
   }
 
   @Test
@@ -1561,6 +1563,24 @@ struct StorageBucketTests {
       response.signedURL.absoluteString
         == "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
     )
+  }
+
+  @Test
+  func createSignedUploadURLWithoutATokenIsADecodingError() async throws {
+    let storage = try makeSUT()
+
+    transport.stub(
+      .post,
+      url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
+      data: Data(#"{"url": "object/upload/sign/bucket/file.txt"}"#.utf8)
+    )
+
+    await #expect {
+      try await storage.from("bucket").createSignedUploadURL(path: "file.txt")
+    } throws: { error in
+      let error = error as? StorageError
+      return error?.kind == .decoding && error?.message == "No token returned by API"
+    }
   }
 
   @Test

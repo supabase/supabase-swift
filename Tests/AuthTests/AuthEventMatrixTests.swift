@@ -113,12 +113,14 @@ struct AuthEventMatrixTests {
       _ name: String,
       starting: Starting = .signedOut,
       autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
+      acceptsImplicitTokens: Bool = false,
       emits events: [AuthEvent],
       leaves status: Status,
       _ act: @escaping @Sendable (_ world: Race, _ client: AuthClient) async throws -> Void
     ) -> Row {
       Row(name: name, events: events, status: status) { world in
-        let client = world.makeClient(autoRefresh: autoRefresh)
+        let client = world.makeClient(
+          autoRefresh: autoRefresh, acceptsImplicitTokens: acceptsImplicitTokens)
         switch starting {
         case .signedOut: break
         case .signedIn: try await client.seedSession(world.issue("held"))
@@ -477,7 +479,7 @@ extension AuthEventMatrixTests.Row {
     },
 
     operation(
-      "handleRedirect with type=recovery", emits: [.passwordRecovery],
+      "handleRedirect with type=recovery", acceptsImplicitTokens: true, emits: [.passwordRecovery],
       leaves: .signedInAs("redirected")
     ) {
       world, client in
@@ -498,7 +500,8 @@ extension AuthEventMatrixTests.Row {
     },
 
     operation(
-      "handleRedirect, other redirect", emits: [.signedIn], leaves: .signedInAs("redirected")
+      "handleRedirect, other redirect", acceptsImplicitTokens: true, emits: [.signedIn],
+      leaves: .signedInAs("redirected")
     ) {
       world, client in
       world.answerUser(world.issue("redirected").user)

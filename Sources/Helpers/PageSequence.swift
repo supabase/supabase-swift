@@ -17,7 +17,7 @@
 /// }
 ///
 /// for try await page in storage.from("photos").objects(prefix: "2026/").pages {
-///   print(page.folders, page.objects.count)
+///   print(page.objects.count)
 /// }
 /// ```
 ///

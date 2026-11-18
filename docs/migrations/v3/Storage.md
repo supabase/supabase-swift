@@ -12,10 +12,12 @@ Changes that still compile but behave differently. Check each one by hand.
   `multipart/form-data`. The file is the body, `Content-Type` is the file type, and `metadata`
   travels as base64 JSON in the `x-metadata` header. Update any middleware, proxy rule or test
   fixture that matches on `multipart/form-data` or `boundary=`.
-- **Object paths are normalized.** Every method drops leading and trailing `/`, collapses `//`
-  and percent-encodes each segment (`+` becomes `%2B`). An empty path, or a path with a `.` or
-  `..` segment, throws `StorageError` with kind `.invalidRequest` before the request goes out.
-  Search for paths that you build from user input.
+- **Object paths are normalized the same way on every method.** Every method drops a leading
+  `/`, collapses `//` and percent-encodes each segment (`+` becomes `%2B`), in URLs and in JSON
+  bodies alike. A trailing `/` is kept: `a/` and `a` are different keys. v2 dropped a trailing
+  `/` and collapsed `//` only on uploads. A path with a `.` or `..` segment throws
+  `StorageError` with kind `.invalidRequest` before the request goes out. An empty path goes to
+  Storage, which answers with `InvalidKey`. Search for paths that you build from user input.
 - **`exists(path:)` throws.** It returns `false` only for a missing key. A missing bucket, an
   expired token or any other failure now throws. In v2 any 400 or 404 returned `false`.
 - **Network and decoding errors are wrapped.** `URLError` and `DecodingError` arrive as
@@ -38,6 +40,11 @@ Changes that still compile but behave differently. Check each one by hand.
   no longer contains the SDK's default `X-Client-Info`. The client still sends it on every
   request unless you set that header. Search for code that reads
   `configuration.headers[.xClientInfo]`.
+- **Unset options are left out of the request.** An upload without `upsert` sends no `x-upsert`
+  header, and a `list` call sends no `limit`, `offset` or `sortBy` that you did not set. Storage
+  applies its own defaults: no overwrite, 100 entries from offset 0, sorted by name ascending.
+  A `sortBy` without `order` sends no order, and Storage sorts ascending. Update any proxy rule
+  or test fixture that expects these fields.
 
 ## Renames and type changes
 
@@ -51,7 +58,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `StorageClientConfiguration(..., session:)` | `StorageClient.Configuration(..., http:)` (see the overview) |
 | `StorageClientConfiguration(..., encoder:, decoder:)` | removed |
 | `StorageClientConfiguration.useNewHostname` | `StorageClient.Configuration.usesNewHostname` |
-| `StorageClientConfiguration(url:headers:...)`, `headers` required | `StorageClient.Configuration(url:headers:usesNewHostname:http:logger:retryEnabled:clock:)`, `headers` defaults to `[:]` |
+| `StorageClientConfiguration(url:headers:...)`, `headers` required | `StorageClient.Configuration(url:headers:usesNewHostname:http:logger:retryEnabled:)`, `headers` defaults to `[:]` |
 | `StorageHTTPSession` | `any ClientTransport` (see the overview) |
 | `JSONEncoder.defaultStorageEncoder`, `JSONDecoder.defaultStorageDecoder` | removed |
 | `getBucket(_:)` | `bucket(_:)` |
@@ -128,7 +135,8 @@ file that is too large.
 
 ## `UploadOptions` replaces `FileOptions`
 
-`cacheControl` is a `CacheControl`, not a string of seconds. `headers` is `HTTPFields`. `duplex`
+`cacheControl` is a `CacheControl`, not a string of seconds. `upsert` is a `Bool?`; `nil` (the
+default) lets Storage decide, and Storage does not overwrite. `headers` is `HTTPFields`. `duplex`
 is removed. `uploadToSignedURL` takes `UploadOptions`, not `UploadOptions?`.
 
 ```swift

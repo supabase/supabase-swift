@@ -112,7 +112,7 @@ struct PostgrestUpdateTests {
       $0.remindAt = date
       $0.snoozedUntil = date
     }
-    let body = try PostgrestClient.Configuration.jsonEncoder.encode(update)
+    let body = try JSONEncoder.supabase().encode(update)
     let decoded = try JSONDecoder().decode([String: JSONValue].self, from: body)
     #expect(
       decoded == [

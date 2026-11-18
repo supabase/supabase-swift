@@ -32,11 +32,13 @@ extension SupabaseClient {
   /// does not cut the result. Fetched rows keep that order, and a new row goes at the end. Sort
   /// the rows yourself when another order matters.
   ///
-  /// The filter applies to the fetch and to the changes, so it takes only what Realtime can run:
-  /// `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, `regexMatch`, `regexIMatch`,
-  /// `isDistinct` and the `IS` checks, on stored columns, with `!` on one condition and `&&`.
-  /// Any other filter ends the stream with a ``RealtimeError`` of kind
-  /// ``RealtimeError/Kind-swift.struct/invalidRequest`` before it opens a channel.
+  /// The filter applies to the fetch and to the changes, so it must be one Realtime can run.
+  /// The Realtime filter grammar joins conditions with `&&` and negates one condition with `!`.
+  /// A filter with `||` or with `!` over a group ends the stream with a ``RealtimeError`` of kind
+  /// ``RealtimeError/Kind-swift.struct/invalidRequest`` before it opens a channel. The server
+  /// judges the rest, such as the operators and the columns. A filter it refuses ends the stream
+  /// with a ``RealtimeError`` of kind ``RealtimeError/Kind-swift.struct/server`` that carries the
+  /// server's message.
   ///
   /// > Note: Realtime checks the filter against the new row only. An update that moves a row out
   /// > of the filter does not reach the stream, so the row stays until the next fetch. Realtime
@@ -99,7 +101,7 @@ extension SupabaseClient {
   ///     `max_rows` of a Supabase project. A server with a lower limit still gets every row, only in more pages.
   /// - Returns: The source the live query runs against.
   /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
-  ///   when Realtime cannot run the filter.
+  ///   when the Realtime filter grammar cannot write the filter.
   func liveQuerySource<R: _PostgrestKeyedRelation>(
     for _: R.Type,
     filter: _PostgrestFilter<R>?,
@@ -130,7 +132,11 @@ extension SupabaseClient {
     return LiveQuerySource(
       signals: signals,
       primaryKey: R.primaryKeyColumns,
-      decode: { try $0.decode(as: R.self) },
+      // The fetch decodes with the database decoder, so the change rows must too.
+      decode: {
+        try $0.decode(
+          as: R.self, decoder: realtime.configuration.typedRowDecoder?.ignoringKeyStrategy())
+      },
       subscribe: { try await channel.subscribe() },
       fetch: { try await Self.fetchAllPages(firstPage) },
       finish: { await realtime.removeChannel(channel) }

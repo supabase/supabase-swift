@@ -47,7 +47,7 @@ do {
 
 ``PostgrestRequestBuilder/single()`` throws when the result is not exactly one row. The code is
 `PGRST116`. To get `nil` for no row, use ``PostgrestRequestBuilder/maybeSingle()`` and decode
-an optional.
+an optional. More than one row still throws `PGRST116`, on the typed and untyped APIs alike.
 
 ```swift
 let todo: Todo? = try await supabase.from("todos")

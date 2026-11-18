@@ -1245,6 +1245,28 @@
     },
     {
       "schema": "public",
+      "name": "evil\\(fatalError())\"name",
+      "overloads": [
+        {
+          "function_id": 917,
+          "args": [],
+          "returns": {
+            "type_id": 0,
+            "format": "void",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
       "name": "labels",
       "overloads": [
         {

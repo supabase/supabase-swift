@@ -7,7 +7,7 @@ import Logging
 import TestHelpers
 import Testing
 
-@testable import Storage
+@_spi(Testing) @testable import Storage
 
 @Suite
 struct StorageClientConfigurationTests {
@@ -140,30 +140,31 @@ struct StorageClientConfigurationTests {
   func retriedRequestGetsAFreshToken() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let counter = LockIsolated(0)
+    var configuration = StorageClient.Configuration(
+      url: URL(string: "http://localhost:54321/storage/v1")!,
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          requests.withValue { $0.append(request) }
+          guard requests.value.count > 1 else {
+            return (HTTPResponse(status: .serviceUnavailable), nil)
+          }
+          return (
+            HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+            HTTPBody(Data("[]".utf8))
+          )
+        },
+        middlewares: [
+          AccessTokenMiddleware {
+            counter.withValue {
+              $0 += 1; return "token-\($0)"
+            }
+          }
+        ]
+      )
+    )
+    configuration.clock = ImmediateClock()
     let storage = try StorageClient(
-      configuration: StorageClient.Configuration(
-        url: URL(string: "http://localhost:54321/storage/v1")!,
-        http: .init(
-          transport: ClosureTransport { request, _ in
-            requests.withValue { $0.append(request) }
-            guard requests.value.count > 1 else {
-              return (HTTPResponse(status: .serviceUnavailable), nil)
-            }
-            return (
-              HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
-              HTTPBody(Data("[]".utf8))
-            )
-          },
-          middlewares: [
-            AccessTokenMiddleware {
-              counter.withValue {
-                $0 += 1; return "token-\($0)"
-              }
-            }
-          ]
-        ),
-        clock: ImmediateClock()
-      ))
+      configuration: configuration)
 
     _ = try await storage.listBuckets()
 

@@ -157,21 +157,25 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   public func single() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.headerFields[.accept] = "application/vnd.pgrst.object+json"
+    copy.request.expectsAtMostOneRow = false
     return copy
   }
 
-  /// Instructs PostgREST to return a single JSON object, returning `nil` when no row matches.
+  /// Returns at most one row: `nil` when no row matches, or that row as a single JSON object.
   ///
-  /// Like ``single()``, this sets the `application/vnd.pgrst.object+json` accept header so the
-  /// server enforces a single result. Unlike ``single()``, when the query matches zero rows the
-  /// resulting `PGRST116` error is not thrown — ``PostgrestResponse/value`` is `nil` instead.
-  /// Decode into an optional type to observe the `nil`.
+  /// More than one row throws a ``PostgrestError`` of kind
+  /// ``PostgrestError/Kind-swift.struct/server`` with code `PGRST116` and status
+  /// `406 Not Acceptable`, the error PostgREST sends when ``single()`` matches more than one row.
+  /// Decode into an optional type to observe the `nil`. Use ``single()`` for the strict variant
+  /// that also throws when no row matches.
   ///
-  /// > Note: PostgREST returns `PGRST116` both when zero rows match and when more than one row
-  /// > matches. Only the zero-row case is turned into `nil`; a match of more than one row still
-  /// > throws, since it indicates the query should have been scoped to match at most one row.
-  /// > Use ``single()`` for the strict variant that always throws when the query does not match
-  /// > exactly one row.
+  /// The request asks for the usual JSON array and the rows are counted when the response
+  /// arrives, as supabase-js does. ``PostgrestResponse/body`` then holds the row's JSON object,
+  /// or `null` when no row matched.
+  ///
+  /// > Important: On a write, such as `delete().select().maybeSingle()`, every matched row has
+  /// > already been written when the count is checked. Use ``single()`` to have PostgREST roll
+  /// > the write back when it does not match exactly one row.
   ///
   /// ```swift
   /// let todo: Todo? = try await client
@@ -186,8 +190,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
   /// - Returns: A ``PostgrestTransformBuilder`` so calls can be chained.
   public func maybeSingle() -> PostgrestTransformBuilder {
     var copy = PostgrestTransformBuilder(carryingFrom: self)
-    copy.request.headerFields[.accept] = "application/vnd.pgrst.object+json"
-    copy.request.nullOnNoRows = true
+    copy.request.headerFields[.accept] = nil
+    copy.request.expectsAtMostOneRow = true
     return copy
   }
 

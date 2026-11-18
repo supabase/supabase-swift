@@ -439,13 +439,33 @@ private struct Membership: _PostgrestKeyedRelation {
   static let columns = Columns()
 }
 
+private struct LiveEvent: _PostgrestKeyedRelation {
+  static let relationName = "events"
+  static let selectString = "*"
+  static let primaryKeyColumns = ["id"]
+
+  var id: Int
+  var startsAt: Date
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case startsAt = "starts_at"
+  }
+
+  struct Columns: Sendable {}
+
+  static let columns = Columns()
+}
+
 private func makeClient(
+  database: SupabaseClient.Configuration.Database = .init(),
   respond: @escaping @Sendable (HTTPRequest) -> String = { _ in "[]" }
 ) throws -> SupabaseClient {
   try SupabaseClient(
     supabaseURL: URL(string: "https://project-ref.supabase.co")!,
     supabaseKey: "PUBLISHABLE_KEY",
     configuration: SupabaseClient.Configuration(
+      database: database,
       auth: SupabaseClient.Configuration.Auth(
         storage: InMemoryAuthStorage(),
         autoRefresh: .manual
@@ -497,6 +517,20 @@ struct SupabaseClientStreamTests {
 
     let bindings = await supabase.realtime.bindings(of: supabase.realtime.channels.first)
     #expect(bindings == [PostgresJoinConfig(event: .all, schema: "public", table: "items")])
+    await source.finish()
+  }
+
+  @Test
+  func decodesChangeRowsWithTheDatabaseDecoderButNoKeyStrategy() async throws {
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let supabase = try makeClient(database: .init(decoder: decoder))
+
+    let source = try await supabase.liveQuerySource(for: LiveEvent.self, filter: nil)
+    let row = try source.decode(PostgresRow(values: ["id": 1, "starts_at": 1000]))
+
+    #expect(row.startsAt == Date(timeIntervalSince1970: 1000))
     await source.finish()
   }
 

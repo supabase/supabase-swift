@@ -243,14 +243,27 @@ struct StorageClientBucketsTests {
   }
 
   @Test
-  func updateBucketWithNothingToChangeThrowsBeforeSending() async throws {
+  func updateBucketWithNothingToChangeSendsAnEmptyBody() async throws {
     let storage = try makeSUT()
 
-    await #expect {
-      try await storage.updateBucket("bucket123", options: UpdateBucketOptions())
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
+    transport.stub(
+      .put,
+      url.appendingPathComponent("bucket/bucket123"),
+      data: Data(#"{"message":"Successfully updated"}"#.utf8)
+    ) {
+      #"""
+      curl \
+      	--request PUT \
+      	--header "Content-Length: 2" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{}" \
+      	"http://localhost:54321/storage/v1/bucket/bucket123"
+      """#
     }
+
+    try await storage.updateBucket("bucket123", options: UpdateBucketOptions())
   }
 
   @Test

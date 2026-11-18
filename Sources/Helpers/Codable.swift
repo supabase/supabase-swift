@@ -100,3 +100,44 @@ extension JSONEncoder {
     return encoder
   }
 }
+
+extension JSONEncoder {
+  /// This encoder, or a copy with `keyEncodingStrategy` reset to `.useDefaultKeys` when it sets
+  /// another one. Every other setting stays.
+  ///
+  /// The typed database API takes column names from `CodingKeys` and from the keys of an encoded
+  /// body. A key strategy would rename them, so the body would name columns that do not exist.
+  package func ignoringKeyStrategy() -> JSONEncoder {
+    guard case .useDefaultKeys = keyEncodingStrategy else {
+      let copy = JSONEncoder()
+      copy.outputFormatting = outputFormatting
+      copy.dateEncodingStrategy = dateEncodingStrategy
+      copy.dataEncodingStrategy = dataEncodingStrategy
+      copy.nonConformingFloatEncodingStrategy = nonConformingFloatEncodingStrategy
+      copy.userInfo = userInfo
+      return copy
+    }
+    return self
+  }
+}
+
+extension JSONDecoder {
+  /// This decoder, or a copy with `keyDecodingStrategy` reset to `.useDefaultKeys` when it sets
+  /// another one. Every other setting stays.
+  ///
+  /// The `CodingKeys` of a typed database row already hold the column names. A key strategy would
+  /// rename the response keys first, so they would no longer match.
+  package func ignoringKeyStrategy() -> JSONDecoder {
+    guard case .useDefaultKeys = keyDecodingStrategy else {
+      let copy = JSONDecoder()
+      copy.dateDecodingStrategy = dateDecodingStrategy
+      copy.dataDecodingStrategy = dataDecodingStrategy
+      copy.nonConformingFloatDecodingStrategy = nonConformingFloatDecodingStrategy
+      copy.userInfo = userInfo
+      copy.allowsJSON5 = allowsJSON5
+      copy.assumesTopLevelDictionary = assumesTopLevelDictionary
+      return copy
+    }
+    return self
+  }
+}

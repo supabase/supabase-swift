@@ -15,8 +15,8 @@ public struct ObjectPage: Sendable {
   /// The objects on this page, with full keys as names.
   public var objects: [StorageObject]
 
-  /// The folders on this page, as full prefixes ending in `/`. Empty unless the listing is
-  /// ``ObjectListingOptions/delimited``.
+  /// The folders on this page, as full prefixes ending in `/`. Empty unless
+  /// ``ObjectListingOptions/delimited`` is `true`.
   public var folders: [String]
 
   /// The cursor for the next page, or `nil` on the last page.
@@ -58,8 +58,9 @@ public struct ObjectListingOptions: Sendable {
   public var pageSize: Int?
 
   /// Whether to list one level, collapsing deeper keys into ``ObjectPage/folders``
-  /// (`true`), or every key at every depth (`false`). Defaults to `true`.
-  public var delimited: Bool
+  /// (`true`), or every key at every depth (`false`). `nil` sends nothing, so Storage lists
+  /// every depth, as with `false`.
+  public var delimited: Bool?
 
   /// The column to sort by: ``ObjectSortColumn/name``, ``ObjectSortColumn/updatedAt`` or
   /// ``ObjectSortColumn/createdAt``. Defaults to the name.
@@ -82,7 +83,8 @@ public struct ObjectListingOptions: Sendable {
   ///
   /// - Parameters:
   ///   - pageSize: Entries per page.
-  ///   - delimited: Whether to list one level with folders, or every key at every depth.
+  ///   - delimited: Whether to list one level with folders, or every key at every depth. `nil`
+  ///     sends nothing, so Storage lists every depth.
   ///   - sortBy: The column to sort by.
   ///   - order: The sort direction.
   ///   - exactMatch: Whether the prefix names one object.
@@ -90,7 +92,7 @@ public struct ObjectListingOptions: Sendable {
   ///   - deleteMarkers: The filter for delete markers.
   public init(
     pageSize: Int? = nil,
-    delimited: Bool = true,
+    delimited: Bool? = nil,
     sortBy: ObjectSortColumn? = nil,
     order: SortOrder? = nil,
     exactMatch: Bool? = nil,
@@ -116,16 +118,16 @@ extension StorageBucket {
   /// until you do one of these.
   ///
   /// ```swift
-  /// // Every object under "2026/", across all pages
+  /// // Every object under "2026/", at every depth, across all pages
   /// var total: Int64 = 0
-  /// for try await object in storage.from("photos").objects(
-  ///   prefix: "2026/", options: ObjectListingOptions(delimited: false))
-  /// {
+  /// for try await object in storage.from("photos").objects(prefix: "2026/") {
   ///   total += object.metadata?.size ?? 0
   /// }
   ///
   /// // One level, with folders
-  /// for try await page in storage.from("photos").objects(prefix: "2026/").pages {
+  /// for try await page in storage.from("photos").objects(
+  ///   prefix: "2026/", options: ObjectListingOptions(delimited: true)
+  /// ).pages {
   ///   folders += page.folders
   ///   files += page.objects
   /// }
@@ -152,7 +154,7 @@ extension StorageBucket {
       fetch: { [api, id] cursor in
         let response = try await api.execute(
           api.requests.objects(
-            bucket: id, prefix: ListPrefix(prefix), options: options, cursor: cursor)
+            bucket: id, prefix: ObjectKey(prefix), options: options, cursor: cursor)
         )
         .decoded(as: ListV2Response.self)
         return ObjectPage(
@@ -176,15 +178,4 @@ struct ListV2Response: Decodable {
   let nextCursor: String?
   let folders: [Folder]?
   let objects: [StorageObject]
-}
-
-/// A list-v2 prefix: normalized like an ``ObjectKey``, but a trailing `/` is kept, because
-/// `photos/` and `photos` select different keys.
-struct ListPrefix {
-  let path: String
-
-  init(_ prefix: String) throws {
-    let key = try ObjectKey(prefix: prefix)
-    path = key.path.isEmpty || !prefix.hasSuffix("/") ? key.path : key.path + "/"
-  }
 }

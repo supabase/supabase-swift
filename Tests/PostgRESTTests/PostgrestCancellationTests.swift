@@ -11,7 +11,7 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
-@_spi(Experimental) @testable import PostgREST
+@_spi(Experimental) @_spi(Testing) @testable import PostgREST
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -48,12 +48,14 @@ struct PostgrestCancellationTests {
     retryEnabled: Bool = false,
     clock: any Clock<Duration> = ContinuousClock()
   ) throws -> PostgrestClient {
-    try PostgrestClient(
-      configuration: .init(
-        url: URL(string: "http://localhost:54321/rest/v1")!,
-        http: .init(transport: transport),
-        retryEnabled: retryEnabled,
-        clock: clock))
+    var configuration = PostgrestClient.Configuration(
+      url: URL(string: "http://localhost:54321/rest/v1")!,
+      http: .init(transport: transport),
+      retryEnabled: retryEnabled
+    )
+    configuration.clock = clock
+    return try PostgrestClient(
+      configuration: configuration)
   }
 
   @Test

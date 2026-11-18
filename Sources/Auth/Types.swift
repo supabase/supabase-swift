@@ -884,9 +884,10 @@ public struct Web3Credentials: Hashable, Sendable {
 
 /// Options for ``AuthClient/signInWithOTP(email:options:)``.
 public struct EmailOTPOptions: Sendable, Hashable {
-  /// Whether the server creates a user when none exists for the email. The default is `true`.
-  /// When `false`, the call fails for an unknown user.
-  public var shouldCreateUser: Bool
+  /// Whether the server creates a user when none exists for the email. When `false`, the call
+  /// fails for an unknown user. When `nil`, the client leaves the field out and the server
+  /// applies its default, which is to create the user.
+  public var shouldCreateUser: Bool?
 
   /// Data to store on the user if the call creates one.
   public var userMetadata: JSONObject
@@ -906,7 +907,7 @@ public struct EmailOTPOptions: Sendable, Hashable {
   ///   - redirectTo: The URL the email link redirects to.
   ///   - captchaToken: The captcha verification token.
   public init(
-    shouldCreateUser: Bool = true,
+    shouldCreateUser: Bool? = nil,
     userMetadata: JSONObject = [:],
     redirectTo: URL? = nil,
     captchaToken: String? = nil
@@ -920,17 +921,19 @@ public struct EmailOTPOptions: Sendable, Hashable {
 
 /// Options for ``AuthClient/signInWithOTP(phone:options:)``.
 public struct PhoneOTPOptions: Sendable, Hashable {
-  /// Whether the server creates a user when none exists for the phone number. The default is
-  /// `true`. When `false`, the call fails for an unknown user.
-  public var shouldCreateUser: Bool
+  /// Whether the server creates a user when none exists for the phone number. When `false`, the
+  /// call fails for an unknown user. When `nil`, the client leaves the field out and the server
+  /// applies its default, which is to create the user.
+  public var shouldCreateUser: Bool?
 
   /// Data to store on the user if the call creates one.
   public var userMetadata: JSONObject
 
-  /// The channel that delivers the code. The default is ``MessagingChannel/sms``.
+  /// The channel that delivers the code. When `nil`, the client leaves the field out and the
+  /// server applies its default, which is ``MessagingChannel/sms``.
   ///
   /// - Note: The ``MessagingChannel/whatsapp`` channel needs a WhatsApp sender on Twilio.
-  public var channel: MessagingChannel
+  public var channel: MessagingChannel?
 
   /// The captcha verification token.
   public var captchaToken: String?
@@ -943,9 +946,9 @@ public struct PhoneOTPOptions: Sendable, Hashable {
   ///   - channel: The channel that delivers the code.
   ///   - captchaToken: The captcha verification token.
   public init(
-    shouldCreateUser: Bool = true,
+    shouldCreateUser: Bool? = nil,
     userMetadata: JSONObject = [:],
-    channel: MessagingChannel = .sms,
+    channel: MessagingChannel? = nil,
     captchaToken: String? = nil
   ) {
     self.shouldCreateUser = shouldCreateUser
@@ -978,7 +981,7 @@ struct MessageIDBody: Decodable {
 struct OTPParams: Encodable, Hashable, Sendable {
   var email: String?
   var phone: String?
-  var createUser: Bool
+  var createUser: Bool?
   var channel: MessagingChannel?
   var data: JSONObject?
   var gotrueMetaSecurity: AuthMetaSecurity?
@@ -1168,8 +1171,10 @@ public struct SignUpOptions: Sendable, Hashable {
   /// the client uses ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
-  /// The channel that delivers the confirmation code. Applies to phone sign-up only.
-  public var channel: MessagingChannel
+  /// The channel that delivers the confirmation code. Applies to phone sign-up only. When `nil`,
+  /// the client leaves the field out and the server applies its default, which is
+  /// ``MessagingChannel/sms``.
+  public var channel: MessagingChannel?
 
   /// The token the user received for completing a captcha.
   public var captchaToken: String?
@@ -1184,7 +1189,7 @@ public struct SignUpOptions: Sendable, Hashable {
   public init(
     userMetadata: JSONObject = [:],
     redirectTo: URL? = nil,
-    channel: MessagingChannel = .sms,
+    channel: MessagingChannel? = nil,
     captchaToken: String? = nil
   ) {
     self.userMetadata = userMetadata

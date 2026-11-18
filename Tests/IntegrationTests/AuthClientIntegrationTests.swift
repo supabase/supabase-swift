@@ -38,6 +38,7 @@ struct AuthClientIntegrationTests {
     storage: any AuthStorage = InMemoryTestStorage(),
     storageKey: String = "sb-test-\(UUID().uuidString)-auth-token",
     redirectTo: URL? = nil,
+    acceptsImplicitTokens: Bool = false,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
   ) throws -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
@@ -51,6 +52,7 @@ struct AuthClientIntegrationTests {
         ],
         storage: storage,
         redirectTo: redirectTo,
+        acceptsImplicitTokens: acceptsImplicitTokens,
         logger: logger
       )
     )
@@ -433,14 +435,6 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
-  func signInWithOTPWithoutCreatingAUserFailsForAnUnknownEmail() async throws {
-    await #expect(throws: AuthError.self) {
-      try await authClient.signInWithOTP(
-        email: mockEmail(), options: EmailOTPOptions(shouldCreateUser: false))
-    }
-  }
-
-  @Test
   func signInWithOTPCreatesAUserWithItsMetadata() async throws {
     let admin = Self.makeAdminClient()
     let email = mockEmail()
@@ -456,6 +450,35 @@ struct AuthClientIntegrationTests {
       return
     }
     #expect(session.user.userMetadata["plan"] == "free")
+  }
+
+  /// Default options leave `create_user` out, so this proves that the server creates the user.
+  @Test
+  func signInWithOTPWithDefaultOptionsCreatesTheUser() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+
+    try await authClient.signInWithOTP(email: email)
+    _ = try await MailCatcher().latestLink(to: email)
+    let token = try await emailOTP(for: email, admin: admin)
+    let result = try await authClient.verifyOTP(email: email, token: token, type: .email)
+
+    guard case .signedIn(let session) = result else {
+      Issue.record("Expected .signedIn, got \(result)")
+      return
+    }
+    #expect(session.user.email == email)
+    try await admin.deleteUser(id: session.user.id)
+  }
+
+  @Test
+  func signInWithOTPWithoutCreatingAUserFailsWithOTPDisabled() async throws {
+    let error = await #expect(throws: AuthError.self) {
+      try await authClient.signInWithOTP(
+        email: mockEmail(), options: EmailOTPOptions(shouldCreateUser: false))
+    }
+    #expect(error?.code == .otpDisabled)
+    #expect(error?.response?.status == 422)
   }
 
   /// The local stack's magic link email has no code, and the native stack cannot serve a custom
@@ -758,7 +781,8 @@ struct AuthClientIntegrationTests {
     let location = try await redirectLocation(of: link.properties.actionLink)
     #expect(location.fragment?.contains("access_token=") == true)
     // The link goes to the Site URL, so the client needs it as its callback.
-    let client = try Self.makeClient(redirectTo: URL(string: "http://127.0.0.1:3000")!)
+    let client = try Self.makeClient(
+      redirectTo: URL(string: "http://127.0.0.1:3000")!, acceptsImplicitTokens: true)
 
     let result = try await client.handleRedirect(location)
     guard case .signedIn(let session, _) = result else {
@@ -766,6 +790,26 @@ struct AuthClientIntegrationTests {
       return
     }
     #expect(session.user.email == email)
+  }
+
+  @Test
+  func implicitMagicLinkIsRefusedByDefault() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    try await admin.createUser(
+      AdminCreateUser(email: email, password: mockPassword(), confirmsEmail: true)
+    )
+
+    let link = try await admin.generateLink(.magicLink(email: email))
+    let location = try await redirectLocation(of: link.properties.actionLink)
+    #expect(location.fragment?.contains("access_token=") == true)
+    let client = try Self.makeClient(redirectTo: URL(string: "http://127.0.0.1:3000")!)
+
+    let error = await #expect(throws: AuthError.self) {
+      try await client.handleRedirect(location)
+    }
+    #expect(error?.kind == .oauthFlowFailed)
+    #expect(client.currentSession == nil)
   }
 
   @Test
@@ -904,6 +948,34 @@ struct AuthClientIntegrationTests {
 
     expectNoDifference(user.email, email)
     #expect(user.invitedAt != nil)
+    expectNoDifference(user.userMetadata, [:])
+    let fetched = try await admin.user(id: user.id)
+    expectNoDifference(fetched.userMetadata, [:])
+  }
+
+  @Test
+  func deleteUserWithDefaultOptionsRemovesTheUser() async throws {
+    let admin = Self.makeAdminClient()
+    let user = try await admin.createUser(AdminCreateUser(email: mockEmail()))
+
+    try await admin.deleteUser(id: user.id)
+
+    let error = await #expect(throws: AuthError.self) {
+      try await admin.user(id: user.id)
+    }
+    #expect(error?.code == .userNotFound)
+  }
+
+  @Test
+  func softDeleteUserKeepsTheUser() async throws {
+    let admin = Self.makeAdminClient()
+    let user = try await admin.createUser(AdminCreateUser(email: mockEmail()))
+
+    try await admin.deleteUser(id: user.id, softDelete: true)
+
+    let deleted = try await admin.user(id: user.id)
+    #expect(deleted.id == user.id)
+    #expect(deleted.email != user.email)
   }
 
   @Test

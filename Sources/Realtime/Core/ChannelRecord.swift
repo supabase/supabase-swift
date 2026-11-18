@@ -30,8 +30,8 @@ struct ChannelRecord {
   /// The ref of the join that timed out while the channel waits to rejoin. A late `ok` for it
   /// still confirms the join.
   var timedOutJoinRef: Ref?
-  /// The access token the channel last joined with.
-  var joinAccessToken: String?
+  /// The access token the channel last sent, in its `phx_join` or in a later `access_token`.
+  var sentAccessToken: String?
   /// Whether the channel already rejoined with a fresh token in this run of expired-token join
   /// errors. Another failure ends the run.
   var hasRefreshedExpiredToken = false

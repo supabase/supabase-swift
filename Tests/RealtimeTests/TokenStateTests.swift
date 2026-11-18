@@ -50,16 +50,29 @@ struct TokenStateTests {
   }
 
   @Test
-  func nilAndUnchangedTokensAreNotChanges() {
+  func anUnchangedTokenIsNotAChange() {
     var state = TokenState()
     _ = state.apply("t", generation: state.beginRefresh())
 
-    let appliedNil = state.apply(nil, generation: state.beginRefresh())
     let appliedSame = state.apply("t", generation: state.beginRefresh())
 
-    #expect(!appliedNil)
     #expect(!appliedSame)
     #expect(state.token == "t")
+  }
+
+  /// SWIFT-V3-004: `nil` after a token means no signed-in user.
+  @Test
+  func nilAfterATokenClearsTheTokenAndItsExpiry() {
+    var state = TokenState()
+    _ = state.apply(makeJWT(exp: 3600), generation: state.beginRefresh())
+
+    let cleared = state.apply(nil, generation: state.beginRefresh())
+    let clearedAgain = state.apply(nil, generation: state.beginRefresh())
+
+    #expect(cleared)
+    #expect(!clearedAgain)
+    #expect(state.token == nil)
+    #expect(state.expiresAt == nil)
   }
 
   @Test

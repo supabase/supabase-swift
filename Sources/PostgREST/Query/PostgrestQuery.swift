@@ -28,20 +28,18 @@ public struct _PostgrestQuery<R: _PostgrestRelation, Output: Decodable & Sendabl
   /// The request this query sends.
   public var request: _PostgrestRequest
 
-  /// Turns a 2xx body into `Output`. Chosen by the method that produced this query, so
-  /// ``maybeSingle()`` can decode an array and enforce at most one row.
+  /// Turns a 2xx body into `Output`. Chosen by the method that produced this query.
   let decode: @Sendable (Data) throws -> Output
 
   init(
     client: PostgrestClient,
     request: _PostgrestRequest,
-    decode: @escaping @Sendable (Data) throws -> Output = {
-      try Self.decoder.decode(Output.self, from: $0)
-    }
+    decode: (@Sendable (Data) throws -> Output)? = nil
   ) {
     self.client = client
     self.request = request
-    self.decode = decode
+    self.decode =
+      decode ?? { try client.configuration.typedDecoder.decode(Output.self, from: $0) }
   }
 }
 
@@ -131,8 +129,6 @@ extension _PostgrestQuery {
     try await request.execute(on: client, decode: decode)
   }
 
-  static var decoder: JSONDecoder { PostgrestClient.Configuration.jsonDecoder }
-
   private static var objectMediaType: String { "application/vnd.pgrst.object+json" }
 }
 
@@ -168,27 +164,21 @@ extension _PostgrestQuery {
   /// ```
   ///
   /// No row decodes as `nil`. More than one row throws a ``PostgrestError`` of kind
-  /// ``PostgrestError/Kind-swift.struct/decoding``, because it means the filter did not narrow the
-  /// query to the one row it was meant to find.
+  /// ``PostgrestError/Kind-swift.struct/server`` with code `PGRST116` and status
+  /// `406 Not Acceptable`, the error PostgREST sends when ``single()`` matches more than one row.
+  /// The untyped ``PostgrestRequestBuilder/maybeSingle()`` behaves the same way.
   ///
-  /// Unlike ``single()``, the request asks for the usual JSON array and the row count is checked
-  /// here, so PostgREST's `PGRST116` never reaches you.
+  /// The request asks for the usual JSON array and the rows are counted when the response
+  /// arrives, as supabase-js does.
   ///
-  /// > Important: The count is checked after the response arrives. On a write, such as
-  /// > `delete().returning().maybeSingle()`, every matched row has already been written by then.
+  /// > Important: On a write, such as `delete().returning().maybeSingle()`, every matched row has
+  /// > already been written when the count is checked. Use ``single()`` to have PostgREST roll
+  /// > the write back when it does not match exactly one row.
   ///
   /// - Returns: A ``_PostgrestQuery`` decoding into `Element?`.
   public func maybeSingle<Element>() -> _PostgrestQuery<R, Element?> where Output == [Element] {
-    let query = _PostgrestQuery<R, Element?>(client: client, request: request) {
-      let rows = try Self.decoder.decode([Element].self, from: $0)
-      guard rows.count <= 1 else {
-        throw PostgrestError(
-          kind: .decoding,
-          message: "maybeSingle() expected at most one row, but the response has \(rows.count)."
-        )
-      }
-      return rows.first
-    }
+    var query = _PostgrestQuery<R, Element?>(client: client, request: request)
+    query.request.expectsAtMostOneRow = true
     return query
   }
 

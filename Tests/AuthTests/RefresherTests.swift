@@ -7,7 +7,7 @@ import Logging
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 @Suite
 struct RefresherTests {
@@ -349,16 +349,17 @@ struct World {
     observesAppLifecycle: Bool = false,
     clock sleepClock: (any Clock<Duration>)? = nil
   ) -> AuthClient.Configuration {
-    AuthClient.Configuration(
+    var configuration = AuthClient.Configuration(
       url: clientURL,
       storageKey: storageKey,
       storage: InMemoryTestStorage(),
       autoRefresh: autoRefresh,
       observesAppLifecycle: observesAppLifecycle,
-      http: HTTPClientConfiguration(transport: http),
-      clock: sleepClock ?? clock,
-      now: now
+      http: HTTPClientConfiguration(transport: http)
     )
+    configuration.clock = sleepClock ?? clock
+    configuration.now = now
+    return configuration
   }
 
   var now: @Sendable () -> Date {

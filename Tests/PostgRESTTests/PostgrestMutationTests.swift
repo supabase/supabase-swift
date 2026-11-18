@@ -83,6 +83,44 @@ struct PostgrestMutationTests {
   }
 
   @Test
+  func insertWithNoOptionsLeavesTheReturnPreferenceToTheServer() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self).insert(Todo.Draft(task: "buy milk")).execute()
+    #expect(capture.header("Prefer") == nil)
+  }
+
+  @Test
+  func updateWithNoOptionsLeavesTheReturnPreferenceToTheServer() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.task = "done" }.where { $0.id.eq(1) }.execute()
+    #expect(capture.header("Prefer") == nil)
+  }
+
+  @Test
+  func deleteWithNoOptionsLeavesTheReturnPreferenceToTheServer() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self).delete().where { $0.id.eq(1) }.execute()
+    #expect(capture.header("Prefer") == nil)
+  }
+
+  @Test
+  func upsertWithNoOptionsSendsOnlyTheResolution() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self).upsert(Todo.Draft(task: "a")).execute()
+    #expect(capture.header("Prefer") == "resolution=merge-duplicates")
+    #expect(capture.query?.contains("on_conflict") != true)
+  }
+
+  @Test
+  func upsertReturningAsksForTheRows() async throws {
+    let capture = try QueryCapture(body: #"[{"id":1,"task":"a","is_done":false}]"#)
+    _ = try await capture.client.from(Todo.self)
+      .upsert(Todo.Draft(task: "a")).returning().execute()
+    #expect(capture.header("Prefer") == "resolution=merge-duplicates,return=representation")
+  }
+
+  @Test
   func updateScopesByFilter() async throws {
     let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
@@ -251,11 +289,11 @@ struct PostgrestMutationTests {
   }
 
   @Test
-  func bulkUpsertDerivesTheConflictTargetFromThePrimaryKey() async throws {
+  func bulkUpsertLeavesThePrimaryKeyConflictTargetToTheServer() async throws {
     let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .upsert([Todo.Draft(task: "a"), Todo.Draft(task: "b")]).execute()
-    #expect(capture.query?.contains("on_conflict=id") == true)
+    #expect(capture.query?.contains("on_conflict") != true)
     #expect(capture.bodyString?.hasPrefix("[") == true)
   }
 
@@ -290,6 +328,91 @@ struct PostgrestMutationTests {
     _ = try await capture.client.from(Todo.self).upsert([Todo.Draft]()).execute()
     #expect(capture.bodyString == "[]")
     #expect(capture.query?.contains("columns") != true)
+  }
+
+  static let raggedRows = [Todo.Draft(task: "a", isDone: true), Todo.Draft(task: "b")]
+
+  @Test
+  func singleRowInsertSendsNoMissingPreference() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self).insert(Todo.Draft(task: "a")).execute()
+    #expect(capture.header("Prefer") == nil)
+  }
+
+  @Test
+  func singleRowUpsertSendsNoMissingPreference() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self).upsert(Todo.Draft(task: "a")).execute()
+    #expect(capture.header("Prefer") == "resolution=merge-duplicates")
+  }
+
+  @Test(arguments: [nil, true] as [Bool?])
+  func bulkInsertLeavesMissingColumnsToTheServerUnlessAsked(defaultToNull: Bool?) async throws {
+    let capture = try QueryCapture()
+    let source = capture.client.from(Todo.self)
+    if let defaultToNull {
+      _ = try await source.insert(Self.raggedRows, defaultToNull: defaultToNull).execute()
+    } else {
+      _ = try await source.insert(Self.raggedRows).execute()
+    }
+    #expect(capture.header("Prefer") == nil)
+  }
+
+  @Test
+  func bulkInsertWithoutDefaultToNullAsksForColumnDefaults() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .insert(Self.raggedRows, defaultToNull: false).execute()
+    #expect(capture.header("Prefer") == "missing=default")
+    #expect(capture.query?.contains(#"columns="is_done","task""#) == true)
+  }
+
+  @Test
+  func bulkInsertMissingPreferenceComposesWithReturningAndCount() async throws {
+    let capture = try QueryCapture(body: #"[{"id":1,"task":"a","is_done":true}]"#)
+    _ = try await capture.client.from(Todo.self)
+      .insert(Self.raggedRows, defaultToNull: false).returning().execute(count: .exact)
+    let prefer = capture.header("Prefer") ?? ""
+    #expect(prefer.contains("missing=default"))
+    #expect(prefer.contains("return=representation"))
+    #expect(prefer.contains("count=exact"))
+  }
+
+  @Test(arguments: [nil, true] as [Bool?])
+  func bulkUpsertLeavesMissingColumnsToTheServerUnlessAsked(defaultToNull: Bool?) async throws {
+    let capture = try QueryCapture()
+    let source = capture.client.from(Todo.self)
+    if let defaultToNull {
+      _ = try await source.upsert(Self.raggedRows, defaultToNull: defaultToNull).execute()
+    } else {
+      _ = try await source.upsert(Self.raggedRows).execute()
+    }
+    #expect(capture.header("Prefer") == "resolution=merge-duplicates")
+  }
+
+  @Test
+  func bulkUpsertWithoutDefaultToNullAsksForColumnDefaults() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .upsert(Self.raggedRows, resolution: .ignoreDuplicates, defaultToNull: false).execute()
+    #expect(capture.header("Prefer") == "resolution=ignore-duplicates,missing=default")
+  }
+
+  @Test
+  func bulkUpsertOnAConflictTargetTakesDefaultToNull() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .upsert(Self.raggedRows, onConflict: \.task, defaultToNull: false).execute()
+    #expect(capture.header("Prefer") == "resolution=merge-duplicates,missing=default")
+    #expect(capture.query?.contains("on_conflict=task") == true)
+  }
+
+  @Test
+  func bulkUpsertOnAConflictTargetLeavesMissingColumnsToTheServerByDefault() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .upsert(Self.raggedRows, onConflict: \.task).execute()
+    #expect(capture.header("Prefer") == "resolution=merge-duplicates")
   }
 
   @Test
@@ -339,7 +462,7 @@ struct PostgrestMutationTests {
       .delete().where { $0.id.eq(1) }
       .dryRun()
       .execute()
-    #expect(capture.header("Prefer") == "return=minimal,tx=rollback")
+    #expect(capture.header("Prefer") == "tx=rollback")
   }
 
   @Test

@@ -18,6 +18,10 @@ Read the matching file before you act:
   feature, bug-fix, and dependency workflows. Read it before you commit or change public API.
 - [tools/supabase-typegen/README.md](tools/supabase-typegen/README.md) — the typegen package, its
   goldens, and its fixtures. Read it before you touch the generator, the `@Table` macros, or an integration migration.
+- [SDK engineering principles](https://github.com/supabase/sdk/blob/main/docs/principles.md) —
+  the Supabase SDK team's principles: thin clients, logic and validation in the service,
+  service-owned defaults, and decoding that accepts new values. Read them before you write or
+  review code. Cite a principle by a link to its heading.
 - [RELEASE.md](RELEASE.md) — release-please, release branches, and the typegen binary release.
   Read it before you touch versions, `CHANGELOG.md`, or release workflows.
 

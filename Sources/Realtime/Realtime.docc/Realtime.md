@@ -70,6 +70,8 @@ result, such as ``RealtimeChannel/subscribe()``, throw ``RealtimeError``. See <d
 
 - ``BroadcastMessage``
 - ``BroadcastPayload``
+- ``BroadcastEvent``
+- ``TypedBroadcastMessage``
 
 ### Postgres Changes
 

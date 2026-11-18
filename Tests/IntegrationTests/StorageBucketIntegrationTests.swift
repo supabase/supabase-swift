@@ -419,17 +419,16 @@ final class StorageBucketIntegrationTests {
     ("a?b.png", "a?b.png"),
     ("a;b=c&d.png", "a;b=c&d.png"),
     ("a:b@c!d$e'(f)*g,h.png", "a:b@c!d$e'(f)*g,h.png"),
+    // The gateway drops a leading `/` and collapses `//`; the SDK reports the key it stores.
     ("/leading/slash.png", "leading/slash.png"),
     ("double//slash/x.png", "double/slash/x.png"),
-    ("trailing/slash.png/", "trailing/slash.png"),
+    ("trailing/slash.png/", "trailing/slash.png/"),
   ]
 
   @Test(arguments: acceptedKeys)
   func roundTripsAnAcceptedKeyThroughEveryRoute(input: String, key: String) async throws {
     let api = storage.from(bucketName)
     let payload = Data("hello storage".utf8)
-    let folder = key.split(separator: "/").dropLast().joined(separator: "/")
-    let leaf = String(key.split(separator: "/").last!)
 
     let uploaded = try await api.upload(path: input, data: payload)
     #expect(uploaded.path == key)
@@ -439,7 +438,8 @@ final class StorageBucketIntegrationTests {
     #expect(try await api.exists(path: input))
     #expect(try await api.info(path: input).name == key)
     #expect(try await api.download(path: input).data() == payload)
-    #expect(try await api.list(path: folder).map(\.name).contains(leaf))
+    let listed = try await api.objects(options: ObjectListingOptions(delimited: false)).page()
+    #expect(listed.objects.map(\.name).contains(key))
 
     let (publicBytes, publicResponse) = try await StorageIntegration.fetch(
       api.publicURL(path: input))
@@ -481,8 +481,18 @@ final class StorageBucketIntegrationTests {
     #expect(error?.message == "Invalid key: \(input)")
   }
 
-  @Test(arguments: ["", "/", "//", "a/../b.png", "./a.png", "folder/./a.png"])
-  func refusesAnInvalidPathWithoutARequest(input: String) async throws {
+  @Test(arguments: ["", "/", "//"])
+  func sendsAnEmptyPathToStorage(input: String) async throws {
+    let error = await StorageIntegration.storageError {
+      _ = try await storage.from(bucketName).download(path: input)
+    }
+
+    #expect(error?.kind == .server)
+    #expect(error?.code == .invalidKey)
+  }
+
+  @Test(arguments: ["a/../b.png", "./a.png", "folder/./a.png"])
+  func refusesADotSegmentWithoutARequest(input: String) async throws {
     let error = await StorageIntegration.storageError {
       _ = try await storage.from(bucketName).download(path: input)
     }
@@ -537,7 +547,7 @@ final class StorageBucketIntegrationTests {
     try await api.upload(path: "present.txt", data: file)
 
     #expect(try await api.exists(path: "present.txt"))
-    #expect(try await api.exists(path: "present.txt/"))
+    #expect(try await !api.exists(path: "present.txt/"))
     #expect(try await !api.exists(path: "absent.txt"))
 
     let error = await StorageIntegration.storageError {
@@ -755,21 +765,6 @@ final class StorageBucketIntegrationTests {
     let (expiredBody, expired) = try await StorageIntegration.fetch(url)
     #expect(expired.statusCode == 400)
     #expect(String(decoding: expiredBody, as: UTF8.self).contains("InvalidJWT"))
-  }
-
-  @Test
-  func subSecondExpiryIsRefusedBeforeSending() async throws {
-    let api = storage.from(bucketName)
-
-    let operations: [() async throws -> Void] = [
-      { _ = try await api.createSignedURL(path: "file.txt", expiresIn: .milliseconds(999)) },
-      { _ = try await api.createSignedURLs(paths: ["file.txt"], expiresIn: .zero) },
-    ]
-    for operation in operations {
-      let error = await StorageIntegration.storageError(operation)
-      #expect(error?.kind == .invalidRequest)
-      #expect(error?.response == nil)
-    }
   }
 
   @Test(arguments: [

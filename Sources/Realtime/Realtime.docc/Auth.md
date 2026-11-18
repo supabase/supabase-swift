@@ -23,8 +23,12 @@ let realtime = try RealtimeClient(
 ```
 
 The client calls the closure before a join and when a heartbeat goes out, at most once every 10
-seconds. A call that throws, returns `nil`, or does not return within
-``RealtimeClient/Configuration/requestTimeout`` keeps the current token.
+seconds. A call that throws or does not return within
+``RealtimeClient/Configuration/requestTimeout`` keeps the current token. Return `nil` when no user
+is signed in: the client clears the current token, later joins and `httpSend` use the API key, and
+the joined channels get the `apikey` header's value. The server ignores an `sb_` key sent to a
+joined channel, so with one, a joined channel keeps the old token until it rejoins or the token
+expires. To end access at sign-out, remove the channels.
 
 When the token is a JWT, the client also calls the closure 60 seconds before the token's `exp`,
 while it is connected, and sends the new token to every joined channel. So a channel does not
@@ -32,8 +36,9 @@ reach the server's expiry check.
 
 ``RealtimeChannel/httpSend(event:payload:encoder:timeout:)`` calls the closure for every request,
 with no 10-second limit. If the closure throws, `httpSend` throws ``RealtimeError`` with kind
-``RealtimeError/Kind-swift.struct/accessToken``. A `nil` result sends the current token. With no
-token at all, `httpSend` sends only `apikey`, which is enough for a public channel.
+``RealtimeError/Kind-swift.struct/accessToken``. A `nil` result means no signed-in user, so
+`httpSend` sends only `apikey`, which is enough for a public channel. The socket clears its own
+token at its next callback call.
 
 This closure is Realtime's only token source, for the socket and for `httpSend`. Do not add an
 `AccessTokenMiddleware` to ``RealtimeClient/Configuration/http``.

@@ -7,15 +7,22 @@
 
 import ConcurrencyExtras
 package import Foundation
+import Helpers
 
 extension PostgrestClient.Configuration {
-  /// The fixed decoder of the typed API. Not public, so no caller can change the settings the
-  /// column names depend on. Typed Postgres changes decode with it too.
+  /// The decoder of typed Postgres changes on a channel whose client has no database decoder,
+  /// such as a standalone `RealtimeClient`.
   package static let jsonDecoder = JSONDecoder.supabase()
 
-  /// The fixed encoder of the typed API. Not public, so no caller can change the settings the
-  /// column names depend on.
-  package static let jsonEncoder = JSONEncoder.supabase()
+  /// The encoder of the typed API: ``encoder`` with its key strategy ignored. The typed API takes
+  /// column names from `CodingKeys` and from the keys of the encoded body, and a key strategy
+  /// would rename them. Every other setting, such as the date strategy, applies.
+  var typedEncoder: JSONEncoder { encoder.ignoringKeyStrategy() }
+
+  /// The decoder of the typed API: ``decoder`` with its key strategy ignored. The `CodingKeys` of
+  /// a typed row already hold the column names. Every other setting, such as the date strategy,
+  /// applies.
+  var typedDecoder: JSONDecoder { decoder.ignoringKeyStrategy() }
 
   /// Sent unless the configured headers set the same name.
   static let defaultHeaders: HTTPFields = [

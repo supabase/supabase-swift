@@ -108,16 +108,10 @@ struct PostgrestRequestTests {
   }
 
   @Test
-  func nullOnNoRowsReportsADecodingError() async throws {
-    let capture = try QueryCapture(
-      body: #"""
-        {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
-        "details":"The result contains 0 rows","hint":null}
-        """#,
-      status: .notAcceptable
-    )
+  func atMostOneRowReportsADecodingErrorForNoRowAndANonOptionalType() async throws {
+    let capture = try QueryCapture(body: "[]")
     var request = capture.client.makeRequest("todos")
-    request.nullOnNoRows = true
+    request.expectsAtMostOneRow = true
     let error = await #expect(throws: PostgrestError.self) {
       _ = try await request.execute(on: capture.client) {
         try JSONDecoder().decode(Int.self, from: $0)
@@ -133,20 +127,14 @@ struct PostgrestRequestTests {
     let prefer = try #require(capture.header("Prefer"))
     #expect(prefer.contains("tx=rollback"))
     #expect(prefer.contains("count=exact"))
-    #expect(prefer.contains("return=minimal"))
+    #expect(prefer.contains("return=") == false)
   }
 
   @Test
-  func nullOnNoRowsDecodesNull() async throws {
-    let capture = try QueryCapture(
-      body: #"""
-        {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
-        "details":"The result contains 0 rows","hint":null}
-        """#,
-      status: .notAcceptable
-    )
+  func atMostOneRowDecodesNullForNoRow() async throws {
+    let capture = try QueryCapture(body: " [ ] ")
     var request = capture.client.makeRequest("todos")
-    request.nullOnNoRows = true
+    request.expectsAtMostOneRow = true
     let response = try await request.execute(on: capture.client) {
       try JSONDecoder().decode(Int?.self, from: $0)
     }
@@ -156,19 +144,42 @@ struct PostgrestRequestTests {
   }
 
   @Test
-  func withoutNullOnNoRowsPGRST116Throws() async throws {
-    let capture = try QueryCapture(
-      body: #"""
-        {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
-        "details":"The result contains 0 rows","hint":null}
-        """#,
-      status: .notAcceptable
-    )
+  func atMostOneRowKeepsTheBytesOfTheOnlyRow() async throws {
+    let row = #"{"amount":12345678901234567890.123456789}"#
+    let capture = try QueryCapture(body: "\n[\n  \(row)\n]\n")
+    var request = capture.client.makeRequest("todos")
+    request.expectsAtMostOneRow = true
+    let response = try await request.execute(on: capture.client) { $0 }
+    #expect(String(decoding: response.body, as: UTF8.self) == row)
+  }
+
+  @Test
+  func atMostOneRowCountsRowsNotNestedArrays() async throws {
+    let capture = try QueryCapture(body: #"[{"tags":["a","b",","],"note":"],["}]"#)
+    var request = capture.client.makeRequest("todos")
+    request.expectsAtMostOneRow = true
+    let response = try await request.execute(on: capture.client) { $0 }
+    #expect(
+      String(decoding: response.body, as: UTF8.self) == #"{"tags":["a","b",","],"note":"],["}"#)
+  }
+
+  @Test
+  func atMostOneRowLeavesABodyThatIsNotAnArray() async throws {
+    let capture = try QueryCapture(body: "")
+    var request = capture.client.makeRequest("todos")
+    request.method = .head
+    request.expectsAtMostOneRow = true
+    let response = try await request.execute(on: capture.client) { $0 }
+    #expect(response.body.isEmpty)
+  }
+
+  @Test
+  func withoutAtMostOneRowAnArrayIsLeftAsItIs() async throws {
+    let capture = try QueryCapture(body: "[1,2]")
     let request = capture.client.makeRequest("todos")
-    await #expect(throws: PostgrestError.self) {
-      _ = try await request.execute(on: capture.client) {
-        try JSONDecoder().decode(Int?.self, from: $0)
-      }
+    let response = try await request.execute(on: capture.client) {
+      try JSONDecoder().decode([Int].self, from: $0)
     }
+    #expect(response.value == [1, 2])
   }
 }

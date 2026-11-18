@@ -78,7 +78,10 @@ public struct AuthAdminClient: Sendable {
     public var retryEnabled: Bool
 
     /// The clock the retry backoff sleeps on. Defaults to `ContinuousClock()`.
-    public var clock: any Clock<Duration>
+    ///
+    /// A test hook: import Auth with `@_spi(Testing)`, and set it on the configuration before
+    /// you create the client.
+    @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
 
     /// Creates a configuration.
     ///
@@ -89,15 +92,13 @@ public struct AuthAdminClient: Sendable {
     ///   - http: The transport and middleware chain every request goes through.
     ///   - logger: The logger to use. Defaults to a build-config-aware logger.
     ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
-    ///   - clock: The clock the retry backoff sleeps on.
     public init(
       url: URL,
       secretKey: String,
       headers: HTTPFields = [:],
       http: HTTPClientConfiguration = .init(),
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-      retryEnabled: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock()
+      retryEnabled: Bool = true
     ) {
       self.url = url
       self.secretKey = secretKey
@@ -105,7 +106,6 @@ public struct AuthAdminClient: Sendable {
       self.http = http
       self.logger = logger
       self.retryEnabled = retryEnabled
-      self.clock = clock
     }
   }
 
@@ -211,10 +211,11 @@ public struct AuthAdminClient: Sendable {
   /// - Parameters:
   ///   - id: The user's unique identifier.
   ///   - softDelete: When `true`, the server sets `deleted_at` and disables the account but
-  ///     keeps its data. When `false`, the server removes the user.
+  ///     keeps its data. When `false`, the server removes the user. When `nil`, the client sends
+  ///     no body and the server applies its default, which is to remove the user.
   /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
   ///   cancelled.
-  public func deleteUser(id: UUID, softDelete: Bool = false) async throws {
+  public func deleteUser(id: UUID, softDelete: Bool? = nil) async throws {
     try await api.execute(authAPI.adminDeleteUser(id: id, softDelete: softDelete))
   }
 

@@ -56,7 +56,7 @@ struct UploadBodyTests {
     #expect(request.method == .post)
     #expect(request.path == "/storage/v1/object/bucket/clip.mov")
     #expect(request.headerFields[.contentType] == mimeType(forPathExtension: "mov"))
-    #expect(request.headerFields[.init("x-upsert")!] == "false")
+    #expect(request.headerFields[.init("x-upsert")!] == nil)
     #expect(sent.value?.body.count == 8 * (64 << 10))
     #expect(object.fullPath == "bucket/clip.mov")
     #expect(

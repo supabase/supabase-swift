@@ -154,17 +154,4 @@ struct PostgrestErrorTests {
       error.description
         == "PostgrestError(server): Row not found [status 406, request req-9] [code PGRST116]")
   }
-
-  @Test
-  func matchedZeroRowsReadsTheRowCountFromDetails() {
-    #expect(
-      PostgrestError.ServerError(message: "", details: "The result contains 0 rows").matchedZeroRows
-    )
-    #expect(
-      !PostgrestError.ServerError(
-        message: "",
-        details: "Results contain 2 rows, application/vnd.pgrst.object+json requires 1 row"
-      ).matchedZeroRows)
-    #expect(!PostgrestError.ServerError(message: "").matchedZeroRows)
-  }
 }

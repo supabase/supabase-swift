@@ -111,20 +111,31 @@ Changes that still compile but behave differently. Check each one by hand.
 - **A `subscribe()` that gives up leaves the channel `.failed`.** v2 moved it back to
   `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
   `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
-- **`SupabaseClient` uses the global logger for Realtime when you pass none.** A `logger:` you
-  pass in `SupabaseClient.Configuration.Realtime` is kept. With `nil`, the default, Realtime uses
-  `Configuration.Global.logger`.
-- **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. For
-  certificate pinning, pass a transport (see [`session:` is replaced by
+- **`SupabaseClient` uses the global logger and HTTP settings for Realtime.**
+  `SupabaseClient.Configuration.Realtime` has no `logger` or `http`. Realtime uses
+  `Configuration.Global.logger` and `Configuration.Global.http`. See
+  [One `http` and one `logger`](../../../V3_MIGRATION.md#one-http-and-one-logger-for-every-sub-client)
+  to filter or change one sub-client only.
+- **The WebSocket shares the global session's delegate, not the session.** With no
+  `webSocketTransport`, when the HTTP settings use a `URLSessionTransport` whose session has a
+  delegate, `SupabaseClient` builds the WebSocket from that session's configuration (without its
+  `httpAdditionalHeaders`) and delegate, so certificate pinning covers the upgrade. The delegate
+  runs on that session's `delegateQueue`. A session with no delegate gives the default transport,
+  as before. A custom `ClientTransport` hides its session: Realtime logs a warning and uses the
+  default transport. Then pass a transport yourself (see [`session:` is replaced by
   `webSocketTransport:`](#session-is-replaced-by-websockettransport)).
 - **The `accessToken` callback is called less often, and before the token expires.** The client
   calls it at most once every 10 seconds; `setAuth()` inside that window keeps the current
   token. Channel joins no longer call it every time. `httpSend` still calls it for every request;
   if it throws, `httpSend` throws a `RealtimeError` of kind `.accessToken`. While connected, it
-  also calls it one minute before a JWT's `exp`. A `nil` result keeps the current token instead of sending a
-  `null` token to channels, and `setAuth()` without a callback no longer clears the stored
-  token. The callback runs in a task of its own with the client's `requestTimeout`, so cancelling a
-  `subscribe()` no longer cancels it. Search for `setAuth()` calls that expect the callback to
+  also calls it one minute before a JWT's `exp`. A `nil` result still means no signed-in user:
+  the client clears the stored token, a later join carries no token, and `httpSend` sends only
+  `apikey`, without an `Authorization` header from `headers`. Joined channels now get the
+  `apikey` value instead of a `null` token; the server ignores an `sb_` key there, so with one a
+  joined channel keeps the old token until it rejoins or the token expires. A callback that throws or times out keeps the current
+  token, and `setAuth()` without a callback no longer clears the stored token. The callback runs
+  in a task of its own with the client's `requestTimeout`, so cancelling a `subscribe()` no
+  longer cancels it. Search for `setAuth()` calls that expect the callback to
   run every time.
 - **`topic` has no `realtime:` prefix.** `channel.topic` is the name you pass to `channel(_:)`.
   Search for `"realtime:"` in code that reads or compares topics.
@@ -499,6 +510,9 @@ let configuration = RealtimeClient.Configuration(
   )
 )
 ```
+
+This transport calls the delegate on a private serial queue, not on `pinnedSession.delegateQueue`.
+The delegate must not depend on a particular queue or actor, such as the main actor.
 
 ## watchOS connections need an opt-in
 

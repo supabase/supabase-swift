@@ -27,7 +27,8 @@ The initializer throws a ``RealtimeError`` of kind
 
 ``RealtimeClient/Configuration/accessToken`` supplies the token for every join. The client calls
 it before a join, when a heartbeat goes out, and shortly before the token expires. A call that
-throws or returns `nil` keeps the current token. To set a token yourself, call
+throws keeps the current token. A call that returns `nil` means no signed-in user: the client
+clears the token and uses the API key. To set a token yourself, call
 ``RealtimeClient/setAuth(_:)``.
 
 Do not add an `AccessTokenMiddleware` to ``RealtimeClient/Configuration/http``. See <doc:Auth>.
@@ -56,10 +57,10 @@ your own ``WebSocketTransport`` to use another stack. See <doc:CustomTransports>
 
 See <doc:ConnectionBehavior> for reconnects, the app lifecycle and network changes.
 
-### Logger and clock
+### Logger
 
 ``RealtimeClient/Configuration/logger`` is a swift-log `Logger`. The client removes tokens,
 secrets and URL query strings from each line, and tags the logger with `system=realtime`.
 
-``RealtimeClient/Configuration/clock`` is the clock for the heartbeat timer and the reconnect
-backoff. Pass a test clock to control them in tests.
+Tests can control the heartbeat timer and the reconnect backoff with the `clock` test hook.
+Import Realtime with `@_spi(Testing)` to set it.

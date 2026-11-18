@@ -47,9 +47,9 @@ public struct _PostgrestRequest: Sendable {
   /// because `single()` may still change the media type it has to be added to.
   var stripsNulls = false
 
-  /// Turns the "no rows" variant of PGRST116 into the value decoded from `null`, for
-  /// `maybeSingle()`. The "multiple rows" variant still throws.
-  var nullOnNoRows = false
+  /// Set by `maybeSingle()`. A JSON array response with no row decodes from `null`, one row
+  /// decodes from that row, and more than one row throws PostgREST's `PGRST116` error.
+  var expectsAtMostOneRow = false
 
   /// Why a filter on this request has no wire form, set by the first such filter. A filter method
   /// cannot throw, so the failure waits here and `execute()` throws it before anything is sent.
@@ -140,21 +140,50 @@ public struct _PostgrestRequest: Sendable {
       }
     }
 
-    if 200..<300 ~= response.status.code {
+    guard 200..<300 ~= response.status.code else {
+      throw PostgrestError.server(response, body: data)
+    }
+    guard expectsAtMostOneRow, let rowCount = Self.rowCount(of: data) else {
       return try decoded(response, body: data)
     }
-
-    let error = PostgrestError.server(response, body: data)
-    if nullOnNoRows, error.code == "PGRST116", error.serverError?.matchedZeroRows == true {
-      // No row is a success for `maybeSingle()`, so the response reads as `200 OK` with the
-      // `null` body the value comes from, not as the 406 PostgREST answered.
-      var success = response
-      success.status = .ok
-      success.headerFields[.contentLength] = nil
-      success.headerFields[.proxyStatus] = nil
-      return try decoded(success, body: Data("null".utf8))
+    guard rowCount <= 1 else {
+      throw Self.singularityError(rowCount: rowCount, response: response)
     }
-    throw error
+    var single = response
+    single.headerFields[.contentLength] = nil
+    return try decoded(single, body: rowCount == 0 ? Data("null".utf8) : Self.onlyElement(of: data))
+  }
+
+  /// The number of elements in a JSON array body, or `nil` when the body is not a JSON array,
+  /// such as the empty body of a `HEAD` request.
+  private static func rowCount(of data: Data) -> Int? {
+    (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [Any])?.count
+  }
+
+  /// The bytes of the only element of a one-element JSON array, unchanged, so numbers keep their
+  /// precision.
+  private static func onlyElement(of array: Data) -> Data {
+    let bytes = array.trimmingJSONWhitespace().dropFirst().dropLast()
+    return Data(bytes).trimmingJSONWhitespace()
+  }
+
+  /// The error PostgREST sends for `Accept: application/vnd.pgrst.object+json` when more than
+  /// one row matches. `maybeSingle()` counts the rows itself, like supabase-js, so the request
+  /// asks for the usual array and this error is built here with PostgREST's code, status and
+  /// wording.
+  private static func singularityError(
+    rowCount: Int, response: HTTPTypes.HTTPResponse
+  ) -> PostgrestError {
+    var notAcceptable = response
+    notAcceptable.status = .notAcceptable
+    notAcceptable.headerFields[.contentLength] = nil
+    notAcceptable.headerFields[.contentRange] = nil
+    let body = Data(
+      #"""
+      {"code":"PGRST116","details":"The result contains \#(rowCount) rows",\#
+      "hint":null,"message":"Cannot coerce the result to a single JSON object"}
+      """#.utf8)
+    return PostgrestError.server(notAcceptable, body: body)
   }
 
   func httpRequest(for configuration: PostgrestClient.Configuration) -> HTTPTypes.HTTPRequest {
@@ -188,6 +217,16 @@ public struct _PostgrestRequest: Sendable {
   }
 }
 
+extension Data {
+  fileprivate func trimmingJSONWhitespace() -> Data {
+    let whitespace: Set<UInt8> = [0x20, 0x09, 0x0A, 0x0D]
+    guard let start = firstIndex(where: { !whitespace.contains($0) }),
+      let end = lastIndex(where: { !whitespace.contains($0) })
+    else { return Data() }
+    return Data(self[start...end])
+  }
+}
+
 extension PostgrestClient {
   func makeRequest(
     _ relation: String,
@@ -203,5 +242,4 @@ extension PostgrestClient {
 extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
-  static let proxyStatus = Self("Proxy-Status")!
 }

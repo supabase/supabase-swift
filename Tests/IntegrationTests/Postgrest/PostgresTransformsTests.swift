@@ -218,8 +218,7 @@ struct PostgrestTransformsTests {
     #expect(res == nil)
   }
 
-  /// PostgREST answers a write that affects no row with 406 and `PGRST116`; `maybeSingle()` reads
-  /// it as a success with no row.
+  /// A write that affects no row returns an empty array, which `maybeSingle()` reads as no row.
   @Test
   func maybeSingleOnAWriteThatAffectsNoRowReportsOK() async throws {
     let response: PostgrestResponse<JSONValue?> =
@@ -233,7 +232,6 @@ struct PostgrestTransformsTests {
     #expect(response.value == nil)
     #expect(response.status == .ok)
     #expect(String(decoding: response.body, as: UTF8.self) == "null")
-    #expect(response.headers[HTTPField.Name("Proxy-Status")!] == nil)
   }
 
   @Test

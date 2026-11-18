@@ -347,7 +347,7 @@ struct TypedUntypedParityTests {
     try await expectParity {
       _ = try await $0.from(Todo.self).insert(draft).execute()
     } untyped: {
-      _ = try await $0.from("todos").insert(draft, returning: .minimal).execute()
+      _ = try await $0.from("todos").insert(draft).execute()
     }
   }
 
@@ -357,7 +357,7 @@ struct TypedUntypedParityTests {
     try await expectParity {
       _ = try await $0.from(Todo.self).insert(drafts).execute()
     } untyped: {
-      _ = try await $0.from("todos").insert(drafts, returning: .minimal).execute()
+      _ = try await $0.from("todos").insert(drafts).execute()
     }
   }
 
@@ -377,14 +377,14 @@ struct TypedUntypedParityTests {
     try await expectParity {
       _ = try await $0.from(Todo.self).upsert(draft).execute()
     } untyped: {
-      _ = try await $0.from("todos").upsert(draft, onConflict: "id", returning: .minimal).execute()
+      _ = try await $0.from("todos").upsert(draft).execute()
     }
     try await expectParity {
       _ = try await $0.from(Todo.self)
         .upsert(draft, onConflict: \.task, resolution: .ignoreDuplicates).execute()
     } untyped: {
       _ = try await $0.from("todos")
-        .upsert(draft, onConflict: "task", returning: .minimal, ignoreDuplicates: true).execute()
+        .upsert(draft, onConflict: "task", ignoreDuplicates: true).execute()
     }
   }
 
@@ -393,7 +393,7 @@ struct TypedUntypedParityTests {
     try await expectParity {
       _ = try await $0.from(Todo.self).update { $0.task = "b" }.where { $0.id.eq(1) }.execute()
     } untyped: {
-      _ = try await $0.from("todos").update(["task": "b"], returning: .minimal)
+      _ = try await $0.from("todos").update(["task": "b"])
         .eq("id", value: 1).execute()
     }
     try await expectParity {
@@ -410,7 +410,7 @@ struct TypedUntypedParityTests {
     try await expectParity {
       _ = try await $0.from(Todo.self).delete().where { $0.id.eq(1) }.execute()
     } untyped: {
-      _ = try await $0.from("todos").delete(returning: .minimal).eq("id", value: 1).execute()
+      _ = try await $0.from("todos").delete().eq("id", value: 1).execute()
     }
   }
 }

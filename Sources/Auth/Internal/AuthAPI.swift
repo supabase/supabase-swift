@@ -194,7 +194,7 @@ extension AuthAPI {
   func signUp(
     phone: String,
     password: String,
-    channel: MessagingChannel,
+    channel: MessagingChannel?,
     userMetadata: JSONObject,
     captchaToken: String?
   ) throws -> AuthRequest<SignUpResult> {

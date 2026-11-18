@@ -70,10 +70,6 @@ extension StorageClient {
       self.allowedMimeTypes = options.allowedMimeTypes
       self.versioningStatus = options.versioningStatus?.rawValue
     }
-
-    var isEmpty: Bool {
-      `public` == nil && fileSizeLimit == nil && allowedMimeTypes == nil && versioningStatus == nil
-    }
   }
 
   /// Creates a new Storage bucket.
@@ -123,16 +119,11 @@ extension StorageClient {
   ///
   /// - Parameters:
   ///   - id: The unique identifier of the bucket to update.
-  ///   - options: The settings to change. At least one field must be set.
-  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest`` if no
-  ///   field is set, or if the bucket does not exist or the caller is not authorized.
+  ///   - options: The settings to change. Storage rejects an update with no field set.
+  /// - Throws: ``StorageError`` if no field is set, the bucket does not exist, or the caller is not
+  ///   authorized.
   public func updateBucket(_ id: String, options: UpdateBucketOptions) async throws {
-    let parameters = BucketParameters(options: options)
-    guard !parameters.isEmpty else {
-      throw StorageError(
-        kind: .invalidRequest, message: "updateBucket needs at least one field to change.")
-    }
-    try await api.execute(api.requests.updateBucket(id, parameters))
+    try await api.execute(api.requests.updateBucket(id, BucketParameters(options: options)))
   }
 
   /// Removes all objects inside a bucket without deleting the bucket itself.

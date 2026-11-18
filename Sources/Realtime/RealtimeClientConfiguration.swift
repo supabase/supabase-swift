@@ -39,8 +39,6 @@ extension RealtimeClient {
   /// ### Logging
   /// - ``logger``
   /// - ``serverLogLevel``
-  /// ### Testing
-  /// - ``clock``
   /// ### Default Values
   /// - ``defaultHeartbeatInterval``
   /// - ``defaultRequestTimeout``
@@ -49,7 +47,7 @@ extension RealtimeClient {
   /// - ``defaultObservesAppLifecycle``
   /// - ``defaultMonitorsNetworkPath``
   /// ### Initialization
-  /// - ``init(url:headers:heartbeatInterval:requestTimeout:connectsOnSubscribe:disconnectOnEmptyChannelsAfter:observesAppLifecycle:monitorsNetworkPath:serverLogLevel:accessToken:webSocketTransport:http:logger:clock:)``
+  /// - ``init(url:headers:heartbeatInterval:requestTimeout:connectsOnSubscribe:disconnectOnEmptyChannelsAfter:observesAppLifecycle:monitorsNetworkPath:serverLogLevel:accessToken:webSocketTransport:http:logger:)``
   public struct Configuration: Sendable {
     /// The Realtime server URL, such as `https://<project>.supabase.co/realtime/v1`.
     public var url: URL
@@ -142,12 +140,17 @@ extension RealtimeClient {
     /// Returns the access token channels join with and `httpSend` sends.
     ///
     /// The client calls it before a join, when a heartbeat goes out, and one minute before the
-    /// token's `exp`, at most once every 10 seconds. A call that throws, returns `nil`, or does not
-    /// return within ``requestTimeout`` keeps the current token. `SupabaseClient` sets it to the
-    /// signed-in user's token.
+    /// token's `exp`, at most once every 10 seconds. A call that throws or does not return within
+    /// ``requestTimeout`` keeps the current token. Return `nil` when no user is signed in: the
+    /// client clears the current token, joins without one, so the server uses the API key, and
+    /// sends the `apikey` header's value to the joined channels. The server ignores that value when
+    /// it is an `sb_` key, so a joined channel then keeps the old token until it rejoins or the
+    /// token expires; remove the channels at sign-out to end access at once. `SupabaseClient` sets
+    /// it to the signed-in user's token, or the API key when no user is signed in.
     ///
     /// `httpSend` calls it for every request. If it throws, `httpSend` throws ``RealtimeError``
-    /// with kind ``RealtimeError/Kind-swift.struct/accessToken``.
+    /// with kind ``RealtimeError/Kind-swift.struct/accessToken``. If it returns `nil`, the request
+    /// sends only `apikey`, with no `Authorization` header.
     ///
     /// This is Realtime's only token source. Do not add an `AccessTokenMiddleware` to ``http``.
     public var accessToken: (@Sendable () async throws -> String?)?
@@ -174,7 +177,17 @@ extension RealtimeClient {
     /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
     /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
     /// yourself, as this package does not export it.
-    public var clock: any Clock<Duration>
+    ///
+    /// A test hook: import Realtime with `@_spi(Testing)`, and set it on the configuration before
+    /// you create the client.
+    @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
+
+    /// The decoder the typed `postgresChanges(of:)` of the `Supabase` module uses when the call
+    /// passes none. `SupabaseClient` sets it to its database decoder, so a row decodes the same
+    /// from a query and from a change. Readers ignore its key strategy, as the typed query API
+    /// does, and read it when they decode, so a later change to the decoder applies. `nil` keeps
+    /// that method's own default.
+    package var typedRowDecoder: JSONDecoder?
 
     /// Default interval between heartbeat messages sent to keep the connection alive.
     public static let defaultHeartbeatInterval: Duration = .seconds(25)
@@ -230,9 +243,6 @@ extension RealtimeClient {
     ///   - webSocketTransport: The WebSocket stack to connect with. Defaults to `nil`, which uses ``URLSessionWebSocketTransport``.
     ///   - http: The transport and middleware chain REST broadcast calls go through.
     ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
-    ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
-    ///     `ContinuousClock()`; pass a `TestClock` from swift-clocks (add it to your
-    ///     test target yourself) to drive them deterministically in tests.
     public init(
       url: URL,
       headers: HTTPFields = [:],
@@ -246,8 +256,7 @@ extension RealtimeClient {
       accessToken: (@Sendable () async throws -> String?)? = nil,
       webSocketTransport: (any WebSocketTransport)? = nil,
       http: HTTPClientConfiguration = .init(),
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
-      clock: any Clock<Duration> = ContinuousClock()
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime")
     ) {
       self.url = url
       self.headers = headers
@@ -262,7 +271,6 @@ extension RealtimeClient {
       self.webSocketTransport = webSocketTransport
       self.http = http
       self.logger = logger
-      self.clock = clock
     }
   }
 }

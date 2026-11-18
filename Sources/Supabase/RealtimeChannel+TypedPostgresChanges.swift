@@ -32,11 +32,12 @@ extension RealtimeChannel {
   /// }
   /// ```
   ///
-  /// Realtime understands fewer filters than PostgREST. The filter can use `eq`, `neq`, `gt`,
-  /// `gte`, `lt`, `lte`, `in`, `like`, `ilike`, `regexMatch`, `regexIMatch`, `isDistinct`, and the
-  /// `IS` checks, on stored columns. It can negate one condition with `!` and join conditions with
-  /// `&&`. Any other filter throws: `||`, `!` over a group, the array, range, JSON and full-text
-  /// operators, JSON paths, and casts. A `raw` filter must follow the same rules.
+  /// The Realtime filter grammar is smaller than PostgREST's. It joins conditions with `&&` and
+  /// negates one condition with `!`. This method throws for `||` and for `!` over a group,
+  /// because the grammar cannot write them. The server judges the rest, such as the operators
+  /// and the columns. When it refuses the filter, ``RealtimeChannel/subscribe()`` throws a
+  /// ``RealtimeError`` of kind ``RealtimeError/Kind-swift.struct/server`` with the server's
+  /// message.
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
@@ -46,11 +47,12 @@ extension RealtimeChannel {
   ///   - event: The change events to receive. Defaults to ``PostgresChangeEvent/all``.
   ///   - filter: Builds the filter from the relation's columns, or `nil` for every row.
   ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. `nil` uses the decoder of the
-  ///     typed query API, a `JSONDecoder.supabase()`, so a row decodes the same from a query and
-  ///     from a change.
+  ///     typed query API, so a row decodes the same from a query and from a change: on a
+  ///     `SupabaseClient` channel, ``SupabaseClient/Configuration/Database/decoder`` without its
+  ///     key strategy; on a standalone `RealtimeClient`, a `JSONDecoder.supabase()`.
   /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
   /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
-  ///   when Realtime cannot run the filter. The message names the part it cannot run.
+  ///   when the Realtime filter grammar cannot write the filter. The message names the part.
   @_spi(Experimental)
   nonisolated public func postgresChanges<R: _PostgrestRelation>(
     of relation: R.Type,
@@ -61,7 +63,8 @@ extension RealtimeChannel {
     let rawFilter = try filter.map { try $0(R.columns).realtimeFilter }
     return await postgresChanges(
       of: R.self, event: event, schema: R.schema, table: R.relationName, rawFilter: rawFilter,
-      select: nil, decoder: decoder ?? PostgrestClient.Configuration.jsonDecoder
+      select: nil,
+      decoder: decoder ?? typedRowDecoder ?? PostgrestClient.Configuration.jsonDecoder
     )
   }
 
@@ -91,7 +94,7 @@ extension _PostgrestFilter {
   /// conditions joined by commas, which the server ANDs.
   ///
   /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
-  ///   naming the first part Realtime cannot run.
+  ///   naming the first part the grammar cannot write.
   var realtimeFilter: String {
     get throws {
       do {
@@ -106,13 +109,13 @@ extension _PostgrestFilter {
 
   /// The filter's conditions in the `postgres_changes` grammar.
   ///
-  /// - Throws: ``UnsupportedRealtimeFilter`` naming the first part Realtime cannot run.
+  /// - Throws: ``UnsupportedRealtimeFilter`` naming the first part the grammar cannot write.
   func realtimeConditions() throws(UnsupportedRealtimeFilter) -> [String] {
     try node.realtimeConditions()
   }
 }
 
-/// A part of a typed filter that a `postgres_changes` binding cannot express.
+/// A part of a typed filter that the `postgres_changes` filter grammar cannot write.
 struct UnsupportedRealtimeFilter: Error {
   var reason: String
 }
@@ -139,29 +142,14 @@ extension PostgrestFilterNode {
     let prefix = negated ? "not." : ""
     switch self {
     case .comparison(let column, let `operator`, let operand):
-      try Self.requireRealtimeColumn(column)
-      try Self.requireRealtimeOperator(`operator`.token)
       if case .invalid(let reason) = operand {
         throw UnsupportedRealtimeFilter(reason: reason)
       }
       return "\(column)=\(prefix)\(`operator`.token).\(operand.grouped)"
     case .raw(let column, let operand):
-      try Self.requireRealtimeColumn(column)
-      var expression = Substring(operand)
-      if expression.hasPrefix("not.") {
-        guard !negated else {
-          throw UnsupportedRealtimeFilter(
-            reason: "Realtime filters cannot negate `\(column)=\(operand)` again.")
-        }
-        expression = expression.dropFirst("not.".count)
+      if negated, operand.hasPrefix("not.") {
+        return "\(column)=\(operand.dropFirst("not.".count))"
       }
-      guard expression.contains(".") else {
-        throw UnsupportedRealtimeFilter(
-          reason:
-            "The raw Realtime filter `\(column)=\(operand)` is not in the `operator.value` form."
-        )
-      }
-      try Self.requireRealtimeOperator(String(expression.prefix { $0 != "." }))
       return "\(column)=\(prefix)\(operand)"
     case .or where !negated:
       throw UnsupportedRealtimeFilter(
@@ -172,31 +160,6 @@ extension PostgrestFilterNode {
       throw UnsupportedRealtimeFilter(
         reason: "Realtime filters cannot negate a group of conditions. Apply `!` to one condition."
       )
-    }
-  }
-
-  /// The values of the server's `realtime.equality_op` type. A raw node is checked against the
-  /// same list as a typed operator, so both spellings accept and reject the same filters.
-  private static let realtimeOperators: Set<String> = [
-    "eq", "neq", "gt", "gte", "lt", "lte", "in", "like", "ilike", "is", "match", "imatch",
-    "isdistinct",
-  ]
-
-  private static func requireRealtimeOperator(_ token: String) throws(UnsupportedRealtimeFilter) {
-    guard realtimeOperators.contains(token) else {
-      throw UnsupportedRealtimeFilter(
-        reason: "Realtime filters do not support the `\(token)` operator.")
-    }
-  }
-
-  private static func requireRealtimeColumn(_ column: String) throws(UnsupportedRealtimeFilter) {
-    if column.contains("->") {
-      throw UnsupportedRealtimeFilter(
-        reason: "Realtime cannot filter on the JSON path `\(column)`. Filter on a stored column.")
-    }
-    if column.contains("::") {
-      throw UnsupportedRealtimeFilter(
-        reason: "Realtime cannot filter on the cast `\(column)`. Filter on a stored column.")
     }
   }
 }

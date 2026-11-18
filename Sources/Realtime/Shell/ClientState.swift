@@ -16,7 +16,7 @@ enum Input: Sendable {
   case socket(SocketInput, generation: Int)
   case connectEnded(Result<any WebSocketConnection, any Error>, attempt: Int)
   case timerFired(TimerID, token: UInt64)
-  case tokenFetched(String?, generation: Int)
+  case tokenFetched(RealtimeCore.TokenFetchResult, generation: Int)
   case streamEnded(StreamID)
   case waiterCancelled(WaiterID)
   /// A caller of `refreshAccessToken()` waiting for the call in flight was cancelled.
@@ -114,13 +114,16 @@ final class Fanout<Element: Sendable> {
   /// the fan-out retains one.
   ///
   /// `filter` applies to yielded elements only; the current element is always replayed.
+  /// `bufferingPolicy` sets what the stream keeps while its consumer is slow.
   /// `onTermination` runs when the consumer ends the stream, never when ``finish()`` does.
   func subscribe(
     _ id: StreamID,
     where filter: ((Element) -> Bool)? = nil,
+    bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy = .unbounded,
     onTermination: @escaping @Sendable () -> Void
   ) -> AsyncStream<Element> {
-    let (stream, continuation) = AsyncStream.makeStream(of: Element.self)
+    let (stream, continuation) = AsyncStream.makeStream(
+      of: Element.self, bufferingPolicy: bufferingPolicy)
     if let current { continuation.yield(current) }
     guard !isFinished else {
       continuation.finish()
@@ -288,8 +291,9 @@ final class ChannelState {
         binding.yield(.change(delivery.change))
       }
     case .presence(let change, let state):
-      presenceChanges.yield(change)
+      // The state goes first, so a consumer that sees the change can read the state it produced.
       presenceStates.yield(state)
+      presenceChanges.yield(change)
     case .event(let event):
       events.yield(event)
       yieldSignal(.event(event))

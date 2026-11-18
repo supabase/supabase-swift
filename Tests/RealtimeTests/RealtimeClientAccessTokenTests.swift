@@ -8,6 +8,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
 import TestHelpers
 import Testing
@@ -284,16 +285,76 @@ struct RealtimeClientAccessTokenTests {
     #expect(await client.accessToken == "second")
   }
 
+  // MARK: No signed-in user
+
+  /// SWIFT-V3-004: a callback that returns a token and then `nil` puts no old token in the next
+  /// join or REST broadcast, and the joined channel gets the API key in place of the old token.
+  @Test
+  func aNilAfterATokenSendsNoOldToken() async throws {
+    let provider = TokenProvider { call in call == 1 ? "user-token" : nil }
+    let http = RecordingTransport()
+    http.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let host = await RealtimeTestHost(
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        headers: [.apikey: "anon-key"],
+        heartbeatInterval: .seconds(3600),
+        observesAppLifecycle: false,
+        accessToken: provider.callback
+      ),
+      http: HTTPClient(transport: http)
+    )
+    try await subscribe(host)
+
+    await host.clock.advance(by: RealtimeClient.accessTokenRefreshInterval)
+    await host.client.setAuth()
+    #expect(await host.client.accessToken == nil)
+    let push = try await host.receive(event: ChannelEvent.accessToken)
+    #expect(push.payload["access_token"] == "anon-key")
+
+    let lobby = await host.client.channel("lobby")
+    async let subscribed: Void = lobby.subscribe()
+    let join = try await host.receive(where: {
+      $0.event == ChannelEvent.join && $0.topic == "realtime:lobby"
+    })
+    #expect(join.payload["access_token"] == nil)
+    host.confirmJoin(join)
+    try await subscribed
+
+    try await lobby.httpSend(event: "ping", payload: ["value": "1"])
+    let headers = try #require(http.requests.last).head.headerFields
+    #expect(headers[.authorization] == nil)
+    #expect(headers[.apikey] == "anon-key")
+  }
+
+  @Test
+  func aFailingCallbackKeepsTheToken() async throws {
+    struct Failure: Error {}
+    let provider = TokenProvider { call in
+      if call == 1 { return "user-token" }
+      throw Failure()
+    }
+    let host = await makeHost(provider)
+    try await subscribe(host)
+
+    await host.clock.advance(by: RealtimeClient.accessTokenRefreshInterval)
+    await host.client.setAuth()
+
+    #expect(provider.calls == 2)
+    #expect(await host.client.accessToken == "user-token")
+    #expect(accessTokenPushes(host).isEmpty)
+  }
+
   // MARK: Helpers
 
   /// An `accessToken` callback that numbers its calls from 1 and answers each with `respond`.
   private final class TokenProvider: Sendable {
     private let count = LockIsolated(0)
-    private let respond: @Sendable (_ call: Int) async -> String?
+    private let respond: @Sendable (_ call: Int) async throws -> String?
     private let callNumbers: AsyncStream<Int>
     private let callNumbersContinuation: AsyncStream<Int>.Continuation
 
-    init(_ respond: @escaping @Sendable (_ call: Int) async -> String?) {
+    init(_ respond: @escaping @Sendable (_ call: Int) async throws -> String?) {
       self.respond = respond
       (callNumbers, callNumbersContinuation) = AsyncStream.makeStream()
     }
@@ -307,7 +368,7 @@ struct RealtimeClientAccessTokenTests {
           return $0
         }
         callNumbersContinuation.yield(call)
-        return await respond(call)
+        return try await respond(call)
       }
     }
 

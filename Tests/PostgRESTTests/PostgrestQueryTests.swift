@@ -86,7 +86,7 @@ struct PostgrestQueryTests {
     #expect(response.count == 7)
     let prefer = capture.header("Prefer") ?? ""
     #expect(prefer.contains("count=exact"))
-    #expect(prefer.contains("return=minimal"))
+    #expect(prefer.contains("return=") == false)
   }
 
   @Test
@@ -147,12 +147,51 @@ struct PostgrestQueryTests {
   }
 
   @Test
-  func maybeSingleThrowsForMoreThanOneRow() async throws {
+  func maybeSingleThrowsPGRST116ForMoreThanOneRow() async throws {
     let capture = try QueryCapture(body: #"[{"id":1,"task":"a"},{"id":2,"task":"b"}]"#)
     let error = await #expect(throws: PostgrestError.self) {
       _ = try await capture.client.from(Todo.self).select().maybeSingle().execute()
     }
-    #expect(error?.kind == .decoding)
+    #expect(error?.kind == .server)
+    #expect(error?.code == "PGRST116")
+    #expect(error?.response?.status == .notAcceptable)
+    #expect(error?.serverError?.details == "The result contains 2 rows")
+  }
+
+  @Test(arguments: [
+    #"[]"#,
+    #"[{"id":1,"task":"buy milk"}]"#,
+    #"[{"id":1,"task":"a"},{"id":2,"task":"b"}]"#,
+  ])
+  func maybeSingleBehavesTheSameOnTheTypedAndUntypedPaths(body: String) async throws {
+    let capture = try QueryCapture(body: body)
+    let typed = await result {
+      try await capture.client.from(Todo.self).select().maybeSingle().execute()
+    }
+    let typedAccept = capture.header("Accept")
+    let untyped = await result {
+      try await capture.client.from("todos").select().maybeSingle().execute()
+        as PostgrestResponse<Todo?>
+    }
+    #expect(capture.header("Accept") == typedAccept)
+
+    switch (typed, untyped) {
+    case (.success(let typed), .success(let untyped)):
+      #expect(typed.value?.task == untyped.value?.task)
+      #expect(typed.status == untyped.status)
+      #expect(typed.body == untyped.body)
+    case (.failure(let typed as PostgrestError), .failure(let untyped as PostgrestError)):
+      #expect(typed.kind == untyped.kind)
+      #expect(typed.code == untyped.code)
+      #expect(typed.serverError == untyped.serverError)
+      #expect(typed.response?.status == untyped.response?.status)
+    default:
+      Issue.record("The paths disagree: typed \(typed), untyped \(untyped)")
+    }
+  }
+
+  private func result<T>(_ body: () async throws -> T) async -> Result<T, any Error> {
+    do { return .success(try await body()) } catch { return .failure(error) }
   }
 
   @Test

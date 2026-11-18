@@ -57,11 +57,13 @@ import Helpers
 /// ### Broadcasting
 /// - ``broadcast(event:payload:encoder:)``
 /// - ``broadcast(event:data:)``
+/// - ``broadcast(_:encoder:)``
 /// - ``httpSend(event:payload:encoder:timeout:)``
 /// - ``httpSend(event:data:timeout:)``
 /// ### Presence
 /// - ``presenceState``
 /// - ``presenceStates()``
+/// - ``presenceStates(bufferingPolicy:)``
 /// - ``presenceChanges()``
 /// - ``track(_:encoder:)``
 /// - ``untrack()``
@@ -70,6 +72,8 @@ import Helpers
 /// - ``postgresChanges(of:event:schema:table:filter:select:decoder:)``
 /// ### Broadcast Events
 /// - ``broadcasts(event:)``
+/// - ``broadcasts(event:bufferingPolicy:)``
+/// - ``broadcasts(of:bufferingPolicy:decoder:)``
 /// ### Channel Events
 /// - ``events()``
 public final class RealtimeChannel: Sendable, Hashable {
@@ -90,6 +94,12 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// Weak: the client owns its channels' state, which holds this handle, and a channel the app
   /// keeps after releasing the client must not keep the client (and its socket) alive.
   var client: RealtimeClient? { clientReference.value }
+
+  /// The `typedRowDecoder` of the client configuration with its key strategy ignored, or `nil`
+  /// once the client is gone.
+  package var typedRowDecoder: JSONDecoder? {
+    client?.configuration.typedRowDecoder?.ignoringKeyStrategy()
+  }
   private let clientReference: WeakClient
 
   init(
@@ -255,6 +265,23 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   channel's ``topic`` is too long.
   public func broadcast(event: String, data: Data) async throws {
     try await broadcast(event: event, payload: .binary(data))
+  }
+
+  /// Sends a ``BroadcastEvent`` value over the WebSocket, under the type's event name.
+  ///
+  /// ```swift
+  /// try await channel.broadcast(Cursor(x: 10, y: 20))
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - message: The value to send. Its type's ``BroadcastEvent/event`` is the event name. It
+  ///     must encode as a JSON object.
+  ///   - encoder: The encoder for `message`. `nil` uses `JSONEncoder.supabase()`.
+  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``.
+  public func broadcast<Event: BroadcastEvent & Encodable>(
+    _ message: Event, encoder: JSONEncoder? = nil
+  ) async throws {
+    try await broadcast(event: Event.checkedEvent, payload: message, encoder: encoder)
   }
 
   private func broadcast(event: String, payload: BroadcastPushPayload) async throws {

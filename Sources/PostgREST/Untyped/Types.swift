@@ -38,7 +38,7 @@ public struct PostgrestResponse<T> {
   /// The HTTP status PostgREST answered with.
   ///
   /// A ``PostgrestRequestBuilder/maybeSingle()`` request that matches no row reads as `200 OK`
-  /// with a `null` ``body``, although PostgREST answers it with `406 Not Acceptable`.
+  /// with a `null` ``body``.
   public var status: HTTPResponse.Status
 
   /// Every response header. Import `HTTPTypes` to spell header names.

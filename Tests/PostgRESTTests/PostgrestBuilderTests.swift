@@ -13,7 +13,7 @@ import Helpers
 import TestHelpers
 import Testing
 
-@testable import PostgREST
+@_spi(Testing) @testable import PostgREST
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -86,69 +86,27 @@ struct PostgrestBuilderTests {
 
   @Test
   func maybeSingleReturnsNilOnZeroRows() async throws {
-    transport.stub(
-      .get, url.appendingPathComponent("users"), status: 406,
-      data: Data(
-        """
-        {
-          "code": "PGRST116",
-          "details": "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row",
-          "message": "JSON object requested, multiple (or no) rows returned"
-        }
-        """.utf8
-      ))
+    transport.stub(.get, url.appendingPathComponent("users"), data: Data("[]".utf8))
 
-    let user: User? =
+    let response: PostgrestResponse<User?> =
       try await sut
       .from("users")
       .select()
       .maybeSingle()
       .execute()
-      .value
 
-    #expect(user == nil)
+    #expect(response.value == nil)
+    #expect(response.status == .ok)
+    #expect(response.body == Data("null".utf8))
   }
 
   @Test
-  func maybeSingleReturnsNilOnZeroRowsWithNewerPostgrestWording() async throws {
+  func maybeSingleThrowsPGRST116OnMultipleRows() async throws {
     transport.stub(
-      .get, url.appendingPathComponent("users"), status: 406,
-      data: Data(
-        """
-        {
-          "code": "PGRST116",
-          "details": "The result contains 0 rows",
-          "message": "Cannot coerce the result to a single JSON object"
-        }
-        """.utf8
-      ))
+      .get, url.appendingPathComponent("users"),
+      data: Data(#"[{"id":1,"username":"a"},{"id":2,"username":"b"}]"#.utf8))
 
-    let user: User? =
-      try await sut
-      .from("users")
-      .select()
-      .maybeSingle()
-      .execute()
-      .value
-
-    #expect(user == nil)
-  }
-
-  @Test
-  func maybeSingleThrowsOnMultipleRows() async throws {
-    transport.stub(
-      .get, url.appendingPathComponent("users"), status: 406,
-      data: Data(
-        """
-        {
-          "code": "PGRST116",
-          "details": "Results contain 2 rows, application/vnd.pgrst.object+json requires 1 row",
-          "message": "JSON object requested, multiple (or no) rows returned"
-        }
-        """.utf8
-      ))
-
-    do {
+    let error = await #expect(throws: PostgrestError.self) {
       let _: User? =
         try await sut
         .from("users")
@@ -156,10 +114,12 @@ struct PostgrestBuilderTests {
         .maybeSingle()
         .execute()
         .value
-      Issue.record("Expected error to be thrown")
-    } catch let error as PostgrestError {
-      #expect(error.code == "PGRST116")
     }
+    #expect(error?.kind == .server)
+    #expect(error?.code == "PGRST116")
+    #expect(error?.response?.status == .notAcceptable)
+    #expect(error?.serverError?.message == "Cannot coerce the result to a single JSON object")
+    #expect(error?.serverError?.details == "The result contains 2 rows")
   }
 
   @Test
@@ -168,23 +128,59 @@ struct PostgrestBuilderTests {
       .get, url.appendingPathComponent("users"),
       data: Data(
         """
-        {
-          "id": 1,
-          "username": "admin"
-        }
+        [
+          {
+            "id": 1,
+            "username": "admin"
+          }
+        ]
         """.utf8
       ))
 
-    let user: User? =
+    let response: PostgrestResponse<User?> =
       try await sut
       .from("users")
       .select()
       .maybeSingle()
       .execute()
+
+    #expect(response.value?.id == 1)
+    #expect(response.value?.username == "admin")
+    #expect(response.string()?.hasPrefix("{") == true)
+  }
+
+  @Test
+  func maybeSingleKeepsAServerErrorAsItIs() async throws {
+    transport.stub(
+      .get, url.appendingPathComponent("users"), status: 406,
+      data: Data(
+        #"{"code":"PGRST116","details":"The result contains 0 rows","message":"m"}"#.utf8))
+
+    let error = await #expect(throws: PostgrestError.self) {
+      let _: User? = try await sut.from("users").select().maybeSingle().execute().value
+    }
+    #expect(error?.code == "PGRST116")
+  }
+
+  @Test
+  func singleAfterMaybeSingleSendsTheObjectMediaTypeAndKeepsTheBody() async throws {
+    transport.stub(
+      .get, url.appendingPathComponent("users"),
+      data: Data(#"{"id":1,"username":"admin"}"#.utf8))
+
+    let user: User =
+      try await sut
+      .from("users")
+      .select()
+      .maybeSingle()
+      .single()
+      .execute()
       .value
 
-    #expect(user?.id == 1)
-    #expect(user?.username == "admin")
+    #expect(user.id == 1)
+    #expect(
+      sut.from("users").select().maybeSingle().single().request.headerFields[.accept]
+        == "application/vnd.pgrst.object+json")
   }
 
   @Test
@@ -794,10 +790,15 @@ struct PostgrestBuilderTests {
       }
       return (head, data.isEmpty ? nil : HTTPBody(data))
     }
+    var configuration = PostgrestClient.Configuration(
+      url: url,
+      http: .init(transport: transport),
+      decoder: decoder,
+      retryEnabled: retryEnabled
+    )
+    configuration.clock = ImmediateRetryTestClock()
     return try PostgrestClient(
-      configuration: .init(
-        url: url, http: .init(transport: transport), decoder: decoder, retryEnabled: retryEnabled,
-        clock: ImmediateRetryTestClock())
+      configuration: configuration
     )
   }
 

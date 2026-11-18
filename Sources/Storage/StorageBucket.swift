@@ -453,8 +453,8 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent;
-  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
+  ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent,
+  ///     rounded toward zero; Storage rejects less than one second with a 400.
   ///   - options: The download behavior, image transformation, version and cache nonce.
   /// - Returns: A signed `URL` ready to share.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
@@ -496,8 +496,8 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - paths: File paths to sign, e.g. `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent;
-  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
+  ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent,
+  ///     rounded toward zero; Storage rejects less than one second with a 400.
   ///   - options: The download behavior and cache nonce.
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
   /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
@@ -524,14 +524,9 @@ public struct StorageBucket: Sendable {
     }
   }
 
-  /// The whole seconds the sign routes take. A per-call value, so a bad one throws rather than
-  /// traps.
-  private static func seconds(_ expiresIn: Duration) throws -> Int {
-    guard expiresIn >= .seconds(1) else {
-      throw StorageError(
-        kind: .invalidRequest, message: "A signed URL must expire at least one second from now.")
-    }
-    return Int(expiresIn.components.seconds)
+  /// The whole seconds the sign routes take. Storage judges the value.
+  private static func seconds(_ expiresIn: Duration) -> Int {
+    Int(expiresIn.components.seconds)
   }
 
   /// The `download` and `cacheNonce` query items every URL-returning method appends.
@@ -608,7 +603,7 @@ public struct StorageBucket: Sendable {
     options: ListOptions = ListOptions()
   ) async throws -> [StorageObject] {
     try await api.execute(
-      api.requests.list(bucket: id, prefix: ObjectKey(prefix: path ?? ""), options: options)
+      api.requests.list(bucket: id, prefix: ObjectKey(path ?? ""), options: options)
     )
     .decoded()
   }

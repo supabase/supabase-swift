@@ -50,15 +50,17 @@ struct ResumableUploadRegistryTests {
     ResumableStore(directory: root.appendingPathComponent("store"))
   }
 
-  private func saveRecord(fingerprint: Fingerprint, offset: Int64 = 8) throws
-    -> ResumableUploadRecord
-  {
+  private func saveRecord(
+    fingerprint: Fingerprint, offset: Int64 = 8,
+    uploadURL: URL? = nil
+  ) throws -> ResumableUploadRecord {
     let source = try store.prepare(data: Data(repeating: 1, count: 20), fingerprint: fingerprint)
     let record = ResumableUploadRecord(
       fingerprint: fingerprint, bucketID: "bucket", path: "video.mp4", totalBytes: 20,
       source: source, sourceModificationDate: .distantPast,
-      uploadURL: URL(
-        string: "http://localhost:54321/storage/v1/upload/resumable/\(fingerprint.rawValue)")!,
+      uploadURL: uploadURL
+        ?? URL(
+          string: "http://localhost:54321/storage/v1/upload/resumable/\(fingerprint.rawValue)")!,
       createdAt: Date(), expiresAt: .distantFuture, lastKnownOffset: offset, chunkSize: 8,
       upsert: true, contentType: "video/mp4", cacheControl: "max-age=1", metadata: nil)
     try store.save(record)
@@ -122,8 +124,10 @@ struct ResumableUploadRegistryTests {
     respond(.noContent, headers: [.uploadOffset: "16"])
     respond(.noContent, headers: [.uploadOffset: "20", .tusComplete: "1"])
 
-    let uploads = try await storage.resumableUploads.resumeAll()
-    let object = try await uploads[0].result
+    let outcomes = try await storage.resumableUploads.resumeAll()
+    #expect(outcomes.count == 1)
+    #expect(outcomes[0].error == nil)
+    let object = try await outcomes[0].upload.result
 
     #expect(object.fullPath == "bucket/video.mp4")
     #expect(
@@ -132,6 +136,57 @@ struct ResumableUploadRegistryTests {
         "PATCH \(path)",
         "PATCH \(path)",
       ])
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func resumeAllReportsTheUploadTheServerRefusesAndResumesTheOthers() async throws {
+    let refused = try saveRecord(fingerprint: .repeating("a"))
+    let accepted = try saveRecord(fingerprint: .repeating("b"))
+    respond(.forbidden, headers: [.contentType: "text/plain"], body: "signature mismatch")
+    respond(.ok, headers: [.uploadOffset: "8"])
+
+    let outcomes = try await storage.resumableUploads.resumeAll()
+
+    #expect(outcomes.map(\.upload.fingerprint) == [refused.fingerprint, accepted.fingerprint])
+    let error = try #require(outcomes[0].error)
+    #expect(error.kind == .server)
+    #expect(error.serverError?.statusCode == 403)
+    guard case .failed = await outcomes[0].upload.status else {
+      Issue.record("The refused upload is not failed.")
+      return
+    }
+    await #expect(throws: StorageError.self) { try await outcomes[0].upload.result }
+    #expect(outcomes[1].error == nil)
+    guard case .uploading = await outcomes[1].upload.status else {
+      Issue.record("The accepted upload is not uploading.")
+      return
+    }
+    respond(.noContent)
+    await outcomes[1].upload.cancel()
+  }
+
+  @Test
+  func resumeAllCreatesAnExpiredUploadAgainWithoutAnError() async throws {
+    let record = try saveRecord(fingerprint: .repeating("a"))
+    let stalePath = "/storage/v1/upload/resumable/\(record.fingerprint.rawValue)"
+    respond(
+      .gone, headers: [.contentType: "text/plain"],
+      body: "The file for this url no longer exists")
+    respond(.created, headers: [.location: "/storage/v1/upload/resumable/new", .uploadOffset: "0"])
+    respond(.noContent, headers: [.uploadOffset: "8"])
+    respond(.noContent, headers: [.uploadOffset: "16"])
+    respond(.noContent, headers: [.uploadOffset: "20", .tusComplete: "1"])
+
+    let outcomes = try await storage.resumableUploads.resumeAll()
+    let object = try await outcomes[0].upload.result
+
+    #expect(outcomes.count == 1)
+    #expect(outcomes[0].error == nil)
+    #expect(object.fullPath == "bucket/video.mp4")
+    #expect(requests.value.prefix(2) == ["HEAD \(stalePath)", "POST /storage/v1/upload/resumable"])
+    #expect(
+      requests.value.dropFirst(2).allSatisfy { $0 == "PATCH /storage/v1/upload/resumable/new" })
     #expect(try store.records().isEmpty)
   }
 
@@ -195,6 +250,89 @@ struct ResumableUploadRegistryTests {
 
     try await storage.resumableUploads.clear()
     #expect(try store.records().isEmpty)
+  }
+
+  @Test(arguments: [
+    "https://attacker.example/storage/v1/upload/resumable/abc",
+    "http://localhost:54321/storage/v1/object/bucket/video.mp4",
+  ])
+  func pendingSkipsARecordWhoseUploadURLLeavesTheStorageOrigin(uploadURL: String) async throws {
+    _ = try saveRecord(fingerprint: .repeating("a"))
+    let other = try saveRecord(fingerprint: .repeating("b"), uploadURL: URL(string: uploadURL)!)
+
+    let uploads = try await storage.resumableUploads.pending()
+
+    #expect(uploads.map(\.fingerprint) == [.repeating("a")])
+    #expect(try store.record(fingerprint: .repeating("b"))?.uploadURL == other.uploadURL)
+    #expect(requests.value.isEmpty)
+  }
+
+  @Test
+  func pendingSkipsAnHTTPRecordForAnHTTPSClient() async throws {
+    _ = try saveRecord(
+      fingerprint: .repeating("a"),
+      uploadURL: URL(string: "http://ref.storage.supabase.co/storage/v1/upload/resumable/abc")!)
+    var configuration = StorageClient.Configuration(
+      url: URL(string: "https://ref.supabase.co/storage/v1")!, headers: [:])
+    configuration.resumable = ResumableUploadConfiguration(
+      directory: root.appendingPathComponent("store"))
+
+    let uploads = try await StorageClient(configuration: configuration).resumableUploads.pending()
+
+    #expect(uploads.isEmpty)
+  }
+
+  @Test
+  func pendingKeepsARecordOnTheProjectHostOfAHostedClient() async throws {
+    let record = try saveRecord(
+      fingerprint: .repeating("a"),
+      uploadURL: URL(string: "https://ref.supabase.co/storage/v1/upload/resumable/abc")!)
+    var configuration = StorageClient.Configuration(
+      url: URL(string: "https://ref.supabase.co/storage/v1")!, headers: [:])
+    configuration.resumable = ResumableUploadConfiguration(
+      directory: root.appendingPathComponent("store"))
+
+    let uploads = try await StorageClient(configuration: configuration).resumableUploads.pending()
+
+    #expect(uploads.map(\.fingerprint) == [record.fingerprint])
+  }
+
+  @Test
+  func startingAnUploadWhoseRecordLeavesTheStorageOriginCreatesItAgain() async throws {
+    _ = try saveRecord(fingerprint: .repeating("a"))
+    let upload = try #require(try await storage.resumableUploads.pending().first)
+    _ = try saveRecord(
+      fingerprint: .repeating("a"),
+      uploadURL: URL(string: "https://attacker.example/storage/v1/upload/resumable/abc")!)
+    respond(.created, headers: [.location: "/storage/v1/upload/resumable/new", .uploadOffset: "0"])
+
+    try await upload.start()
+
+    #expect(requests.value.first == "POST /storage/v1/upload/resumable")
+    #expect(
+      try store.record(fingerprint: .repeating("a"))?.uploadURL
+        == URL(string: "http://localhost:54321/storage/v1/upload/resumable/new"))
+    respond(.noContent)
+    await upload.cancel()
+  }
+
+  @Test
+  func startingAHandleWhoseSourceTheStoreRefusesSendsNothing() async throws {
+    let saved = try saveRecord(fingerprint: .repeating("a"))
+    let record = ResumableUploadRecord(
+      fingerprint: saved.fingerprint, bucketID: saved.bucketID, path: saved.path,
+      totalBytes: saved.totalBytes, source: .container(relativePath: "../outside.mp4"),
+      sourceModificationDate: saved.sourceModificationDate, uploadURL: saved.uploadURL,
+      createdAt: saved.createdAt, expiresAt: saved.expiresAt,
+      lastKnownOffset: saved.lastKnownOffset, chunkSize: saved.chunkSize, upsert: saved.upsert,
+      contentType: saved.contentType, cacheControl: saved.cacheControl, metadata: saved.metadata)
+    let upload = ResumableUpload.handle(record: record, api: try storage.api)
+    store.removeFiles(fingerprint: .repeating("a"))
+
+    let error = await #expect(throws: StorageError.self) { try await upload.start() }
+
+    #expect(error?.kind == .invalidRequest)
+    #expect(requests.value.isEmpty)
   }
 
   @Test
