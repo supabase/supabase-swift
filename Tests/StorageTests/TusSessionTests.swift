@@ -19,7 +19,7 @@ struct TusSessionTests {
   private let uploadURL = URL(string: "http://localhost:54321/storage/v1/upload/resumable/abc")!
 
   private func makeSUT(
-    upsert: Bool = false,
+    options: UploadOptions = UploadOptions(),
     fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)
   ) throws -> TusSession {
     TusSession(
@@ -39,7 +39,7 @@ struct TusSessionTests {
               }
               return (head, data.isEmpty ? nil : HTTPBody(data))
             }))),
-      upsert: upsert)
+      options: options)
   }
 
   private func response(
@@ -60,7 +60,7 @@ struct TusSessionTests {
 
   @Test
   func createSendsTusHeadersAndReadsTheLocation() async throws {
-    let sut = try makeSUT { request in
+    let sut = try makeSUT(options: options) { request in
       assertInlineSnapshot(of: request, as: .curl) {
         #"""
         curl \
@@ -84,7 +84,7 @@ struct TusSessionTests {
     }
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("folder/video.mp4"), length: 20, options: options)
+      bucket: "bucket", key: try ObjectKey("folder/video.mp4"), length: 20)
 
     #expect(created.uploadURL == uploadURL)
     #expect(created.offset == 0)
@@ -93,12 +93,12 @@ struct TusSessionTests {
 
   @Test
   func createWithoutUploadOffsetStartsAtZero() async throws {
-    let sut = try makeSUT { _ in
+    let sut = try makeSUT(options: options) { _ in
       self.response(201, headers: ["Location": "/storage/v1/upload/resumable/abc"])
     }
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options)
+      bucket: "bucket", key: try ObjectKey("a"), length: 20)
 
     #expect(created.offset == 0)
   }
@@ -121,10 +121,10 @@ struct TusSessionTests {
                 nil
               )
             }))),
-      upsert: false)
+      options: options)
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
+      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20)
 
     #expect(
       sent.value == URL(string: "https://ref.storage.supabase.co/storage/v1/upload/resumable"))
@@ -135,7 +135,7 @@ struct TusSessionTests {
 
   @Test
   func createWithTheFirstChunkSendsItAsAnOffsetStream() async throws {
-    let sut = try makeSUT { request in
+    let sut = try makeSUT(options: options) { request in
       #expect(
         request.value(forHTTPHeaderField: "Content-Type") == "application/offset+octet-stream")
       #expect(request.httpBody == Data(repeating: 1, count: 6))
@@ -144,7 +144,7 @@ struct TusSessionTests {
     }
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options,
+      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20,
       firstChunk: Data(repeating: 1, count: 6))
 
     #expect(created.offset == 6)
@@ -153,26 +153,26 @@ struct TusSessionTests {
 
   @Test
   func createWithTheFirstChunkRequiresUploadOffset() async throws {
-    let sut = try makeSUT { _ in
+    let sut = try makeSUT(options: options) { _ in
       self.response(201, headers: ["Location": "/storage/v1/upload/resumable/abc"])
     }
 
     await #expect(throws: StorageError.self) {
       try await sut.create(
-        bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options,
+        bucket: "bucket", key: try ObjectKey("a"), length: 20,
         firstChunk: Data(repeating: 1, count: 6))
     }
   }
 
   @Test
   func createPassesServerErrorsThrough() async throws {
-    let sut = try makeSUT { _ in
+    let sut = try makeSUT(options: options) { _ in
       self.response(413, headers: ["Content-Type": "text/plain"], body: "Payload too large")
     }
 
     let error = await #expect(throws: StorageError.self) {
       try await sut.create(
-        bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
+        bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20)
     }
     #expect(error?.code == nil)
     #expect(error?.serverError?.statusCode == 413)
@@ -252,42 +252,15 @@ struct TusSessionTests {
   }
 
   @Test
-  func appendOverAnExistingObjectThrowsKeyAlreadyExists() async throws {
-    let sut = try makeSUT { _ in
-      self.response(
-        409, headers: ["Content-Type": "text/plain"], body: "The resource already exists")
-    }
-
-    let error = await #expect(throws: StorageError.self) {
-      try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
-    }
-    #expect(error?.code == .keyAlreadyExists)
-    #expect(error?.serverError?.statusCode == 409)
-  }
-
-  @Test
-  func appendWithAnUnknownConflictThrowsTheServerError() async throws {
-    let sut = try makeSUT { _ in
-      self.response(409, headers: ["Content-Type": "text/plain"], body: "Locked elsewhere")
-    }
-
-    let error = await #expect(throws: StorageError.self) {
-      try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
-    }
-    #expect(error?.code == nil)
-    #expect(error?.message == "Locked elsewhere")
-  }
-
-  @Test
   func createOverAnExistingObjectThrowsKeyAlreadyExists() async throws {
-    let sut = try makeSUT { _ in
+    let sut = try makeSUT(options: options) { _ in
       self.response(
         409, headers: ["Content-Type": "text/plain"], body: "The resource already exists")
     }
 
     let error = await #expect(throws: StorageError.self) {
       try await sut.create(
-        bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
+        bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20)
     }
     #expect(error?.code == .keyAlreadyExists)
   }
@@ -295,7 +268,7 @@ struct TusSessionTests {
   @Test
   func upsertIsSentOnEveryRequestAfterCreation() async throws {
     let sent = LockIsolated<[URLRequest]>([])
-    let sut = try makeSUT(upsert: true) { request in
+    let sut = try makeSUT(options: UploadOptions(upsert: true)) { request in
       sent.withValue { $0.append(request) }
       return self.response(204, headers: ["Upload-Offset": "17"])
     }

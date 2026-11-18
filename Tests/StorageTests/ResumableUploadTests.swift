@@ -18,6 +18,7 @@ struct ResumableUploadTests {
 
     let steps: LockIsolated<[Step]>
     let log = LockIsolated<[String]>([])
+    let upserts = LockIsolated<[String?]>([])
 
     init(_ steps: [Step]) {
       self.steps = LockIsolated(steps)
@@ -30,6 +31,7 @@ struct ResumableUploadTests {
       if !data.isEmpty { line += " +\(data.count)" }
       let entry = line
       log.withValue { $0.append(entry) }
+      upserts.withValue { $0.append(request.headerFields[.xUpsert]) }
       let step = steps.withValue { $0.isEmpty ? nil : $0.removeFirst() }
       guard let step else { throw URLError(.badServerResponse) }
       let (response, responseBody) = try await step(request, data)
@@ -174,8 +176,7 @@ struct ResumableUploadTests {
   @Test
   func offsetConflictResyncsWithHead() async throws {
     let script = Script([
-      Self.created(offset: 0), Self.status(409, "Upload-Offset conflict"), Self.head(offset: 8),
-      Self.appended(offset: 16),
+      Self.created(offset: 0), Self.status(409), Self.head(offset: 8), Self.appended(offset: 16),
       Self.appended(offset: 20, complete: true),
     ])
     let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
@@ -193,7 +194,7 @@ struct ResumableUploadTests {
   }
 
   @Test
-  func anExistingObjectFailsTheUploadInsteadOfResyncing() async throws {
+  func aConflictThatLeavesTheOffsetUnchangedFailsTheUpload() async throws {
     let script = Script([
       Self.created(offset: 0), Self.status(409, "The resource already exists"),
       Self.head(offset: 0),
@@ -204,22 +205,19 @@ struct ResumableUploadTests {
     let error = await #expect(throws: StorageError.self) { try await upload.result }
 
     #expect(error?.code == .keyAlreadyExists)
-    #expect(script.log.value.count == 2)
+    #expect(
+      script.log.value.dropFirst() == [
+        "PATCH /storage/v1/upload/resumable/abc @0 +8",
+        "HEAD /storage/v1/upload/resumable/abc",
+      ])
     #expect(try store.records().isEmpty)
   }
 
   @Test
   func upsertTravelsOnEveryChunk() async throws {
-    let upserts = LockIsolated<[String?]>([])
-    let record: @Sendable (@escaping Script.Step) -> Script.Step = { step in
-      { request, data in
-        upserts.withValue { $0.append(request.headerFields[.xUpsert]) }
-        return try await step(request, data)
-      }
-    }
     let script = Script([
-      record(Self.created(offset: 0)), record(Self.appended(offset: 8)),
-      record(Self.appended(offset: 16)), record(Self.appended(offset: 20, complete: true)),
+      Self.created(offset: 0), Self.appended(offset: 8), Self.appended(offset: 16),
+      Self.appended(offset: 20, complete: true),
     ])
     let upload = try makeBucket(script).resumableUpload(
       path: "video.mp4", fileURL: fileURL, options: UploadOptions(upsert: true))
@@ -227,7 +225,7 @@ struct ResumableUploadTests {
     try await upload.start()
     _ = try await upload.result
 
-    #expect(upserts.value == ["true", "true", "true", "true"])
+    #expect(script.upserts.value == ["true", "true", "true", "true"])
   }
 
   @Test

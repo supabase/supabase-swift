@@ -79,7 +79,9 @@ public actor ResumableUpload {
 
   private enum Next {
     case append
-    case resync
+    /// Ask the server for its offset. After a `409`, carries that error: an unchanged offset
+    /// means the server refused for another reason, and the upload fails with it.
+    case resync(after: StorageError?)
     case recreate
   }
 
@@ -115,6 +117,7 @@ public actor ResumableUpload {
   }
 
   private let api: StorageAPI
+  private let tus: TusSession
   private let store: ResumableStore
   private let options: UploadOptions
   private let input: Input
@@ -198,6 +201,7 @@ public actor ResumableUpload {
     self.input = input
     self.options = options
     self.api = api
+    self.tus = TusSession(api: api, options: options)
     self.store = ResumableStore(configuration: api.configuration.resumable)
     let initial = Status.pending
     self.status = initial
@@ -316,7 +320,7 @@ public actor ResumableUpload {
     guard record != nil else { return try await startAgain() }
     claimLive(liveKey)
     status = .uploading
-    startLoop(from: 0, next: .resync)
+    startLoop(from: 0, next: .resync(after: nil))
   }
 
   /// Runs ``start()`` again after it failed before the upload existed on the server. Only a
@@ -382,7 +386,7 @@ public actor ResumableUpload {
 
   /// Deletes the server's copy (best effort), the record, and any sandbox copy.
   private func discard(_ record: ResumableUploadRecord) async {
-    await TusSession(api: api, upsert: options.upsert).terminate(record.uploadURL)
+    await tus.terminate(record.uploadURL)
     store.remove(record)
   }
 
@@ -394,7 +398,6 @@ public actor ResumableUpload {
   }
 
   private func run(from start: Int64, next first: Next) async {
-    let tus = TusSession(api: api, upsert: options.upsert)
     var offset = start
     var next = first
     var retry = 0
@@ -402,14 +405,19 @@ public actor ResumableUpload {
     while !pauseRequested, let record {
       do {
         switch next {
-        case .resync:
-          offset = try await tus.offset(of: record.uploadURL)
+        case .resync(let conflict):
+          let serverOffset = try await tus.offset(of: record.uploadURL)
+          if let conflict, serverOffset == offset {
+            fail(conflict, keepRecord: false)
+            break
+          }
+          offset = serverOffset
           next = .append
         case .recreate:
           offset = try await recreate(record).lastKnownOffset
           next = .append
         case .append:
-          guard let more = try await append(at: offset, with: tus) else { break }
+          guard let more = try await append(at: offset) else { break }
           offset = more
           retry = 0
           waited = .zero
@@ -417,8 +425,8 @@ public actor ResumableUpload {
         }
       } catch is CancellationError {
         break
-      } catch TusSession.Failure.offsetConflict {
-        next = .resync
+      } catch TusSession.Failure.offsetConflict(let error) {
+        next = .resync(after: error)
       } catch TusSession.Failure.uploadGone {
         next = .recreate
       } catch let error as StorageError where error.kind == .transport {
@@ -433,7 +441,7 @@ public actor ResumableUpload {
           "Resumable upload \(id.rawValue) retrying in \(delay) after: \(error.message)")
         try? await api.configuration.clock.sleep(for: delay)
         if Task.isCancelled { break }
-        next = .resync
+        next = .resync(after: nil)
       } catch {
         fail(storageError(error), keepRecord: false)
         break
@@ -445,7 +453,7 @@ public actor ResumableUpload {
 
   /// Sends the chunk at `offset` and returns the server's new offset, or `nil` once the upload
   /// is complete.
-  private func append(at offset: Int64, with tus: TusSession) async throws -> Int64? {
+  private func append(at offset: Int64) async throws -> Int64? {
     guard var record else { return nil }
     if offset < totalBytes {
       let range = FileRange(
@@ -482,7 +490,6 @@ public actor ResumableUpload {
   }
 
   private func loadOrCreateRecord() async throws -> ResumableUploadRecord {
-    let tus = TusSession(api: api, upsert: options.upsert)
     if var existing = try store.record(fingerprint: fingerprint) {
       do {
         existing.lastKnownOffset = try await tus.offset(of: existing.uploadURL)
@@ -498,26 +505,24 @@ public actor ResumableUpload {
       case .data(let data): try store.prepare(data: data, fingerprint: fingerprint)
       case .prepared(let source): source
       }
-    return try await createRecord(source: source, with: tus)
+    return try await createRecord(source: source)
   }
 
   /// Creates the upload again on the server for a record the server no longer knows.
   private func recreate(_ stale: ResumableUploadRecord) async throws -> ResumableUploadRecord {
     try? FileManager.default.removeItem(at: store.recordURL(fingerprint: stale.fingerprint))
-    let record = try await createRecord(
-      source: stale.source, with: TusSession(api: api, upsert: options.upsert))
+    let record = try await createRecord(source: stale.source)
     self.record = record
     return record
   }
 
-  private func createRecord(source: ResumableSource, with tus: TusSession) async throws
+  private func createRecord(source: ResumableSource) async throws
     -> ResumableUploadRecord
   {
     let key = try ObjectKey(path)
     let (_, modificationDate) = try ResumableStore.attributes(
       of: store.fileURL(for: source, fingerprint: fingerprint))
-    let created = try await tus.create(
-      bucket: bucketID, key: key, length: totalBytes, options: options)
+    let created = try await tus.create(bucket: bucketID, key: key, length: totalBytes)
     let now = Date()
     let record = ResumableUploadRecord(
       fingerprint: fingerprint,
