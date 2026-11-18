@@ -194,6 +194,10 @@ public struct MySchemaRestockFunction {
   public var `in`: String? = nil
 }
 
+@Function(#"evil\(fatalError())"name"#)
+public struct EvilFatalErrorNameFunction {
+}
+
 @Function("labels")
 public struct LabelsFunction {
   public var userID: Int
@@ -245,6 +249,10 @@ extension _PostgrestFunctions {
     -> _PostgrestFunctionQuery<[MySchemaClass]>
   {
     try call(MySchemaRestockFunction(selfArgument: selfArgument, `in`: `in`))
+  }
+
+  public func evilFatalErrorName() throws -> _PostgrestFunctionQuery<Void> {
+    try call(EvilFatalErrorNameFunction())
   }
 
   public func labels(userID: Int, userId: Int) throws -> _PostgrestFunctionQuery<Void> {
