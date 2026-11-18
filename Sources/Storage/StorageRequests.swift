@@ -469,7 +469,7 @@ struct StorageRequests: Sendable {
     let prefix: String
     let limit: Int?
     let cursor: String?
-    let withDelimiter: Bool
+    let withDelimiter: Bool?
     let sortBy: SortBody?
     let exactMatch: Bool?
     let noncurrentVersions: String?

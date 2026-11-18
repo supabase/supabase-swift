@@ -15,8 +15,8 @@ public struct ObjectPage: Sendable {
   /// The objects on this page, with full keys as names.
   public var objects: [StorageObject]
 
-  /// The folders on this page, as full prefixes ending in `/`. Empty unless the listing is
-  /// ``ObjectListingOptions/delimited``.
+  /// The folders on this page, as full prefixes ending in `/`. Empty unless
+  /// ``ObjectListingOptions/delimited`` is `true`.
   public var folders: [String]
 
   /// The cursor for the next page, or `nil` on the last page.
@@ -58,8 +58,9 @@ public struct ObjectListingOptions: Sendable {
   public var pageSize: Int?
 
   /// Whether to list one level, collapsing deeper keys into ``ObjectPage/folders``
-  /// (`true`), or every key at every depth (`false`). Defaults to `true`.
-  public var delimited: Bool
+  /// (`true`), or every key at every depth (`false`). `nil` sends nothing, and Storage lists
+  /// every key at every depth.
+  public var delimited: Bool?
 
   /// The column to sort by: ``ObjectSortColumn/name``, ``ObjectSortColumn/updatedAt`` or
   /// ``ObjectSortColumn/createdAt``. Defaults to the name.
@@ -90,7 +91,7 @@ public struct ObjectListingOptions: Sendable {
   ///   - deleteMarkers: The filter for delete markers.
   public init(
     pageSize: Int? = nil,
-    delimited: Bool = true,
+    delimited: Bool? = nil,
     sortBy: ObjectSortColumn? = nil,
     order: SortOrder? = nil,
     exactMatch: Bool? = nil,
@@ -116,16 +117,16 @@ extension StorageBucket {
   /// until you do one of these.
   ///
   /// ```swift
-  /// // Every object under "2026/", across all pages
+  /// // Every object under "2026/", at every depth, across all pages
   /// var total: Int64 = 0
-  /// for try await object in storage.from("photos").objects(
-  ///   prefix: "2026/", options: ObjectListingOptions(delimited: false))
-  /// {
+  /// for try await object in storage.from("photos").objects(prefix: "2026/") {
   ///   total += object.metadata?.size ?? 0
   /// }
   ///
   /// // One level, with folders
-  /// for try await page in storage.from("photos").objects(prefix: "2026/").pages {
+  /// for try await page in storage.from("photos").objects(
+  ///   prefix: "2026/", options: ObjectListingOptions(delimited: true)
+  /// ).pages {
   ///   folders += page.folders
   ///   files += page.objects
   /// }
