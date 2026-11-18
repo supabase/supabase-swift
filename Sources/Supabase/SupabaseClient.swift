@@ -4,8 +4,10 @@ public import HTTPTypes
 import Helpers
 import IssueReporting
 import Logging
-@_spi(Experimental) import PostgREST
-@_spi(Experimental) import Storage
+@_spi(Testing) import Auth
+@_spi(Experimental) @_spi(Testing) import PostgREST
+@_spi(Testing) import Realtime
+@_spi(Experimental) @_spi(Testing) import Storage
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
@@ -113,25 +115,23 @@ public final class SupabaseClient: Sendable {
   }
 
   var rest: PostgrestClient {
+    var restConfiguration = PostgrestClient.Configuration(
+      url: databaseURL,
+      schema: configuration.database.schema,
+      headers: dataHeaders,
+      http: Self.resolveHTTP(
+        global: configuration.global.http,
+        sdkMiddlewares: [bearerMiddleware(staleTokenRejection: .postgrest)]
+      ),
+      logger: configuration.global.logger,
+      encoder: configuration.database.encoder,
+      decoder: configuration.database.decoder,
+      retryEnabled: configuration.database.retryEnabled
+    )
+    restConfiguration.clock = configuration.global.clock
     // `init` checked `supabaseURL`, so `databaseURL`, derived from it, passes the check too.
     // swift-format-ignore: NeverUseForceTry
-    try! PostgrestClient(
-      configuration: .init(
-        url: databaseURL,
-        schema: configuration.database.schema,
-        headers: dataHeaders,
-        http: Self.resolveHTTP(
-          global: configuration.global.http,
-          override: configuration.database.http,
-          sdkMiddlewares: [bearerMiddleware(staleTokenRejection: .postgrest)]
-        ),
-        logger: configuration.database.logger ?? configuration.global.logger,
-        encoder: configuration.database.encoder,
-        decoder: configuration.database.decoder,
-        retryEnabled: configuration.database.retryEnabled,
-        clock: configuration.database.clock ?? configuration.global.clock
-      )
-    )
+    return try! PostgrestClient(configuration: restConfiguration)
   }
 
   /// The Storage client for uploading, downloading, and managing files.
@@ -142,13 +142,12 @@ public final class SupabaseClient: Sendable {
       usesNewHostname: configuration.storage.usesNewHostname,
       http: Self.resolveHTTP(
         global: configuration.global.http,
-        override: configuration.storage.http,
         sdkMiddlewares: [bearerMiddleware(staleTokenRejection: .storage)]
       ),
-      logger: configuration.storage.logger ?? configuration.global.logger,
-      retryEnabled: configuration.storage.retryEnabled,
-      clock: configuration.storage.clock ?? configuration.global.clock
+      logger: configuration.global.logger,
+      retryEnabled: configuration.storage.retryEnabled
     )
+    storageConfiguration.clock = configuration.global.clock
     storageConfiguration.resumable = configuration.storage.resumable
     // `init` checked `supabaseURL`, so every URL derived from it passes `StorageClient`'s check.
     // swift-format-ignore: NeverUseForceTry
@@ -244,7 +243,7 @@ public final class SupabaseClient: Sendable {
       .merging(with: [.authorization: "Bearer \(supabaseKey)", .apikey: supabaseKey])
       .merging(with: configuration.global.headers)
 
-    let authConfiguration = AuthClient.Configuration(
+    var authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       storageKey: configuration.auth.storageKey ?? defaultStorageKey,
       headers: headers,
@@ -254,13 +253,12 @@ public final class SupabaseClient: Sendable {
         ? configuration.auth.autoRefresh : .disabled,
       observesAppLifecycle: configuration.auth.observesAppLifecycle,
       http: Self.resolveHTTP(
-        global: configuration.global.http,
-        override: configuration.auth.http
+        global: configuration.global.http
       ),
-      logger: configuration.auth.logger ?? configuration.global.logger,
-      retryEnabled: configuration.auth.retryEnabled,
-      clock: configuration.auth.clock ?? configuration.global.clock
+      logger: configuration.global.logger,
+      retryEnabled: configuration.auth.retryEnabled
     )
+    authConfiguration.clock = configuration.global.clock
     _auth = try AuthClient(configuration: authConfiguration)
 
     if configuration.auth.accessToken == nil {
@@ -465,21 +463,18 @@ public final class SupabaseClient: Sendable {
     mutableState.listenForAuthEventsTask?.cancel()
   }
 
-  /// A module's HTTP configuration: `override` on top of `global`, field by field.
+  /// A module's HTTP configuration: the global one plus the SDK's middlewares.
   ///
-  /// A `nil` transport or timeout in `override` falls back to the global one, and the transport
-  /// to ``URLSessionTransport`` when neither sets one. The middlewares run in this order: the
-  /// global ones, the module's own, ``TraceContextMiddleware``, then `sdkMiddlewares`.
+  /// A `nil` transport falls back to ``URLSessionTransport``. The middlewares run in this order:
+  /// the global ones, ``TraceContextMiddleware``, then `sdkMiddlewares`.
   private static func resolveHTTP(
     global: HTTPClientConfiguration,
-    override: HTTPClientConfiguration?,
     sdkMiddlewares: [any ClientMiddleware] = []
   ) -> HTTPClientConfiguration {
     HTTPClientConfiguration(
-      transport: override?.transport ?? global.transport ?? URLSessionTransport(),
-      middlewares: global.middlewares + (override?.middlewares ?? []) + [TraceContextMiddleware()]
-        + sdkMiddlewares,
-      timeout: override?.timeout ?? global.timeout
+      transport: global.transport ?? URLSessionTransport(),
+      middlewares: global.middlewares + [TraceContextMiddleware()] + sdkMiddlewares,
+      timeout: global.timeout
     )
   }
 
@@ -599,14 +594,13 @@ public final class SupabaseClient: Sendable {
         region: configuration.functions.region,
         http: Self.resolveHTTP(
           global: configuration.global.http,
-          override: configuration.functions.http,
           sdkMiddlewares: [
             bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
               APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
             }
           ]
         ),
-        logger: configuration.functions.logger ?? configuration.global.logger,
+        logger: configuration.global.logger,
         decoder: configuration.functions.decoder
       )
     )
@@ -615,28 +609,26 @@ public final class SupabaseClient: Sendable {
   private func _initRealtimeClient() -> RealtimeClient {
     let realtime = configuration.realtime
 
+    var realtimeConfiguration = RealtimeClient.Configuration(
+      url: supabaseURL.appendingPathComponent("/realtime/v1"),
+      headers: headers.merging(with: realtime.headers),
+      heartbeatInterval: realtime.heartbeatInterval,
+      requestTimeout: realtime.requestTimeout,
+      connectsOnSubscribe: realtime.connectsOnSubscribe,
+      disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
+      observesAppLifecycle: realtime.observesAppLifecycle,
+      monitorsNetworkPath: realtime.monitorsNetworkPath,
+      serverLogLevel: realtime.serverLogLevel,
+      accessToken: { [weak self] in try await self?._getAccessToken() },
+      webSocketTransport: realtime.webSocketTransport,
+      http: Self.resolveHTTP(
+        global: configuration.global.http
+      ),
+      logger: configuration.global.logger
+    )
+    realtimeConfiguration.clock = configuration.global.clock
     // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
     // swift-format-ignore: NeverUseForceTry
-    return try! RealtimeClient(
-      configuration: .init(
-        url: supabaseURL.appendingPathComponent("/realtime/v1"),
-        headers: headers.merging(with: realtime.headers),
-        heartbeatInterval: realtime.heartbeatInterval,
-        requestTimeout: realtime.requestTimeout,
-        connectsOnSubscribe: realtime.connectsOnSubscribe,
-        disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
-        observesAppLifecycle: realtime.observesAppLifecycle,
-        monitorsNetworkPath: realtime.monitorsNetworkPath,
-        serverLogLevel: realtime.serverLogLevel,
-        accessToken: { [weak self] in try await self?._getAccessToken() },
-        webSocketTransport: realtime.webSocketTransport,
-        http: Self.resolveHTTP(
-          global: configuration.global.http,
-          override: realtime.http
-        ),
-        logger: realtime.logger ?? configuration.global.logger,
-        clock: realtime.clock ?? configuration.global.clock
-      )
-    )
+    return try! RealtimeClient(configuration: realtimeConfiguration)
   }
 }

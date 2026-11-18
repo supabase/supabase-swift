@@ -62,7 +62,7 @@ These rules add to the Swift API Design Guidelines. They make the same idea read
 - Each client exposes the value it was created with as `public let configuration`. Every configuration field is `public var`.
 - Configuration init parameters come in this order: `url`, required module fields, `headers: HTTPFields = [:]`, optional module fields, `http: HTTPClientConfiguration`, `logger: Logger` (never optional; defaults to `supabaseDefaultLogger(label: "io.supabase.<module>")`), `encoder`/`decoder`, `retryEnabled`, `clock`.
 - An HTTP module has no `accessToken` setting. The caller adds `AccessTokenMiddleware` to `http.middlewares`; that is the one way to put a token on a request (see ARCHITECTURE.md "HTTP Layer"). Realtime is the one exception: its socket needs the token outside any HTTP request, so `RealtimeClient.Configuration.accessToken` is its only token source, and it also covers `httpSend`.
-- Every module that retries takes `retryEnabled:`. Every module that waits or retries takes `clock:`.
+- Every module that retries takes `retryEnabled:`. Every module that waits or retries takes a `clock:`, behind `@_spi(Testing)`: it is a test hook, not a user setting.
 - The facade follows the same naming: `SupabaseClient(supabaseURL:supabaseKey:configuration:)` takes a `SupabaseClient.Configuration`, with one nested type per sub-client (`SupabaseClient.Configuration.Auth`, `.Database`, `.Storage`, `.Functions`, `.Realtime`) and `.Global` for shared settings. A facade type never reuses a module configuration type, because the facade derives `url` and the key itself.
 - Public header APIs use `HTTPFields` and `HTTPField.Name`, never `[String: String]`.
 

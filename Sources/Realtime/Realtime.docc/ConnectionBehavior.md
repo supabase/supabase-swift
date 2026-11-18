@@ -88,7 +88,7 @@ the app returns to the foreground, a liveness probe finds it sooner; see
 ``RealtimeClient/heartbeats()`` reports each step, with the round-trip latency of each answer.
 It is an event stream: it reports the steps after the call and never replays an earlier one.
 
-The heartbeat runs on ``RealtimeClient/Configuration/clock``, a `ContinuousClock` by default. That
+The heartbeat runs on a `ContinuousClock`. That
 clock keeps counting while the device sleeps, so after a long sleep the next heartbeat is due at
 once.
 

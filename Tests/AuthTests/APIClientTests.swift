@@ -17,7 +17,7 @@ import Testing
   import FoundationNetworking
 #endif
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 @Suite
 struct APIClientTests {
@@ -200,14 +200,15 @@ struct APIClientTests {
   }
 
   private func makeClient(transport: ClosureTransport) -> APIClient {
-    APIClient(
+    var configuration = AuthClient.Configuration(
+      url: URL(string: "http://localhost/auth/v1")!,
+      storageKey: uniqueStorageKey(),
+      storage: InMemoryTestStorage(),
+      http: .init(transport: transport)
+    )
+    configuration.clock = ImmediateClock()
+    return APIClient(
       http: HTTPClient(
-        configuration: AuthClient.Configuration(
-          url: URL(string: "http://localhost/auth/v1")!,
-          storageKey: uniqueStorageKey(),
-          storage: InMemoryTestStorage(),
-          http: .init(transport: transport),
-          clock: ImmediateClock()
-        )))
+        configuration: configuration))
   }
 }

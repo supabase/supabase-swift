@@ -15,11 +15,11 @@
   import Foundation
   import Logging
   import OSLog
-  @_spi(Experimental) import Supabase
+  @_spi(Experimental) @_spi(Testing) import Supabase
   import TestHelpers
   import Testing
   @testable import Helpers
-  @testable import Realtime
+  @_spi(Testing) @testable import Realtime
   @Suite(
     .serialized,
     .mainSerialExecutorSerialized,
@@ -32,30 +32,32 @@
     let client: SupabaseClient
     let client2: SupabaseClient
     init() async throws {
+      var global1 = SupabaseClient.Configuration.Global(
+        logger: Logging.Logger(label: "client1") {
+          OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
+        }
+      )
+      global1.clock = testClock
       client = try SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
-          global: .init(
-            logger: Logging.Logger(label: "client1") {
-              OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-            },
-            clock: testClock
-          )
+          global: global1
         )
       )
+      var global2 = SupabaseClient.Configuration.Global(
+        logger: Logging.Logger(label: "client2") {
+          OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
+        }
+      )
+      global2.clock = testClock
       client2 = try SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
-          global: .init(
-            logger: Logging.Logger(label: "client2") {
-              OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-            },
-            clock: testClock
-          )
+          global: global2
         )
       )
       _ = try? await client.from("key_value_storage").delete().neq("key", value: UUID().uuidString)
@@ -304,18 +306,19 @@
       // A heartbeat goes out only when the test advances `clock`, so no heartbeat can start
       // while `late` registers.
       let clock = TestClock<Duration>()
+      var configuration = RealtimeClient.Configuration(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        headers: [
+          .apikey: DotEnv.supabasePublishableKey,
+          .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
+        ],
+        heartbeatInterval: .seconds(1),
+        disconnectOnEmptyChannelsAfter: .seconds(3600),
+        observesAppLifecycle: false
+      )
+      configuration.clock = clock
       let realtime = try RealtimeClient(
-        configuration: RealtimeClient.Configuration(
-          url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
-          headers: [
-            .apikey: DotEnv.supabasePublishableKey,
-            .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
-          ],
-          heartbeatInterval: .seconds(1),
-          disconnectOnEmptyChannelsAfter: .seconds(3600),
-          observesAppLifecycle: false,
-          clock: clock
-        )
+        configuration: configuration
       )
       try await realtime.connect()
 
@@ -1408,16 +1411,17 @@
     @Test
     func httpSendSendsTheConfiguredHeaders() async throws {
       let recorder = HeaderRecorder()
+      var global = SupabaseClient.Configuration.Global(
+        headers: [HTTPField.Name("X-Integration-Test")!: "httpSend"],
+        http: .init(middlewares: [recorder])
+      )
+      global.clock = testClock
       let client = try SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
-          global: .init(
-            headers: [HTTPField.Name("X-Integration-Test")!: "httpSend"],
-            http: .init(middlewares: [recorder]),
-            clock: testClock
-          )
+          global: global
         )
       )
 
@@ -1485,14 +1489,15 @@
     private func makeRealtimeClient(
       accessToken: @escaping @Sendable () async throws -> String?
     ) throws -> RealtimeClient {
-      try RealtimeClient(
-        configuration: RealtimeClient.Configuration(
-          url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
-          headers: [.apikey: DotEnv.supabasePublishableKey],
-          observesAppLifecycle: false,
-          accessToken: accessToken,
-          clock: testClock
-        )
+      var configuration = RealtimeClient.Configuration(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        headers: [.apikey: DotEnv.supabasePublishableKey],
+        observesAppLifecycle: false,
+        accessToken: accessToken
+      )
+      configuration.clock = testClock
+      return try RealtimeClient(
+        configuration: configuration
       )
     }
 

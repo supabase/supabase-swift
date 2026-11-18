@@ -410,9 +410,6 @@ Changes that still compile but behave differently. Check each one by hand.
   In v2 the request went out with the API key. Only a missing session still falls back to the key.
   A refresh the server rejects gives an `AuthError` of kind `.sessionInvalidated` in
   `underlyingError`.
-- **Realtime uses the global logger when you pass none.** `SupabaseClient` keeps a `logger`
-  you set in `SupabaseClient.Configuration.Realtime`. With `nil`, the default, it uses
-  `Configuration.Global.logger`.
 - **Auth events do not build the Realtime client.** `SupabaseClient` pushes a new token only to
   a Realtime client that already exists. A client built later fetches the current token itself.
 - **Realtime gets the token after every session change.** `SupabaseClient` pushes the access
@@ -435,6 +432,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `SupabaseClientOptions.AuthOptions`, `GlobalOptions`, `FunctionsOptions`, `StorageOptions` | `SupabaseClient.Configuration.Auth`, `.Global`, `.Functions`, `.Storage` |
 | `SupabaseClientOptions(realtime: RealtimeClientOptions)` | `SupabaseClient.Configuration.Realtime`; no `accessToken` |
 | `RealtimeClientOptions(handleAppLifecycle:)` | `Configuration.Realtime(observesAppLifecycle:)` |
+| `RealtimeClientOptions(logger:)`, `RealtimeClientOptions(fetch:)` in `SupabaseClientOptions` | removed; use `Configuration.Global.logger` and `Configuration.Global.http`; see [One `http` and one `logger`](#one-http-and-one-logger-for-every-sub-client) |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
 | `supabase.realtimeV2` | `supabase.realtime`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.channel(_:options:)`, `supabase.channels` | `await supabase.channel(_:configure:)`, `await supabase.channels`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
@@ -482,9 +480,9 @@ let client = try SupabaseClient(supabaseURL: url, supabaseKey: key, configuratio
 
 ### `GlobalOptions.session` is removed
 
-Configure the `URLSession` on the transport. One `http` value covers every sub-client.
-`Configuration.Auth` also gains `http`, `logger` and `clock` to override the global value for Auth
-alone; `nil` means the global value.
+Configure the `URLSession` on the transport. One `http` value covers every sub-client; see
+[One `http` and one `logger`](#one-http-and-one-logger-for-every-sub-client) to change one
+sub-client only.
 
 ```swift
 // v2
@@ -502,10 +500,59 @@ configuration: .init(
 )
 ```
 
+### One `http` and one `logger` for every sub-client
+
+`SupabaseClient.Configuration` has one `http` and one `logger`, in `Global`. The module groups
+have no `http`, `logger` or `clock`. To change the HTTP behavior of one sub-client, branch on the
+request path in a middleware or a transport: `/auth/v1`, `/rest/v1`, `/storage/v1`,
+`/functions/v1` or `/realtime/v1`. To filter the logs of one sub-client, read the `system`
+metadata key (`auth`, `postgrest`, `storage`, `functions`, `realtime`) in your `LogHandler`.
+For a longer timeout on one call, use `PostgrestRequestBuilder.timeout(_:)` or
+`FunctionInvokeOptions.timeout`.
+
+```swift
+// v2
+options: .init(realtime: RealtimeClientOptions(logger: realtimeLogger))
+
+// v3: a middleware for Storage requests only
+struct StorageOnly: ClientMiddleware {
+  let inner: any ClientMiddleware
+
+  func intercept(
+    _ request: HTTPRequest,
+    body: HTTPBody?,
+    next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws -> (
+      HTTPResponse, HTTPBody?
+    )
+  ) async throws -> (HTTPResponse, HTTPBody?) {
+    guard request.path?.hasPrefix("/storage/v1/") == true else {
+      return try await next(request, body)
+    }
+    return try await inner.intercept(request, body: body, next: next)
+  }
+}
+
+var configuration = SupabaseClient.Configuration()
+configuration.global.http.middlewares = [StorageOnly(inner: uploadMetrics)]
+
+// v3: Realtime logs only, at debug level
+configuration.global.logger = Logger(label: "io.supabase") { label in
+  SystemFilter(system: "realtime", base: StreamLogHandler.standardOutput(label: label))
+}
+configuration.global.logger.logLevel = .debug
+```
+
+`SystemFilter` is your own `LogHandler`: it forwards a message when `metadata["system"]` is
+`"realtime"`, and drops it otherwise. The "Configuring One Module" article in the Supabase
+documentation has a complete one, and a transport that sends one sub-client elsewhere.
+
+The clock the SDK sleeps on is a test hook. Import Supabase with `@_spi(Testing)` and set
+`configuration.global.clock`.
+
 ### `Configuration.Functions` takes a `FunctionRegion`
 
 The `String?` initializer is removed. A string literal still compiles; a `String` variable needs
-a conversion. `Configuration.Functions` also gains `http` and `logger`; `nil` means the global value.
+a conversion.
 
 ```swift
 // v2

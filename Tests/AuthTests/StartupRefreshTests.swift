@@ -5,7 +5,7 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 /// The one bounded refresh of an expired stored session that runs before `.initialSession`.
 @Suite
@@ -325,18 +325,19 @@ struct StartupRefreshTests {
       platform.hasBackgroundState = true
       platform.lifecycleEvents = { AsyncStream { _ in } }
     }
+    var configuration = AuthClient.Configuration(
+      url: clientURL,
+      storageKey: key,
+      storage: storage ?? localStorage,
+      autoRefresh: autoRefresh,
+      observesAppLifecycle: startsInBackground,
+      initialRefreshTimeout: initialRefreshTimeout,
+      http: HTTPClientConfiguration(transport: http)
+    )
+    configuration.clock = clock
+    configuration.now = { Self.now }
     return AuthClient(
-      configuration: AuthClient.Configuration(
-        url: clientURL,
-        storageKey: key,
-        storage: storage ?? localStorage,
-        autoRefresh: autoRefresh,
-        observesAppLifecycle: startsInBackground,
-        initialRefreshTimeout: initialRefreshTimeout,
-        http: HTTPClientConfiguration(transport: http),
-        clock: clock,
-        now: { Self.now }
-      ),
+      configuration: configuration,
       pkce: .live,
       platform: platform
     )
