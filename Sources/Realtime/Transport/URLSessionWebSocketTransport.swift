@@ -35,6 +35,7 @@ import IssueReporting
 public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
   let configuration: URLSessionConfiguration
   let delegate: (any URLSessionDelegate)?
+  let delegateQueue: OperationQueue?
   let allowsWatchOSConnections: Bool
   let isWatchOS: Bool
   let handshakeTimeout: TimeInterval
@@ -45,6 +46,8 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
   ///   - configuration: The configuration each connection's `URLSession` uses. The transport
   ///     keeps a copy, so later changes to `configuration` do not reach it.
   ///   - delegate: Answers TLS authentication challenges. Other delegate methods are not called.
+  ///     It is called on a private serial queue, not on the `delegateQueue` of the session it
+  ///     came from, so it must not depend on a particular queue or actor.
   ///   - allowsWatchOSConnections: Set to `true` only when the watchOS app runs in a context
   ///     where the system allows WebSockets, such as audio streaming. On watchOS, `connect` throws
   ///     a non-retryable ``RealtimeError/Kind-swift.struct/invalidRequest`` error when this is
@@ -63,11 +66,33 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
     )
   }
 
+  /// Creates a transport that calls `delegate` on `delegateQueue`, the queue of the session the
+  /// delegate came from, so a delegate built for that queue (for example a main-actor one on
+  /// `.main`) is not called from another thread.
+  ///
+  /// `configuration` usually belongs to an HTTP session, so its `httpAdditionalHeaders` are
+  /// dropped: they can break the upgrade handshake on iOS with a -1005 error.
+  package init(
+    configuration: URLSessionConfiguration,
+    delegate: any URLSessionDelegate,
+    delegateQueue: OperationQueue
+  ) {
+    let webSocketConfiguration = configuration.copy() as! URLSessionConfiguration
+    webSocketConfiguration.httpAdditionalHeaders = nil
+    self.init(
+      configuration: webSocketConfiguration,
+      delegate: delegate,
+      delegateQueue: delegateQueue,
+      isWatchOS: Self.runsOnWatchOS
+    )
+  }
+
   /// `isWatchOS` and `handshakeTimeout` are injected so tests can reach the watchOS paths on any
   /// platform. `handshakeTimeout` defaults to the configuration's `timeoutIntervalForRequest`.
   init(
     configuration: URLSessionConfiguration = .default,
     delegate: (any URLSessionDelegate)? = nil,
+    delegateQueue: OperationQueue? = nil,
     allowsWatchOSConnections: Bool = false,
     isWatchOS: Bool,
     handshakeTimeout: TimeInterval? = nil
@@ -76,6 +101,7 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
     let configuration = configuration.copy() as! URLSessionConfiguration
     self.configuration = configuration
     self.delegate = delegate
+    self.delegateQueue = delegateQueue
     self.allowsWatchOSConnections = allowsWatchOSConnections
     self.isWatchOS = isWatchOS
     self.handshakeTimeout = handshakeTimeout ?? configuration.timeoutIntervalForRequest
@@ -152,7 +178,8 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
           abnormal: false
         )
       },
-      wrappedDelegate: delegate
+      wrappedDelegate: delegate,
+      wrappedDelegateQueue: delegateQueue
     )
 
     // Headers go on the request, not `httpAdditionalHeaders`: the latter can break the upgrade

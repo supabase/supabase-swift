@@ -28,7 +28,9 @@ fails `swift test` at the root; a generator change that is not recorded fails `E
 `SupabaseTypegenPostgrestTypegenOutputTests` and `SupabaseTypegenHostileOutputTests` build with
 `.defaultIsolation(MainActor.self)` and `InferIsolatedConformances`, as an app with Xcode's
 "Approachable Concurrency" does; `SupabaseTypegenOutputTests` keeps the nonisolated default.
-`SupabaseTypegenOutputTests` also runs queries through the generated types. `IntegrationTests`
+`SupabaseTypegenOutputTests` also runs queries through the generated types, and
+`SupabaseTypegenHostileOutputTests` checks that hostile database names stay data; it names types
+from `hostile_metadata.json`, so rename them there and in the test together. `IntegrationTests`
 compiles the same file through the symlink `Tests/IntegrationTests/Postgrest/Generated.swift` (a
 test target cannot depend on another), so the Postgrest integration tests query the integration
 schema with its generated models. After changing a migration there, refresh the fixtures and record
