@@ -10,12 +10,12 @@ package import HTTPTypes
 
 /// How a client retries a request that failed transiently.
 ///
-/// One policy drives every module that retries (Auth, PostgREST, Storage, and the delay math of
-/// Realtime's reconnect). A request is retried when its method is in ``retryableMethods`` and
+/// One policy drives every HTTP module that retries (Auth, PostgREST, Storage). Realtime's
+/// reconnect uses ``BackoffPolicy`` directly, with its own delays. A request is retried when its method is in ``retryableMethods`` and
 /// the attempt either failed with a transient `URLError` or returned a response that
 /// ``retries(_:)`` accepts: a status in ``retryableStatuses``, and for a 429 a `Retry-After`.
-/// The wait between attempts is capped exponential backoff with equal jitter —
-/// `random(cap/2...cap)` where `cap = min(maxDelay, baseDelay · 2^(n-1))` for the n-th retry —
+/// The wait between attempts is capped exponential backoff with full jitter —
+/// `random(0...cap)` where `cap = min(maxDelay, baseDelay · 2^(n-1))` for the n-th retry —
 /// unless the response carried a `Retry-After` header, which is honoured up to ``maxDelay``.
 ///
 /// `package` on purpose: which requests are safe to replay is the SDK's decision, so callers
@@ -69,13 +69,16 @@ extension RetryPolicy {
     return response.status != .tooManyRequests || response.headerFields[.retryAfter] != nil
   }
 
-  /// Equal-jitter backoff for the `retry`-th retry (1-based): a random duration in
-  /// `cap/2...cap`, where `cap = min(maxDelay, baseDelay · 2^(retry-1))`.
-  package func backoffDelay(retry: Int) -> Duration {
-    let exponent = min(max(retry - 1, 0), 30)
-    let cap = baseDelay > maxDelay / (1 << exponent) ? maxDelay : baseDelay * (1 << exponent)
-    let half = cap / 2
-    return half + half * Double.random(in: 0...1)
+  /// Full-jitter backoff for the `retry`-th retry (1-based): a random duration in `0...cap`,
+  /// where `cap = min(maxDelay, baseDelay · 2^(retry-1))`. Full jitter spreads the clients that
+  /// lost the same connection over the whole window, so they do not retry in step. `random`
+  /// draws the jitter factor from `0...1`; tests pin it.
+  package func backoffDelay(
+    retry: Int,
+    random: (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
+  ) -> Duration {
+    BackoffPolicy.fullJitter(base: baseDelay, cap: maxDelay)
+      .delay(forAttempt: retry, random: random)
   }
 
   /// The wait before the `retry`-th retry: `Retry-After` when present and parseable, capped at
