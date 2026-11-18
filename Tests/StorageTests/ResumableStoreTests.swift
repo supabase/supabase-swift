@@ -285,6 +285,35 @@ struct ResumableStoreTests {
   }
 
   @Test
+  func aRecordWhosePathLeavesTheContainerThroughASymbolicLinkIsCorrupt() throws {
+    let outside = root.appendingPathComponent("outside")
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    _ = try writeFile("private.dat", in: outside)
+    try FileManager.default.createSymbolicLink(
+      at: container.appendingPathComponent("linked"), withDestinationURL: outside)
+    try store.save(
+      record(fingerprint: .repeating("1"), source: .container(relativePath: "linked/private.dat")))
+
+    #expect(try store.record(fingerprint: .repeating("1")) == nil)
+    #expect(!FileManager.default.fileExists(atPath: storeFile(.repeating("1"), "json").path))
+  }
+
+  @Test
+  func aFileReachedThroughASymbolicLinkOutOfTheContainerIsCopied() async throws {
+    let outside = root.appendingPathComponent("outside")
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    _ = try writeFile("private.dat", in: outside)
+    try FileManager.default.createSymbolicLink(
+      at: container.appendingPathComponent("linked"), withDestinationURL: outside)
+
+    let source = try await store.prepare(
+      fileURL: container.appendingPathComponent("linked/private.dat"),
+      fingerprint: .repeating("1"))
+
+    #expect(source == .sandboxCopy)
+  }
+
+  @Test
   func aRecordWithANestedPathInsideTheContainerLoads() throws {
     let folder = container.appendingPathComponent("Documents/videos")
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

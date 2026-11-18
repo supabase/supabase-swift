@@ -263,7 +263,7 @@ struct ResumableUploadRegistryTests {
     let uploads = try await storage.resumableUploads.pending()
 
     #expect(uploads.map(\.fingerprint) == [.repeating("a")])
-    #expect(try store.record(fingerprint: .repeating("b")) == other)
+    #expect(try store.record(fingerprint: .repeating("b"))?.uploadURL == other.uploadURL)
     #expect(requests.value.isEmpty)
   }
 

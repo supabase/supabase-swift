@@ -283,8 +283,12 @@ struct ResumableStore: Sendable {
     return isInsideContainer(container.appendingPathComponent(relativePath))
   }
 
+  /// Checks the path as written and with symbolic links resolved, so a link inside the
+  /// container cannot point the upload at a file outside it.
   private func isInsideContainer(_ url: URL) -> Bool {
     url.standardizedFileURL.path.hasPrefix(container.path + "/")
+      && url.resolvingSymlinksInPath().path.hasPrefix(
+        container.resolvingSymlinksInPath().path + "/")
   }
 
   private func isStale(_ record: ResumableUploadRecord) -> Bool {
