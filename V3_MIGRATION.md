@@ -399,6 +399,10 @@ called from the main actor stays on the main actor. Move heavy decoding off it w
 
 Changes that still compile but behave differently. Check each one by hand.
 
+- **`handleRedirect(_:)` refuses implicit tokens.** A URL with `#access_token=…` throws an
+  `AuthError` of kind `.oauthFlowFailed` unless `Configuration.Auth.acceptsImplicitTokens` is
+  `true`. Set it if your app gets token links from invites, `generateLink`, or another client. See
+  [Auth.md](docs/migrations/v3/Auth.md).
 - **Your `Authorization` header wins.** PostgREST, Storage and Functions set `Authorization`
   only when the request does not have one. In v2, the session token replaced a header that you
   set with `setHeader`. Search for `Authorization` set on a builder, a Storage `setHeader`, or

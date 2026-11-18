@@ -115,7 +115,6 @@ struct StorageClientTests {
         	--header "X-Client-Info: storage-swift/x.y.z" \
         	--header "apikey: test.api.key" \
         	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
-        	--header "x-upsert: false" \
         	--data "test data" \
         	"http://localhost:54321/storage/v1/object/tests/file1.txt"
         """#
@@ -160,7 +159,6 @@ struct StorageClientTests {
         	--header "X-Client-Info: storage-swift/x.y.z" \
         	--header "apikey: test.api.key" \
         	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
-        	--header "x-upsert: false" \
         	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"
         """#
       }

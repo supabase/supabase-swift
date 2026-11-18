@@ -38,6 +38,7 @@ struct AuthClientIntegrationTests {
     storage: any AuthStorage = InMemoryTestStorage(),
     storageKey: String = "sb-test-\(UUID().uuidString)-auth-token",
     redirectTo: URL? = nil,
+    acceptsImplicitTokens: Bool = false,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
   ) throws -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
@@ -51,6 +52,7 @@ struct AuthClientIntegrationTests {
         ],
         storage: storage,
         redirectTo: redirectTo,
+        acceptsImplicitTokens: acceptsImplicitTokens,
         logger: logger
       )
     )
@@ -779,7 +781,8 @@ struct AuthClientIntegrationTests {
     let location = try await redirectLocation(of: link.properties.actionLink)
     #expect(location.fragment?.contains("access_token=") == true)
     // The link goes to the Site URL, so the client needs it as its callback.
-    let client = try Self.makeClient(redirectTo: URL(string: "http://127.0.0.1:3000")!)
+    let client = try Self.makeClient(
+      redirectTo: URL(string: "http://127.0.0.1:3000")!, acceptsImplicitTokens: true)
 
     let result = try await client.handleRedirect(location)
     guard case .signedIn(let session, _) = result else {
@@ -787,6 +790,26 @@ struct AuthClientIntegrationTests {
       return
     }
     #expect(session.user.email == email)
+  }
+
+  @Test
+  func implicitMagicLinkIsRefusedByDefault() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    try await admin.createUser(
+      AdminCreateUser(email: email, password: mockPassword(), confirmsEmail: true)
+    )
+
+    let link = try await admin.generateLink(.magicLink(email: email))
+    let location = try await redirectLocation(of: link.properties.actionLink)
+    #expect(location.fragment?.contains("access_token=") == true)
+    let client = try Self.makeClient(redirectTo: URL(string: "http://127.0.0.1:3000")!)
+
+    let error = await #expect(throws: AuthError.self) {
+      try await client.handleRedirect(location)
+    }
+    #expect(error?.kind == .oauthFlowFailed)
+    #expect(client.currentSession == nil)
   }
 
   @Test

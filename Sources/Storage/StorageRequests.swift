@@ -180,9 +180,9 @@ struct StorageRequests: Sendable {
     options: UploadOptions
   ) throws -> StorageRequest {
     var headers = try uploadHeaders(key: key, options: options)
-    if method == .post {
-      headers[.xUpsert] = "\(options.upsert)"
-    } else if options.upsert {
+    if method == .post, let upsert = options.upsert {
+      headers[.xUpsert] = "\(upsert)"
+    } else if method != .post, options.upsert == true {
       reportIssue(
         "UploadOptions.upsert has no effect on update(path:): PUT always replaces the object.")
     }
@@ -237,7 +237,9 @@ struct StorageRequests: Sendable {
     headers[.tusResumable] = Self.tusVersion
     headers[.uploadLength] = "\(length)"
     headers[.uploadMetadata] = try tusMetadata(bucket: bucket, key: key, options: options)
-    headers[.xUpsert] = "\(options.upsert)"
+    if let upsert = options.upsert {
+      headers[.xUpsert] = "\(upsert)"
+    }
     if firstChunk != nil {
       headers[.contentType] = Self.tusContentType
     }
@@ -441,29 +443,31 @@ struct StorageRequests: Sendable {
 
   private struct SortBody: Encodable {
     let column: String
-    let order: SortOrder
+    let order: SortOrder?
   }
 
   private struct ListBody: Encodable {
     let prefix: String
-    let limit: Int
-    let offset: Int
-    let sortBy: SortBody
+    let limit: Int?
+    let offset: Int?
+    let sortBy: SortBody?
     let search: String?
     let exactMatch: Bool?
     let noncurrentVersions: String?
     let deleteMarkers: String?
   }
 
-  /// Sends the server defaults for the fields the caller left `nil`, so a sort column without an
-  /// order (or the reverse) keeps the other half.
+  /// Leaves out the fields the caller left `nil`, so Storage applies its own defaults. Storage
+  /// rejects a `sortBy` without a column, so an order alone goes with the `name` column.
   func list(bucket: String, prefix: ObjectKey, options: ListOptions) throws -> StorageRequest {
+    let sortBy =
+      options.sortBy == nil && options.order == nil
+      ? nil : SortBody(column: (options.sortBy ?? .name).rawValue, order: options.order)
     let body = ListBody(
       prefix: prefix.path,
-      limit: options.limit ?? 100,
-      offset: options.offset ?? 0,
-      sortBy: SortBody(
-        column: (options.sortBy ?? .name).rawValue, order: options.order ?? .ascending),
+      limit: options.limit,
+      offset: options.offset,
+      sortBy: sortBy,
       search: options.search,
       exactMatch: options.exactMatch,
       noncurrentVersions: options.versions?.rawValue,
@@ -477,7 +481,7 @@ struct StorageRequests: Sendable {
     let prefix: String
     let limit: Int?
     let cursor: String?
-    let withDelimiter: Bool
+    let withDelimiter: Bool?
     let sortBy: SortBody?
     let exactMatch: Bool?
     let noncurrentVersions: String?
