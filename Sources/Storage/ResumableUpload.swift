@@ -484,6 +484,11 @@ public actor ResumableUpload {
   private func loadOrCreateRecord() async throws -> ResumableUploadRecord {
     let tus = TusSession(api: api)
     if var existing = try store.record(fingerprint: fingerprint) {
+      // A record saved before the upload URL was moved onto the storage origin, or edited on
+      // disk, is created again here rather than contacted.
+      guard api.requests.isTusUploadURL(existing.uploadURL) else {
+        return try await recreate(existing)
+      }
       do {
         existing.lastKnownOffset = try await tus.offset(of: existing.uploadURL)
         try store.save(existing)
