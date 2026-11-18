@@ -59,7 +59,8 @@ struct ObjectListingTests {
 
     var pages: [ObjectPage] = []
     for try await page in bucket.objects(
-      prefix: "2026/", options: ObjectListingOptions(pageSize: 1, sortBy: .createdAt)
+      prefix: "2026/",
+      options: ObjectListingOptions(pageSize: 1, delimited: true, sortBy: .createdAt)
     ).pages {
       pages.append(page)
     }
@@ -119,6 +120,17 @@ struct ObjectListingTests {
   }
 
   @Test
+  func defaultOptionsSendOnlyThePrefix() async throws {
+    let bodies = LockIsolated<[String]>([])
+    let bucket = try Self.makeBucket(
+      bodies: bodies, responses: [#"{"hasNext":false,"objects":[]}"#])
+
+    _ = try await bucket.objects(prefix: "2026/").page()
+
+    #expect(bodies.value == [#"{"prefix":"2026\/"}"#])
+  }
+
+  @Test
   func pageAfterSendsTheCursor() async throws {
     let bodies = LockIsolated<[String]>([])
     let bucket = try Self.makeBucket(bodies: bodies, responses: [Self.lastPage])
@@ -126,7 +138,7 @@ struct ObjectListingTests {
     let page = try await bucket.objects().page(after: "c9")
 
     #expect(page.nextCursor == nil)
-    #expect(bodies.value == [#"{"cursor":"c9","prefix":"","with_delimiter":true}"#])
+    #expect(bodies.value == [#"{"cursor":"c9","prefix":""}"#])
   }
 
   @Test
