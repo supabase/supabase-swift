@@ -56,7 +56,7 @@ struct RealtimeCoreSubscribeTests {
       ])
     #expect(
       harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
-    #expect(harness.core.channels[.room]?.joinAccessToken == "token")
+    #expect(harness.core.channels[.room]?.sentAccessToken == "token")
   }
 
   @Test

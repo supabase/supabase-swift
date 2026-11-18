@@ -143,14 +143,18 @@ extension RealtimeCore {
   }
 
   /// Sends `token` to every subscribed channel, and to every channel whose `phx_join` already
-  /// went out with another token. A channel still waiting for a token joins with this one.
+  /// went out and that last sent another token. A channel still waiting for a token joins with
+  /// this one.
   private mutating func pushAccessToken(_ token: String) -> [Effect] {
     guard isConnected else { return [] }
     var effects: [Effect] = []
     for channel in channels.ids.sorted() {
       guard let record = channels[channel], let joinRef = record.currentJoinRef else { continue }
       let isSubscribed = if case .subscribed = record.phase { true } else { false }
-      guard isSubscribed || record.joinAccessToken != token else { continue }
+      // Compared with the last token sent, not the join's: the server may hold a token pushed
+      // after the join.
+      guard isSubscribed || record.sentAccessToken != token else { continue }
+      channels.update(channel) { $0.sentAccessToken = token }
       logger.debug("Updating auth token for channel '\(topic(of: channel))'")
       effects.append(
         .send(

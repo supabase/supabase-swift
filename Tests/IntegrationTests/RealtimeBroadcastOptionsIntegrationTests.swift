@@ -16,7 +16,7 @@
   import Testing
 
   @testable import Helpers
-  @testable import Realtime
+  @_spi(Testing) @testable import Realtime
 
   /// Broadcast join options and binary REST sends, against the local stack.
   ///
@@ -239,15 +239,14 @@
       let clock = TestClock<Duration>()
       let userToken = signedToken(role: "authenticated")
       let signedIn = LockIsolated(true)
-      let realtime = try RealtimeClient(
-        configuration: RealtimeClient.Configuration(
-          url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
-          headers: [.apikey: DotEnv.supabasePublishableKey],
-          observesAppLifecycle: false,
-          accessToken: { signedIn.value ? userToken : nil },
-          clock: clock
-        )
+      var configuration = RealtimeClient.Configuration(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        headers: [.apikey: DotEnv.supabasePublishableKey],
+        observesAppLifecycle: false,
+        accessToken: { signedIn.value ? userToken : nil }
       )
+      configuration.clock = clock
+      let realtime = try RealtimeClient(configuration: configuration)
       try await realtime.connect()
       let joined = await realtime.channel("swift-private:revoked-\(UUID().uuidString)") {
         $0.isPrivate = true

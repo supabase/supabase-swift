@@ -49,7 +49,7 @@ struct RealtimeCoreTokenTests {
       ])
     #expect(
       harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
-    #expect(harness.core.channels[.room]?.joinAccessToken == "t1")
+    #expect(harness.core.channels[.room]?.sentAccessToken == "t1")
   }
 
   @Test
@@ -228,7 +228,7 @@ struct RealtimeCoreTokenTests {
     _ = harness.send(Self.subscribe(harness.waiter(), channel: b, topic: "b"))
     harness.advance(by: .seconds(5))
     _ = harness.send(Self.subscribe(harness.waiter(), channel: c, topic: "c"))
-    #expect(harness.core.channels[b]?.joinAccessToken == "t0")
+    #expect(harness.core.channels[b]?.sentAccessToken == "t0")
 
     #expect(
       harness.send(.tokenFetched(token: "t1", generation: 2)) == [
@@ -254,6 +254,21 @@ struct RealtimeCoreTokenTests {
     #expect(harness.send(.setAuth(token: nil)) == [])
   }
 
+  /// A channel that joined with the API key and then got a user's token before its join reply
+  /// gets the API key again at sign-out: the server may already hold the user's token.
+  @Test
+  func aJoiningChannelGetsItsJoinTokenBackAfterAnotherToken() {
+    var harness = CoreHarness.connected(initialToken: "anon-key")
+    _ = harness.send(Self.subscribe(harness.waiter()))
+    _ = harness.send(.setAuth(token: "user-token"))
+
+    #expect(
+      harness.send(.setAuth(token: "anon-key")) == [
+        .send(Self.accessToken("anon-key", joinRef: "1", ref: "3"))
+      ])
+    #expect(harness.send(.setAuth(token: "anon-key")) == [])
+  }
+
   // MARK: No signed-in user
 
   /// SWIFT-V3-004: a `nil` from the callback after a token means no signed-in user. The token
@@ -269,7 +284,7 @@ struct RealtimeCoreTokenTests {
         .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
       ])
     #expect(harness.core.tokens.token == nil)
-    #expect(harness.core.channels[.room]?.joinAccessToken == nil)
+    #expect(harness.core.channels[.room]?.sentAccessToken == nil)
   }
 
   /// The server ignores an `access_token` push of `null`, so the joined channels get the API key

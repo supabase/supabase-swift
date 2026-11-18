@@ -36,8 +36,9 @@ reach the server's expiry check.
 
 ``RealtimeChannel/httpSend(event:payload:encoder:timeout:)`` calls the closure for every request,
 with no 10-second limit. If the closure throws, `httpSend` throws ``RealtimeError`` with kind
-``RealtimeError/Kind-swift.struct/accessToken``. A `nil` result sends the current token. With no
-token at all, `httpSend` sends only `apikey`, which is enough for a public channel.
+``RealtimeError/Kind-swift.struct/accessToken``. A `nil` result means no signed-in user, so
+`httpSend` sends only `apikey`, which is enough for a public channel. The socket clears its own
+token at its next callback call.
 
 This closure is Realtime's only token source, for the socket and for `httpSend`. Do not add an
 `AccessTokenMiddleware` to ``RealtimeClient/Configuration/http``.
