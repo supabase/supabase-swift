@@ -249,13 +249,13 @@ struct StorageRequests: Sendable {
       body: firstChunk.map { HTTPBody($0) })
   }
 
-  func tusOffset(of uploadURL: URL, upsert: Bool) -> StorageRequest {
+  func tusOffset(of uploadURL: URL, upsert: Bool?) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(
         method: .head, url: uploadURL, headerFields: tusFollowUpHeaders(upsert: upsert)))
   }
 
-  func tusAppend(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL, upsert: Bool)
+  func tusAppend(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL, upsert: Bool?)
     -> StorageRequest
   {
     var headers = tusFollowUpHeaders(upsert: upsert)
@@ -265,18 +265,19 @@ struct StorageRequests: Sendable {
       head: HTTPRequest(method: .patch, url: uploadURL, headerFields: headers), body: chunk)
   }
 
-  func tusTerminate(_ uploadURL: URL, upsert: Bool) -> StorageRequest {
+  func tusTerminate(_ uploadURL: URL, upsert: Bool?) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(
         method: .delete, url: uploadURL, headerFields: tusFollowUpHeaders(upsert: upsert)))
   }
 
   /// Storage checks `x-upsert` on every tus request, not only on creation: a `PATCH` or `DELETE`
-  /// without it over an existing object answers `409 The resource already exists`.
-  private func tusFollowUpHeaders(upsert: Bool) -> HTTPFields {
+  /// without it over an existing object answers `409 The resource already exists`. Each one
+  /// sends the same value as ``tusCreate(bucket:key:length:options:firstChunk:)``.
+  private func tusFollowUpHeaders(upsert: Bool?) -> HTTPFields {
     var headers: HTTPFields = [.tusResumable: Self.tusVersion]
-    if upsert {
-      headers[.xUpsert] = "true"
+    if let upsert {
+      headers[.xUpsert] = "\(upsert)"
     }
     return headers
   }
