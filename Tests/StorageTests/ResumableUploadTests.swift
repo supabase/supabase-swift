@@ -94,16 +94,17 @@ struct ResumableUploadTests {
     try makeStorage(script, retryTimeout: retryTimeout).from("bucket")
   }
 
-  private func makeStorage(_ script: Script, retryTimeout: Duration = .seconds(60)) throws
-    -> StorageClient
-  {
+  private func makeStorage(
+    _ script: Script, retryTimeout: Duration = .seconds(60),
+    clock: any Clock<Duration> = ImmediateClock()
+  ) throws -> StorageClient {
     var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
       http: .init(transport: ClosureTransport { try await script.send($0, body: $1) }))
     configuration.resumable = ResumableUploadConfiguration(
       chunkSize: 8, retryTimeout: retryTimeout, directory: root.appendingPathComponent("store"))
-    configuration.clock = ImmediateClock()
+    configuration.clock = clock
     return try StorageClient(configuration: configuration)
   }
 
@@ -236,6 +237,32 @@ struct ResumableUploadTests {
     #expect(
       try store.records().count == 1,
       "the record survives a transport failure so a relaunch can resume it")
+  }
+
+  @Test
+  func everyRetryWaitsAtLeastHalfTheBackoffCap() async throws {
+    let retries = 8
+    let script = Script(
+      [Self.created(offset: 0)]
+        + (0..<retries).flatMap { _ in [Self.transportFailure, Self.head(offset: 0)] }
+        + [
+          Self.appended(offset: 8), Self.appended(offset: 16),
+          Self.appended(offset: 20, complete: true),
+        ])
+    let clock = RecordingClock()
+    let upload = try makeStorage(script, retryTimeout: .seconds(600), clock: clock)
+      .from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+
+    try await upload.start()
+    _ = try await upload.result
+
+    let sleeps = clock.sleeps.value
+    #expect(sleeps.count == retries)
+    for (index, sleep) in sleeps.enumerated() {
+      let cap = min(Duration.seconds(20), .milliseconds(500) * (1 << index))
+      #expect(sleep >= cap / 2, "retry \(index + 1) waited \(sleep), below half of \(cap)")
+      #expect(sleep <= cap)
+    }
   }
 
   @Test
@@ -792,5 +819,19 @@ extension ResumableUpload.Status {
     case .failed: "failed"
     case .cancelled: "cancelled"
     }
+  }
+}
+
+private final class RecordingClock: Clock, Sendable {
+  let base = ImmediateClock()
+  let sleeps = LockIsolated<[Duration]>([])
+
+  var now: ImmediateClock<Duration>.Instant { base.now }
+  var minimumResolution: Duration { base.minimumResolution }
+
+  func sleep(until deadline: ImmediateClock<Duration>.Instant, tolerance: Duration?) async throws {
+    let duration = base.now.duration(to: deadline)
+    sleeps.withValue { $0.append(duration) }
+    try await base.sleep(until: deadline, tolerance: tolerance)
   }
 }

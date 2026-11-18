@@ -423,7 +423,7 @@ public actor ResumableUpload {
         next = .recreate
       } catch let error as StorageError where error.kind == .transport {
         retry += 1
-        let delay = RetryPolicy.default.backoffDelay(retry: retry)
+        let delay = Self.retryDelay(retry: retry)
         waited += delay
         guard waited <= api.configuration.resumable.retryTimeout else {
           fail(error, keepRecord: true)
@@ -441,6 +441,16 @@ public actor ResumableUpload {
       if status.isTerminal { break }
     }
     loop = nil
+  }
+
+  /// A random wait in `cap/2...cap`, with `cap` from ``RetryPolicy/default``. Only
+  /// `retryTimeout` bounds this loop, not an attempt count, so each wait keeps a floor of half
+  /// the cap: full jitter alone can draw waits near zero and send a burst of retries to a
+  /// server that is already failing.
+  private static func retryDelay(retry: Int) -> Duration {
+    let policy = RetryPolicy.default
+    let cap = policy.backoffDelay(retry: retry) { $0.upperBound }
+    return cap / 2 + policy.backoffDelay(retry: retry) / 2
   }
 
   /// Sends the chunk at `offset` and returns the server's new offset, or `nil` once the upload
