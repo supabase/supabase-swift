@@ -58,7 +58,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/supabase/supabase-swift.git",
-            from: "3.0.0-alpha.1"
+            from: "3.0.0-alpha.2"
         ),
     ],
     targets: [
@@ -233,7 +233,7 @@ supabase-swift version your project uses:
 
 <!-- x-release-please-start-version -->
 ```bash
-VERSION=3.0.0-alpha.1 # your supabase-swift version
+VERSION=3.0.0-alpha.2 # your supabase-swift version
 ASSET=supabase-typegen-macos-universal.tar.gz # or supabase-typegen-linux-x86_64.tar.gz
 mkdir -p ~/.local/bin
 curl -fsSL "https://github.com/supabase/supabase-swift/releases/download/v$VERSION/$ASSET" | tar -xz -C ~/.local/bin
