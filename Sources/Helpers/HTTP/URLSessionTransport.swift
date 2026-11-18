@@ -55,7 +55,7 @@ import HTTPTypesFoundation
 /// let transport = URLSessionTransport(configuration: configuration)
 /// ```
 public struct URLSessionTransport: ClientTransport {
-  private let session: URLSession
+  package let session: URLSession
 
   /// Creates a transport over an existing session. Defaults to `URLSession.shared`.
   public init(session: URLSession = .shared) {

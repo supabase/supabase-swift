@@ -116,8 +116,12 @@ Changes that still compile but behave differently. Check each one by hand.
   `Configuration.Global.logger` and `Configuration.Global.http`. See
   [One `http` and one `logger`](../../../V3_MIGRATION.md#one-http-and-one-logger-for-every-sub-client)
   to filter or change one sub-client only.
-- **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. For
-  certificate pinning, pass a transport (see [`session:` is replaced by
+- **The WebSocket shares the global session's delegate, not the session.** With no
+  `webSocketTransport`, `SupabaseClient` builds the WebSocket from the configuration and delegate
+  of a `URLSessionTransport` in the HTTP settings, so certificate pinning covers the upgrade. The
+  delegate runs on that session's `delegateQueue`. A
+  custom `ClientTransport` hides its session: Realtime logs a warning and uses the default
+  transport. Then pass a transport yourself (see [`session:` is replaced by
   `webSocketTransport:`](#session-is-replaced-by-websockettransport)).
 - **The `accessToken` callback is called less often, and before the token expires.** The client
   calls it at most once every 10 seconds; `setAuth()` inside that window keeps the current

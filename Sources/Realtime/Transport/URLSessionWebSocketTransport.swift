@@ -35,6 +35,7 @@ import IssueReporting
 public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
   let configuration: URLSessionConfiguration
   let delegate: (any URLSessionDelegate)?
+  let delegateQueue: OperationQueue?
   let allowsWatchOSConnections: Bool
   let isWatchOS: Bool
   let handshakeTimeout: TimeInterval
@@ -63,11 +64,28 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
     )
   }
 
+  /// Creates a transport that calls `delegate` on `delegateQueue`, the queue of the session the
+  /// delegate came from, so a delegate built for that queue (for example a main-actor one on
+  /// `.main`) is not called from another thread.
+  package init(
+    configuration: URLSessionConfiguration,
+    delegate: any URLSessionDelegate,
+    delegateQueue: OperationQueue
+  ) {
+    self.init(
+      configuration: configuration,
+      delegate: delegate,
+      delegateQueue: delegateQueue,
+      isWatchOS: Self.runsOnWatchOS
+    )
+  }
+
   /// `isWatchOS` and `handshakeTimeout` are injected so tests can reach the watchOS paths on any
   /// platform. `handshakeTimeout` defaults to the configuration's `timeoutIntervalForRequest`.
   init(
     configuration: URLSessionConfiguration = .default,
     delegate: (any URLSessionDelegate)? = nil,
+    delegateQueue: OperationQueue? = nil,
     allowsWatchOSConnections: Bool = false,
     isWatchOS: Bool,
     handshakeTimeout: TimeInterval? = nil
@@ -76,6 +94,7 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
     let configuration = configuration.copy() as! URLSessionConfiguration
     self.configuration = configuration
     self.delegate = delegate
+    self.delegateQueue = delegateQueue
     self.allowsWatchOSConnections = allowsWatchOSConnections
     self.isWatchOS = isWatchOS
     self.handshakeTimeout = handshakeTimeout ?? configuration.timeoutIntervalForRequest
@@ -152,7 +171,8 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
           abnormal: false
         )
       },
-      wrappedDelegate: delegate
+      wrappedDelegate: delegate,
+      wrappedDelegateQueue: delegateQueue
     )
 
     // Headers go on the request, not `httpAdditionalHeaders`: the latter can break the upgrade

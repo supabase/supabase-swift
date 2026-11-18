@@ -608,6 +608,8 @@ public final class SupabaseClient: Sendable {
 
   private func _initRealtimeClient() -> RealtimeClient {
     let realtime = configuration.realtime
+    let http = Self.resolveHTTP(global: configuration.global.http)
+    let logger = configuration.global.logger
 
     var realtimeConfiguration = RealtimeClient.Configuration(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
@@ -620,15 +622,48 @@ public final class SupabaseClient: Sendable {
       monitorsNetworkPath: realtime.monitorsNetworkPath,
       serverLogLevel: realtime.serverLogLevel,
       accessToken: { [weak self] in try await self?._getAccessToken() },
-      webSocketTransport: realtime.webSocketTransport,
-      http: Self.resolveHTTP(
-        global: configuration.global.http
-      ),
-      logger: configuration.global.logger
+      webSocketTransport: realtime.webSocketTransport
+        ?? Self.webSocketTransport(sharingDelegateOf: http.transport, logger: logger),
+      http: http,
+      logger: logger
     )
     realtimeConfiguration.clock = configuration.global.clock
     // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
     // swift-format-ignore: NeverUseForceTry
     return try! RealtimeClient(configuration: realtimeConfiguration)
+  }
+
+  /// A WebSocket transport that answers TLS challenges with the HTTP session's delegate, so
+  /// certificate pinning set on ``URLSessionTransport`` also covers the Realtime upgrade.
+  ///
+  /// The delegate is called on the session's `delegateQueue`, as `URLSession` would call it.
+  /// Returns `nil`, and Realtime's default transport is used, when the session has no delegate.
+  /// A custom transport hides its session, so it logs a warning instead. The Realtime client is
+  /// built once per ``SupabaseClient``, so the warning is too.
+  static func webSocketTransport(
+    sharingDelegateOf transport: (any ClientTransport)?,
+    logger: Logging.Logger
+  ) -> URLSessionWebSocketTransport? {
+    switch transport {
+    case let transport as URLSessionTransport:
+      guard let delegate = transport.session.delegate else { return nil }
+      return URLSessionWebSocketTransport(
+        configuration: transport.session.configuration,
+        delegate: delegate,
+        delegateQueue: transport.session.delegateQueue
+      )
+    case nil:
+      return nil
+    default:
+      logger.warning(
+        """
+        Realtime cannot see the URLSession behind a custom transport, so the WebSocket uses the \
+        default URLSessionWebSocketTransport. If that session has a delegate (for example for \
+        certificate pinning), set `SupabaseClient.Configuration.Realtime.webSocketTransport` \
+        to a `URLSessionWebSocketTransport` built from the same session.
+        """
+      )
+      return nil
+    }
   }
 }
