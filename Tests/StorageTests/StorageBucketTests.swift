@@ -211,11 +211,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 83" \
+      	--header "Content-Length: 19" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	--data "{\"prefix\":\"folder\"}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -237,11 +237,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 89" \
+      	--header "Content-Length: 52" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"asc\"}}" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -264,11 +264,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 84" \
+      	--header "Content-Length: 61" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -291,11 +291,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 90" \
+      	--header "Content-Length: 67" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"desc\"}}" \
+      	--data "{\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"desc\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -318,11 +318,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 84" \
+      	--header "Content-Length: 72" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":100,\"offset\":10,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	--data "{\"offset\":10,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -345,11 +345,11 @@ struct StorageBucketTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 82" \
+      	--header "Content-Length: 71" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"limit\":50,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
+      	--data "{\"limit\":50,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
       	"http://localhost:54321/storage/v1/object/list/bucket"
       """#
     }
@@ -402,7 +402,7 @@ struct StorageBucketTests {
 
     #expect(
       String(decoding: try #require(body.value), as: UTF8.self)
-        == #"{"deleteMarkers":"only","exactMatch":true,"limit":100,"noncurrentVersions":"include","offset":0,"prefix":"folder\/a.txt","search":"a","sortBy":{"column":"last_accessed_at","order":"asc"}}"#
+        == #"{"deleteMarkers":"only","exactMatch":true,"noncurrentVersions":"include","prefix":"folder\/a.txt","search":"a","sortBy":{"column":"last_accessed_at"}}"#
     )
   }
 
@@ -1029,7 +1029,6 @@ struct StorageBucketTests {
       	--header "Content-Type: image/png" \
       	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "x-upsert: false" \
       	--data "hello world!
       " \
       	"http://localhost:54321/storage/v1/object/bucket/file.txt"

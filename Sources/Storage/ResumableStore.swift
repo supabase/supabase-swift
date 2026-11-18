@@ -85,7 +85,7 @@ struct ResumableUploadRecord: Hashable, Codable, Sendable {
   var expiresAt: Date
   var lastKnownOffset: Int64
   let chunkSize: Int64
-  let upsert: Bool
+  let upsert: Bool?
   let contentType: String?
   let cacheControl: String
   let metadata: JSONObject?
