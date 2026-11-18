@@ -410,21 +410,25 @@ struct AuthClientIntegrationTests {
       AdminCreateUser(
         email: email, phone: phone, password: password, confirmsEmail: true, confirmsPhone: true)
     )
-    defer { Task { try? await admin.deleteUser(id: created.id) } }
+    do {
+      let session = try await authClient.signIn(email: email, password: password)
+      let phoneIdentity = try #require(session.user.identities?.first { $0.provider == "phone" })
 
-    let session = try await authClient.signIn(email: email, password: password)
-    let phoneIdentity = try #require(session.user.identities?.first { $0.provider == "phone" })
+      try await expectAuthEvents([.initialSession, .userUpdated]) {
+        try await authClient.unlinkIdentity(phoneIdentity)
+      }
 
-    try await expectAuthEvents([.initialSession, .userUpdated]) {
-      try await authClient.unlinkIdentity(phoneIdentity)
+      let user = try #require(authClient.currentUser)
+      #expect(user.identities?.map(\.provider) == ["email"])
+      #expect(user.appMetadata["providers"] == ["email"])
+      #expect(user.phone == nil)
+      let serverUser = try await authClient.user()
+      expectNoDifference(user, serverUser)
+    } catch {
+      try? await admin.deleteUser(id: created.id)
+      throw error
     }
-
-    let user = try #require(authClient.currentUser)
-    #expect(user.identities?.map(\.provider) == ["email"])
-    #expect(user.appMetadata["providers"] == ["email"])
-    #expect(user.phone == nil)
-    let serverUser = try await authClient.user()
-    expectNoDifference(user, serverUser)
+    try await admin.deleteUser(id: created.id)
   }
 
   @Test

@@ -57,11 +57,15 @@ struct AuthRequest<Response>: Sendable {
   var body: Data?
   let decodeBody: @Sendable (HTTPResponse, Data) throws -> Response
 
+  /// Whether a GET is retried after a timeout or a 5xx. Set it to `false` for a request whose
+  /// result the caller can do without, so that a failing server does not hold the caller up.
+  var retriesServerFailures = true
+
   /// Whether a retry waits for a failure where the request never reached GoTrue. Every method
   /// but GET can change server state: `POST /token` rotates the refresh token, `/otp` sends a
   /// message. Replaying one after a timeout or a 5xx can repeat that change.
   var retriesOnlyConnectionFailures: Bool {
-    head.method != .get
+    head.method != .get || !retriesServerFailures
   }
 
   /// The model for a response to this request, or the ``AuthError`` from ``ErrorDecoder`` when

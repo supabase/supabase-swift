@@ -402,6 +402,7 @@ extension AuthClientTests {
     )
 
     expectNoDifference(sut.currentUser, Session.valid.user)
+    #expect(transport.requests(.get, "user").count == 1)
   }
 
   @Test
