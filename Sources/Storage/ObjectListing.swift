@@ -58,8 +58,8 @@ public struct ObjectListingOptions: Sendable {
   public var pageSize: Int?
 
   /// Whether to list one level, collapsing deeper keys into ``ObjectPage/folders``
-  /// (`true`), or every key at every depth (`false`). `nil` sends nothing, and Storage lists
-  /// every key at every depth.
+  /// (`true`), or every key at every depth (`false`). `nil` sends nothing, so Storage lists
+  /// every depth, as with `false`.
   public var delimited: Bool?
 
   /// The column to sort by: ``ObjectSortColumn/name``, ``ObjectSortColumn/updatedAt`` or
@@ -83,7 +83,8 @@ public struct ObjectListingOptions: Sendable {
   ///
   /// - Parameters:
   ///   - pageSize: Entries per page.
-  ///   - delimited: Whether to list one level with folders, or every key at every depth.
+  ///   - delimited: Whether to list one level with folders, or every key at every depth. `nil`
+  ///     sends nothing, so Storage lists every depth.
   ///   - sortBy: The column to sort by.
   ///   - order: The sort direction.
   ///   - exactMatch: Whether the prefix names one object.
