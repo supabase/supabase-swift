@@ -25,8 +25,17 @@ Read the matching file before you act:
 - [RELEASE.md](RELEASE.md) — release-please, release branches, and the typegen binary release.
   Read it before you touch versions, `CHANGELOG.md`, or release workflows.
 
+- [SDK principles](https://github.com/supabase/sdk/pull/308) — the cross-SDK rules that guide every
+  change. Read them before you change behavior. The document lands at `docs/principles.md` in
+  `supabase/sdk` with that pull request.
+
 ## Notes for AI coding agents
 
+- A change to behavior that a capability spec describes starts with a spec change in
+  `supabase/sdk` (`packages/capability-matrix/specs/`). Land the spec first. See "Principles and
+  Specs" in [CONTRIBUTING.md](CONTRIBUTING.md)
+- Run `./scripts/check-compliance.sh` with Xcode 26.x (Swift 6.3), not Xcode 27; see "Capability
+  Compliance" in [CONTRIBUTING.md](CONTRIBUTING.md)
 - On macOS, run `swift test` and `swift build --build-tests` with the flags from
   "macOS test flags" in [DEVELOPMENT.md](DEVELOPMENT.md); without them, swift-snapshot-testing
   fails to compile
