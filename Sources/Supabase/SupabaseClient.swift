@@ -249,6 +249,7 @@ public final class SupabaseClient: Sendable {
       headers: headers,
       storage: configuration.auth.storage,
       redirectTo: configuration.auth.redirectTo,
+      acceptsImplicitTokens: configuration.auth.acceptsImplicitTokens,
       autoRefresh: configuration.auth.accessToken == nil
         ? configuration.auth.autoRefresh : .disabled,
       observesAppLifecycle: configuration.auth.observesAppLifecycle,

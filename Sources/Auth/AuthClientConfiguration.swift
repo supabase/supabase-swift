@@ -25,6 +25,9 @@ extension AuthClient {
   /// - ``redirectTo``
   /// - ``http``
   ///
+  /// ### Redirects
+  /// - ``acceptsImplicitTokens``
+  ///
   /// ### Storage
   /// - ``storage``
   /// - ``storageKey``
@@ -57,6 +60,20 @@ extension AuthClient {
 
     /// Default URL to be used for redirect on the flows that requires it.
     public var redirectTo: URL?
+
+    /// Whether ``AuthClient/handleRedirect(_:)`` signs in with a URL that carries tokens
+    /// (`#access_token=…`). Defaults to `false`.
+    ///
+    /// The client always uses PKCE, so its own flows return a `code`, never tokens. Tokens in a URL
+    /// sign in the account they belong to, with no flow that this device started. Anyone who can
+    /// make your app open a URL can then sign it in to their own account. While this is `false`,
+    /// such a URL throws an error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` and the
+    /// client stores nothing.
+    ///
+    /// Set it to `true` only when your app gets token links from outside the client's PKCE flows,
+    /// for example invites, links from `generateLink`, or email links that another client
+    /// requested.
+    public var acceptsImplicitTokens: Bool
 
     /// The logger used by the Auth library. Defaults to a build-config-aware logger: visible
     /// (warning+) in debug builds, silent in release builds. Pass your own `Logging.Logger` for
@@ -145,6 +162,7 @@ extension AuthClient {
     ///   - headers: Headers to send with every request.
     ///   - storage: Where the client persists the session. `nil` uses the platform's default.
     ///   - redirectTo: Default URL to be used for redirect on the flows that requires it.
+    ///   - acceptsImplicitTokens: Whether a redirect URL with tokens signs in. Defaults to `false`.
     ///   - autoRefresh: When the client refreshes the session on its own.
     ///   - observesAppLifecycle: Whether auto refresh pauses in the background and resumes in the
     ///     foreground.
@@ -159,6 +177,7 @@ extension AuthClient {
       headers: HTTPFields = [:],
       storage: (any AuthStorage)? = nil,
       redirectTo: URL? = nil,
+      acceptsImplicitTokens: Bool = false,
       autoRefresh: AutoRefreshPolicy = .automatic,
       observesAppLifecycle: Bool = true,
       initialRefreshTimeout: Duration = .seconds(5),
@@ -171,6 +190,7 @@ extension AuthClient {
       self.headers = headers
       self.storage = storage ?? AuthPlatform.defaultStorage
       self.redirectTo = redirectTo
+      self.acceptsImplicitTokens = acceptsImplicitTokens
       self.logger = logger
       self.http = http
       self.autoRefresh = autoRefresh

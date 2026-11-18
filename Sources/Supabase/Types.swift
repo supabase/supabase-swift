@@ -90,6 +90,10 @@ extension SupabaseClient {
       /// Default URL to be used for redirect on the flows that requires it.
       public var redirectTo: URL?
 
+      /// Whether a redirect URL with tokens (`#access_token=…`) signs in. Defaults to `false`. See
+      /// ``AuthClient/Configuration/acceptsImplicitTokens``.
+      public var acceptsImplicitTokens: Bool
+
       /// Optional key name used for storing tokens in local storage.
       public var storageKey: String?
 
@@ -120,6 +124,8 @@ extension SupabaseClient {
       /// - Parameters:
       ///   - storage: Where the session is stored. `nil` uses the platform default.
       ///   - redirectTo: The default redirect URL for Auth flows.
+      ///   - acceptsImplicitTokens: Whether a redirect URL with tokens signs in. Defaults to
+      ///     `false`.
       ///   - storageKey: The storage key for the session. `nil` derives it from the project.
       ///   - autoRefresh: When the client refreshes the session.
       ///   - observesAppLifecycle: Whether auto refresh follows the app's foreground state.
@@ -129,6 +135,7 @@ extension SupabaseClient {
       public init(
         storage: (any AuthStorage)? = nil,
         redirectTo: URL? = nil,
+        acceptsImplicitTokens: Bool = false,
         storageKey: String? = nil,
         autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
         observesAppLifecycle: Bool = true,
@@ -137,6 +144,7 @@ extension SupabaseClient {
       ) {
         self.storage = storage
         self.redirectTo = redirectTo
+        self.acceptsImplicitTokens = acceptsImplicitTokens
         self.storageKey = storageKey
         self.autoRefresh = autoRefresh
         self.observesAppLifecycle = observesAppLifecycle

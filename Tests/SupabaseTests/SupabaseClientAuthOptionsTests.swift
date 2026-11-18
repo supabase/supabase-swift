@@ -35,6 +35,23 @@ struct SupabaseClientAuthOptionsTests {
     #expect(client.auth.configuration.redirectTo == redirect)
   }
 
+  @Test(arguments: [true, false])
+  func acceptsImplicitTokensForwardsToTheAuthClient(accepts: Bool) throws {
+    let client = try makeClient(
+      auth: .init(
+        storage: InMemoryAuthStorage(), acceptsImplicitTokens: accepts, autoRefresh: .manual)
+    )
+
+    #expect(client.auth.configuration.acceptsImplicitTokens == accepts)
+  }
+
+  @Test
+  func implicitTokensAreRefusedByDefault() throws {
+    let client = try makeClient(auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual))
+
+    #expect(client.auth.configuration.acceptsImplicitTokens == false)
+  }
+
   @Test
   func authUsesTheGlobalClock() throws {
     let globalClock = TestClock<Duration>()
