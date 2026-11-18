@@ -104,8 +104,8 @@ extension AuthClient {
 
     /// The clock auto refresh sleeps on until the refresh is due, and between retries.
     ///
-    /// Keep it in step with ``now``: the refresh deadline sleeps on this clock, and expiry checks
-    /// read ``now``.
+    /// Keep it in step with `now`: the refresh deadline sleeps on this clock, and expiry checks
+    /// read `now`.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
     /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
@@ -119,7 +119,7 @@ extension AuthClient {
     /// The time source for every expiry check and every receipt time the client records.
     ///
     /// Defaults to the system clock. Pass a fixed or stepped time in tests, together with a
-    /// ``clock`` you control.
+    /// `clock` you control.
     ///
     /// A test hook: import Auth with `@_spi(Testing)`, and set it on the configuration before
     /// you create the client.
@@ -131,7 +131,7 @@ extension AuthClient {
     /// Defaults to 5 seconds. A refresh that finishes in time makes the initial session the
     /// refreshed one. A refresh that fails, or does not finish in time, makes it the expired
     /// session. A refresh that is still running then commits as ``AuthEvent/tokenRefreshed``. The
-    /// wait uses ``clock``.
+    /// wait uses `clock`.
     ///
     /// The client refreshes at start-up only under ``AuthClient/AutoRefreshPolicy/automatic``. A
     /// value of zero or less turns it off.
