@@ -431,7 +431,9 @@ public actor ResumableUpload {
         next = .recreate
       } catch let error as StorageError where error.kind == .transport {
         retry += 1
-        let delay = RetryPolicy.default.backoffDelay(retry: retry)
+        // Only `retryTimeout` bounds this loop, so each wait keeps a floor of half the cap;
+        // full jitter alone can draw near-zero waits and burst retries at a failing server.
+        let delay = RetryPolicy.default.backoffDelay(retry: retry) { _ in .random(in: 0.5...1) }
         waited += delay
         guard waited <= api.configuration.resumable.retryTimeout else {
           fail(error, keepRecord: true)
