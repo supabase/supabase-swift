@@ -370,6 +370,96 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func realtimeWebSocketUsesTheGlobalSessionDelegate() throws {
+    let delegate = PinningDelegate()
+    let sessionConfiguration = URLSessionConfiguration.ephemeral
+    sessionConfiguration.timeoutIntervalForRequest = 42
+    sessionConfiguration.httpAdditionalHeaders = ["X-App": "demo"]
+    let session = URLSession(
+      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
+    defer { session.invalidateAndCancel() }
+    let recorder = LogRecorder()
+
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
+        ),
+        global: SupabaseClient.Configuration.Global(
+          http: .init(transport: URLSessionTransport(session: session)),
+          logger: recorder.makeLogger()
+        )
+      )
+    )
+
+    let transport = try #require(client.realtime.transport as? URLSessionWebSocketTransport)
+    #expect(transport.delegate === delegate)
+    #expect(transport.delegateQueue === session.delegateQueue)
+    #expect(transport.configuration.timeoutIntervalForRequest == 42)
+    #expect(transport.configuration.httpAdditionalHeaders == nil)
+    #expect(!recorder.entries.contains { $0.contains("WebSocket") })
+  }
+
+  @Test
+  func realtimeWarnsOnceWhenACustomTransportHidesTheSessionDelegate() throws {
+    let session = URLSession(
+      configuration: .ephemeral, delegate: PinningDelegate(), delegateQueue: nil)
+    defer { session.invalidateAndCancel() }
+    let recorder = LogRecorder()
+
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
+        ),
+        global: SupabaseClient.Configuration.Global(
+          http: .init(transport: WrappingTransport(wrapped: URLSessionTransport(session: session))),
+          logger: recorder.makeLogger()
+        )
+      )
+    )
+
+    let transport = try #require(client.realtime.transport as? URLSessionWebSocketTransport)
+    _ = client.realtime
+    #expect(transport.delegate == nil)
+    #expect(recorder.entries.filter { $0.contains("webSocketTransport") }.count == 1)
+  }
+
+  @Test
+  func realtimeDoesNotWarnWhenItHasItsOwnWebSocketTransport() throws {
+    let recorder = LogRecorder()
+    let realtimeTransport = MarkerWebSocketTransport()
+    let session = URLSession(
+      configuration: .ephemeral, delegate: PinningDelegate(), delegateQueue: nil)
+    defer { session.invalidateAndCancel() }
+
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
+        ),
+        global: SupabaseClient.Configuration.Global(
+          http: .init(transport: URLSessionTransport(session: session)),
+          logger: recorder.makeLogger()
+        ),
+        realtime: SupabaseClient.Configuration.Realtime(webSocketTransport: realtimeTransport)
+      )
+    )
+
+    #expect(client.realtime.transport as AnyObject === realtimeTransport)
+    #expect(!recorder.entries.contains { $0.contains("webSocketTransport") })
+  }
+
+  @Test
   func clientInitWithCustomAccessToken() async throws {
     let localStorage = InMemoryAuthStorage()
 
@@ -899,6 +989,18 @@ private func authorization(
 
 extension HTTPField.Name {
   fileprivate static let tag = HTTPField.Name("X-Tag")!
+}
+
+private final class PinningDelegate: NSObject, URLSessionDelegate {}
+
+private struct WrappingTransport: ClientTransport {
+  let wrapped: URLSessionTransport
+
+  func send(_ request: HTTPTypes.HTTPRequest, body: HTTPBody?) async throws -> (
+    HTTPTypes.HTTPResponse, HTTPBody?
+  ) {
+    try await wrapped.send(request, body: body)
+  }
 }
 
 private final class MarkerWebSocketTransport: WebSocketTransport {

@@ -23,6 +23,8 @@ extension URLSession {
   ///   - onWebSocketTaskOpened: Optional callback when a WebSocket connection opens successfully.
   ///   - onWebSocketTaskClosed: Optional callback when a WebSocket connection closes.
   ///   - wrappedDelegate: An optional delegate that receives the auth challenges.
+  ///   - wrappedDelegateQueue: The queue `wrappedDelegate` is called on. `nil` calls it on the
+  ///     session's own serial queue.
   /// - Returns: A configured URLSession instance.
   static func sessionWithConfiguration(
     _ configuration: URLSessionConfiguration,
@@ -31,7 +33,8 @@ extension URLSession {
       nil,
     onWebSocketTaskClosed: (@Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void)? =
       nil,
-    wrappedDelegate: (any URLSessionDelegate)? = nil
+    wrappedDelegate: (any URLSessionDelegate)? = nil,
+    wrappedDelegateQueue: OperationQueue? = nil
   ) -> URLSession {
     let queue = OperationQueue()
     queue.maxConcurrentOperationCount = 1
@@ -47,7 +50,8 @@ extension URLSession {
           onComplete: onComplete,
           onWebSocketTaskOpened: onWebSocketTaskOpened,
           onWebSocketTaskClosed: onWebSocketTaskClosed,
-          wrappedDelegate: wrappedDelegate
+          wrappedDelegate: wrappedDelegate,
+          wrappedDelegateQueue: wrappedDelegateQueue
         ),
         delegateQueue: queue
       )
@@ -77,6 +81,10 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
   /// auth-challenge forwarding only. Read-only after `init`; only ever invoked from the
   /// URLSession delegate queue, the same way `URLSession` itself would call it.
   private let wrappedDelegate: (any URLSessionDelegate)?
+  /// The queue `wrappedDelegate` expects its calls on: the `delegateQueue` of the session it
+  /// came from. A delegate built for `.main` can be main-actor isolated, and calling it from the
+  /// session's own queue would trap. `nil` calls it on the session's queue.
+  private let wrappedDelegateQueue: OperationQueue?
   /// The task `connect` creates for this connection, set once right after creation (the
   /// delegate must exist before the task can be created, since the session needs a
   /// delegate at construction time). Used to forward auth challenges to `wrappedDelegate`'s
@@ -92,12 +100,14 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
     onWebSocketTaskClosed: (
       @Sendable (URLSession, URLSessionWebSocketTask, Int?, Data?) -> Void
     )?,
-    wrappedDelegate: (any URLSessionDelegate)? = nil
+    wrappedDelegate: (any URLSessionDelegate)? = nil,
+    wrappedDelegateQueue: OperationQueue? = nil
   ) {
     self.onComplete = onComplete
     self.onWebSocketTaskOpened = onWebSocketTaskOpened
     self.onWebSocketTaskClosed = onWebSocketTaskClosed
     self.wrappedDelegate = wrappedDelegate
+    self.wrappedDelegateQueue = wrappedDelegateQueue
   }
 
   /// Called when a task completes, with or without error.
@@ -157,7 +167,26 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
         completionHandler(.performDefaultHandling, nil)
         return
       }
+      if let wrappedDelegateQueue, OperationQueue.current !== wrappedDelegateQueue {
+        let call = UncheckedSendable((self, session, challenge, wrappedDelegate))
+        wrappedDelegateQueue.addOperation {
+          let (delegate, session, challenge, wrappedDelegate) = call.value
+          delegate.forward(challenge, from: session, to: wrappedDelegate, completionHandler)
+        }
+        return
+      }
+      forward(challenge, from: session, to: wrappedDelegate, completionHandler)
+    #endif
+  }
 
+  #if !canImport(FoundationNetworking)
+    private func forward(
+      _ challenge: URLAuthenticationChallenge,
+      from session: URLSession,
+      to wrappedDelegate: any URLSessionDelegate,
+      _ completionHandler:
+        @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
       if let task = associatedTask.value,
         let taskDelegate = wrappedDelegate as? any URLSessionTaskDelegate,
         wrappedDelegate.responds(
@@ -178,6 +207,6 @@ final class _Delegate: NSObject, URLSessionDelegate, URLSessionDataDelegate, URL
       }
 
       completionHandler(.performDefaultHandling, nil)
-    #endif
-  }
+    }
+  #endif
 }

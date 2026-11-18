@@ -420,9 +420,15 @@ Changes that still compile but behave differently. Check each one by hand.
   token whenever it differs from the last one it pushed, whatever the event was. In v2 only
   `.initialSession`, `.signedIn`, `.tokenRefreshed` and `.signedOut` did. After `mfa.verify` or
   `linkIdentity(idToken:)`, channels now use the new token instead of the old one. `.signedOut` resets Realtime to the API key.
-- **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
-  for certificate pinning), pass `SupabaseClient.Configuration.Realtime(webSocketTransport:)` a
-  `URLSessionWebSocketTransport` built from the session.
+- **Realtime gets the global `URLSession` delegate, not the session.** When
+  `Configuration.Global.http` uses a `URLSessionTransport` whose session has a delegate, and you set no `webSocketTransport`, the WebSocket uses a
+  `URLSessionWebSocketTransport` built from that session's configuration and delegate. It calls
+  the delegate on the session's `delegateQueue`. So certificate pinning covers the WebSocket
+  upgrade. The WebSocket also gets the rest of that configuration, for example its timeouts and
+  proxy settings, but not its `httpAdditionalHeaders`, which can break the upgrade on iOS. A custom `ClientTransport` hides its
+  session: Realtime then logs a warning and uses the default transport. In that case, pass
+  `SupabaseClient.Configuration.Realtime(webSocketTransport:)` a `URLSessionWebSocketTransport`
+  built from the session.
 - **`supabase.functions` is cached.** Each access returns the same client. The default
   `Configuration.Functions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).
 

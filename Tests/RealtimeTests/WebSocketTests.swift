@@ -330,6 +330,41 @@ struct WebSocketTests {
     }
 
     @Test
+    func challengeForwardedOnTheWrappedDelegateQueue() async {
+      final class QueueRecordingDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
+        let calledOn = LockIsolated<OperationQueue?>(nil)
+        func urlSession(
+          _ session: URLSession,
+          didReceive challenge: URLAuthenticationChallenge,
+          completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        ) {
+          calledOn.setValue(OperationQueue.current)
+          completionHandler(.useCredential, nil)
+        }
+      }
+
+      let queue = OperationQueue()
+      let wrappedDelegate = QueueRecordingDelegate()
+      let delegate = _Delegate(
+        onComplete: nil,
+        onWebSocketTaskOpened: nil,
+        onWebSocketTaskClosed: nil,
+        wrappedDelegate: wrappedDelegate,
+        wrappedDelegateQueue: queue
+      )
+      let session = URLSession(configuration: .default)
+      let disposition = LockIsolated<URLSession.AuthChallengeDisposition?>(nil)
+
+      delegate.urlSession(session, didReceive: makeChallenge()) { result, _ in
+        disposition.setValue(result)
+      }
+      let completed = await waitUntil(timeout: 2) { disposition.value != nil }
+      #expect(completed)
+      #expect(disposition.value == .useCredential)
+      #expect(wrappedDelegate.calledOn.value === queue)
+    }
+
+    @Test
     func challengeForwardedToSessionLevelWrappedDelegateWhenTaskLevelNotImplemented() async {
       final class RecordingDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
         var receivedChallenge: URLAuthenticationChallenge?

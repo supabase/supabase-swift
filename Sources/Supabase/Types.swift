@@ -296,7 +296,9 @@ extension SupabaseClient {
       public var serverLogLevel: RealtimeServerLogLevel?
 
       /// The WebSocket stack the client connects with. `nil` uses
-      /// ``URLSessionWebSocketTransport``.
+      /// ``URLSessionWebSocketTransport``. When ``SupabaseClient/Configuration/Global/http`` has a
+      /// ``URLSessionTransport`` whose session has a delegate, that transport uses the session's configuration and delegate, and calls the delegate on the session's
+      /// `delegateQueue`. So certificate pinning also covers the WebSocket upgrade.
       public var webSocketTransport: (any WebSocketTransport)?
 
       /// Creates the Realtime settings.
