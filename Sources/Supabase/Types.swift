@@ -46,14 +46,14 @@ extension SupabaseClient {
 
       /// The JSONEncoder to use when encoding database request objects.
       ///
-      /// Applies to the untyped API (`from(_:)` with a table name, `rpc(_:)`) only. The typed API
-      /// always uses a fixed encoder.
+      /// The typed API uses it too, but ignores its `keyEncodingStrategy`: typed column names
+      /// come from `CodingKeys`.
       public var encoder: JSONEncoder
 
       /// The JSONDecoder to use when decoding database response objects.
       ///
-      /// Applies to the untyped API (`from(_:)` with a table name, `rpc(_:)`) only. The typed API
-      /// always uses a fixed decoder.
+      /// The typed API uses it too, but ignores its `keyDecodingStrategy`: typed column names
+      /// come from `CodingKeys`.
       public var decoder: JSONDecoder
 
       /// Whether to automatically retry transient (network, 503 or 520) PostgREST errors on GET
@@ -63,9 +63,9 @@ extension SupabaseClient {
       /// Creates the database settings.
       /// - Parameters:
       ///   - schema: The Postgres schema queries target. `nil` uses `public`.
-      ///   - encoder: The encoder for request bodies of the untyped API. Defaults to a new
+      ///   - encoder: The encoder for request bodies. Defaults to a new
       ///     `JSONEncoder.supabase()`.
-      ///   - decoder: The decoder for responses of the untyped API. Defaults to a new
+      ///   - decoder: The decoder for responses. Defaults to a new
       ///     `JSONDecoder.supabase()`.
       ///   - retryEnabled: Whether to retry transient errors on GET and HEAD requests.
       public init(

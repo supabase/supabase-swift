@@ -182,6 +182,13 @@ extension RealtimeClient {
     /// you create the client.
     @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
 
+    /// The decoder the typed `postgresChanges(of:)` of the `Supabase` module uses when the call
+    /// passes none. `SupabaseClient` sets it to its database decoder, so a row decodes the same
+    /// from a query and from a change. Readers ignore its key strategy, as the typed query API
+    /// does, and read it when they decode, so a later change to the decoder applies. `nil` keeps
+    /// that method's own default.
+    package var typedRowDecoder: JSONDecoder?
+
     /// Default interval between heartbeat messages sent to keep the connection alive.
     public static let defaultHeartbeatInterval: Duration = .seconds(25)
 
