@@ -13,7 +13,8 @@ import Testing
 struct SupabaseClientRealtimeTokenTests {
   private func makeClient(
     transport: some ClientTransport = RecordingTransport(),
-    accessToken: (@Sendable () async throws -> String?)? = nil
+    accessToken: (@Sendable () async throws -> String?)? = nil,
+    realtimeHeaders: HTTPFields = [:]
   ) throws -> SupabaseClient {
     try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -21,7 +22,8 @@ struct SupabaseClientRealtimeTokenTests {
       configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryTestStorage(), autoRefresh: .manual, accessToken: accessToken),
         global: .init(http: .init(transport: transport)),
-        realtime: SupabaseClient.Configuration.Realtime(observesAppLifecycle: false)
+        realtime: SupabaseClient.Configuration.Realtime(
+          headers: realtimeHeaders, observesAppLifecycle: false)
       )
     )
   }
@@ -60,6 +62,17 @@ struct SupabaseClientRealtimeTokenTests {
     await client.realtime.setAuth()
 
     #expect(await client.realtime.accessToken == "PUBLISHABLE_KEY")
+  }
+
+  /// With no user, Realtime gets the credential its own headers set, not the client's key.
+  @Test
+  func realtimeKeepsItsOwnAuthorizationOverrideWithNoUser() async throws {
+    let client = try makeClient(realtimeHeaders: [.authorization: "Bearer realtime-anon-jwt"])
+
+    await client.realtime.setAuth()
+
+    #expect(await client.realtime.accessToken == "realtime-anon-jwt")
+    #expect(client.realtimeTokenToPush(event: .signedOut, session: nil) == "realtime-anon-jwt")
   }
 
   @Test
