@@ -373,10 +373,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   ///   - additional: The remaining columns, for a constraint spanning more than one.
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``_PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
-  ///   - defaultToNull: What a row gets for a column that another row in the batch names and it
-  ///     leaves out. `true`, the default, stores `null` there. `false` sends
-  ///     `Prefer: missing=default`, so the column's `DEFAULT` applies instead. Use `false` when a
-  ///     draft leaves out a `NOT NULL` column that has a default.
+  ///   - defaultToNull: `false` gives a column that a row leaves out its `DEFAULT` instead of
+  ///     `null`, as in ``insert(_:defaultToNull:)``.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
   ///   is sent.
@@ -532,11 +530,9 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
   ///   - values: The rows to upsert, in the relation's ``_PostgrestWritableRelation/Draft`` shape.
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``_PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
-  ///   - defaultToNull: What a row gets for a column that another row in the batch names and it
-  ///     leaves out. `true`, the default, stores `null` there. `false` sends
-  ///     `Prefer: missing=default`, so the column's `DEFAULT` applies instead. It also decides
-  ///     the key of a row that leaves out a generated key: under `false` it gets the generated
-  ///     value, so the row is inserted.
+  ///   - defaultToNull: `false` gives a column that a row leaves out its `DEFAULT` instead of
+  ///     `null`, as in ``insert(_:defaultToNull:)``.
+  ///     A row that leaves out a generated key then gets a new key, so it is inserted.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
   ///   is sent.

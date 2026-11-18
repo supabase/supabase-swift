@@ -140,60 +140,56 @@ struct PostgrestServiceDefaultsIntegrationTests {
     try await client.from(Todos.self).delete().where { $0.id.in([first, second]) }.execute()
   }
 
+  /// Two drafts where only the first names `is_complete`, which is `NOT NULL DEFAULT false`.
+  private func raggedDrafts() -> (ids: [UUID], drafts: [Todos.Draft]) {
+    let ids = [UUID(), UUID()]
+    return (
+      ids,
+      [
+        Todos.Draft(id: ids[0], description: "a", isComplete: true),
+        Todos.Draft(id: ids[1], description: "b"),
+      ]
+    )
+  }
+
   @Test
   func raggedBulkInsertStoresNullForAMissingColumnByDefault() async throws {
-    let first = UUID()
-    let second = UUID()
-    let rows = [
-      Todos.Draft(id: first, description: "a", isComplete: true),
-      Todos.Draft(id: second, description: "b"),
-    ]
+    let (ids, drafts) = raggedDrafts()
 
-    // `is_complete` is `NOT NULL DEFAULT false`. The second row leaves it out, so it gets `null`.
     await #expect(throws: PostgrestError.self) {
-      try await client.from(Todos.self).insert(rows).execute()
+      try await client.from(Todos.self).insert(drafts).execute()
     }
-    #expect(try await self.rows(withID: second).isEmpty)
+    #expect(try await rows(withID: ids[1]).isEmpty)
   }
 
   @Test
   func raggedBulkInsertWithoutDefaultToNullAppliesTheColumnDefault() async throws {
-    let first = UUID()
-    let second = UUID()
-    let rows = [
-      Todos.Draft(id: first, description: "a", isComplete: true),
-      Todos.Draft(id: second, description: "b"),
-    ]
+    let (ids, drafts) = raggedDrafts()
 
-    let response = try await client.from(Todos.self).insert(rows, defaultToNull: false).execute()
+    let response = try await client.from(Todos.self)
+      .insert(drafts, defaultToNull: false).returning().execute()
 
     #expect(response.status.code == 201)
     #expect(appliedPreferences(response.headers).contains("missing=default"))
-    #expect(try await self.rows(withID: first).map(\.isComplete) == [true])
-    #expect(try await self.rows(withID: second).map(\.isComplete) == [false])
+    #expect(response.value.map(\.isComplete) == [true, false])
 
-    try await client.from(Todos.self).delete().where { $0.id.in([first, second]) }.execute()
+    try await client.from(Todos.self).delete().where { $0.id.in(ids) }.execute()
   }
 
   @Test
   func raggedBulkUpsertWithoutDefaultToNullAppliesTheColumnDefault() async throws {
-    let first = UUID()
-    let second = UUID()
-    let rows = [
-      Todos.Draft(id: first, description: "a", isComplete: true),
-      Todos.Draft(id: second, description: "b"),
-    ]
+    let (ids, drafts) = raggedDrafts()
 
     await #expect(throws: PostgrestError.self) {
-      try await client.from(Todos.self).upsert(rows).execute()
+      try await client.from(Todos.self).upsert(drafts).execute()
     }
 
-    try await client.from(Todos.self).upsert(rows, defaultToNull: false).execute()
+    let response = try await client.from(Todos.self)
+      .upsert(drafts, defaultToNull: false).returning().execute()
 
-    #expect(try await self.rows(withID: first).map(\.isComplete) == [true])
-    #expect(try await self.rows(withID: second).map(\.isComplete) == [false])
+    #expect(response.value.map(\.isComplete) == [true, false])
 
-    try await client.from(Todos.self).delete().where { $0.id.in([first, second]) }.execute()
+    try await client.from(Todos.self).delete().where { $0.id.in(ids) }.execute()
   }
 
   @Test
