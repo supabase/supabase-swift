@@ -249,28 +249,37 @@ struct StorageRequests: Sendable {
       body: firstChunk.map { HTTPBody($0) })
   }
 
-  func tusOffset(of uploadURL: URL) -> StorageRequest {
+  func tusOffset(of uploadURL: URL, upsert: Bool?) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(
-        method: .head, url: uploadURL, headerFields: [.tusResumable: Self.tusVersion]))
+        method: .head, url: uploadURL, headerFields: tusFollowUpHeaders(upsert: upsert)))
   }
 
-  func tusAppend(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL) -> StorageRequest {
-    StorageRequest(
-      head: HTTPRequest(
-        method: .patch, url: uploadURL,
-        headerFields: [
-          .tusResumable: Self.tusVersion,
-          .contentType: Self.tusContentType,
-          .uploadOffset: "\(offset)",
-        ]),
-      body: chunk)
+  func tusAppend(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL, upsert: Bool?)
+    -> StorageRequest
+  {
+    var headers = tusFollowUpHeaders(upsert: upsert)
+    headers[.contentType] = Self.tusContentType
+    headers[.uploadOffset] = "\(offset)"
+    return StorageRequest(
+      head: HTTPRequest(method: .patch, url: uploadURL, headerFields: headers), body: chunk)
   }
 
-  func tusTerminate(_ uploadURL: URL) -> StorageRequest {
+  func tusTerminate(_ uploadURL: URL, upsert: Bool?) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(
-        method: .delete, url: uploadURL, headerFields: [.tusResumable: Self.tusVersion]))
+        method: .delete, url: uploadURL, headerFields: tusFollowUpHeaders(upsert: upsert)))
+  }
+
+  /// Storage checks `x-upsert` on every tus request, not only on creation: a `PATCH` or `DELETE`
+  /// without it over an existing object answers `409 The resource already exists`. Each one
+  /// sends the same value as ``tusCreate(bucket:key:length:options:firstChunk:)``.
+  private func tusFollowUpHeaders(upsert: Bool?) -> HTTPFields {
+    var headers: HTTPFields = [.tusResumable: Self.tusVersion]
+    if let upsert {
+      headers[.xUpsert] = "\(upsert)"
+    }
+    return headers
   }
 
   /// The upload URL for the resolved `Location` of a tus creation: its path and query on the

@@ -178,9 +178,12 @@ struct StorageAPI: Sendable {
         in: .whitespacesAndNewlines),
       !text.isEmpty
     {
+      // Storage's refusal to overwrite an object carries a code on the JSON routes only.
+      let duplicate = status == 409 && text == "The resource already exists"
       return StorageError(
         kind: .server,
         message: text,
+        code: duplicate ? .keyAlreadyExists : nil,
         serverError: .init(statusCode: status, message: text),
         response: httpResponse
       )

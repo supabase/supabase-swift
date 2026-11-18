@@ -292,3 +292,61 @@ final class StorageResumableIntegrationTests {
     try await expectObject(client, path: "shared-record.bin")
   }
 }
+
+/// Resumable uploads over an object that already exists. Kept apart from
+/// ``StorageResumableIntegrationTests`` so these small uploads skip its 20 MB fixture.
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
+final class StorageResumableUpsertIntegrationTests {
+  let bucketName: String
+  let directory: URL
+
+  init() async throws {
+    bucketName = try await StorageIntegration.newBucket("resumable-upsert")
+    directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+  }
+
+  deinit {
+    StorageIntegration.dropBucket(bucketName)
+    try? FileManager.default.removeItem(at: directory)
+  }
+
+  private var client: StorageClient {
+    get throws {
+      var configuration = StorageClient.Configuration(
+        url: StorageIntegration.url,
+        headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"])
+      configuration.resumable = ResumableUploadConfiguration(directory: directory)
+      return try StorageClient(configuration: configuration)
+    }
+  }
+
+  @Test(.timeLimit(.minutes(2)))
+  func upsertOverwritesAnExistingObject() async throws {
+    let client = try self.client
+    try await client.from(bucketName).upload(path: "taken.txt", data: Data("old".utf8))
+    let replacement = Data("the new content".utf8)
+
+    let upload = try client.from(bucketName).resumableUpload(
+      path: "taken.txt", data: replacement, options: UploadOptions(upsert: true))
+    try await upload.start()
+    _ = try await upload.result
+
+    #expect(try await client.from(bucketName).download(path: "taken.txt").data() == replacement)
+  }
+
+  @Test(.timeLimit(.minutes(2)))
+  func withoutUpsertAnExistingObjectFailsWithKeyAlreadyExists() async throws {
+    let client = try self.client
+    try await client.from(bucketName).upload(path: "kept.txt", data: Data("old".utf8))
+
+    let upload = try client.from(bucketName).resumableUpload(
+      path: "kept.txt", data: Data("new".utf8))
+    let error = await #expect(throws: StorageError.self) {
+      try await upload.start()
+      _ = try await upload.result
+    }
+
+    #expect(error?.code == .keyAlreadyExists)
+    #expect(try await client.from(bucketName).download(path: "kept.txt").data() == Data("old".utf8))
+  }
+}
