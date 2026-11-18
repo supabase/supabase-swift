@@ -89,13 +89,15 @@
     /// - Throws: `CancellationError` when the user closes the page, or when the task is cancelled
     ///   before the page opens. A cancel while the page is open goes to SwiftUI's session. An
     ///   error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when `redirectURL` is `nil`
-    ///   or has no scheme, or when another page is open. Else the error of the session.
+    ///   or has no scheme, when it is an HTTPS URL that the system cannot listen for (before iOS
+    ///   17.4, macOS 14.4, tvOS 17.4, visionOS 1.1, and watchOS 10.4) or that has no host, or when
+    ///   another page is open. Else the error of the session.
     @MainActor
     public func authenticate(url: URL, redirectURL: URL?) async throws -> URL {
       try await authenticate(
         url: url,
-        callback: redirectURL.flatMap {
-          ASWebAuthenticationSessionPresenter.callback(
+        callback: try redirectURL.flatMap {
+          try ASWebAuthenticationSessionPresenter.callback(
             for: $0, httpsCallbacksAvailable: httpsCallbacksAvailable)
         }
       )

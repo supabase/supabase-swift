@@ -1450,12 +1450,14 @@ features:
       - AuthClient.events
   client.authentication_integration.session_url_detection:
     status: implemented
-    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. A URL is an auth redirect only when its scheme, host, port, and path match the configured redirect URL or the redirectTo of a pending flow; the client then detects the flow from the URL's contents, returns nil for any other URL, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) (async, reads the pending flows) checks a URL with the same rule without handling it."
+    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. A URL is an auth redirect only when its scheme, host, port, and path match the configured redirect URL or the redirectTo of a pending flow; the client then detects the flow from the URL's contents, returns nil for any other URL, and replays the first result for a repeated delivery. A URL with implicit tokens (#access_token=...) throws oauthFlowFailed and stores nothing unless AuthClient.Configuration.acceptsImplicitTokens (default false) is set, matching supabase-js with flowType pkce. AuthClient.isAuthRedirect(_:) (async, reads the pending flows) checks a URL with the same rule without handling it."
     symbols:
       - SupabaseClient.handleRedirect
       - AuthClient.handleRedirect
       - AuthClient.isAuthRedirect
     supporting_symbols:
+      - AuthClient.Configuration.acceptsImplicitTokens
+      - SupabaseClient.Configuration.Auth.acceptsImplicitTokens
       - RedirectResult
       - RedirectResult.signedIn
       - RedirectResult.emailChangePending

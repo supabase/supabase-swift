@@ -24,6 +24,10 @@ public protocol WebAuthPresenter: Sendable {
   /// listen for a universal link. The default implementation calls
   /// ``authenticate(url:callbackScheme:)`` with the scheme of `redirectURL`.
   ///
+  /// The client checks the returned URL against `redirectURL`: when its scheme, host, port, or
+  /// path differs, the sign-in throws an error of kind
+  /// ``AuthError/Kind-swift.struct/oauthFlowFailed``.
+  ///
   /// - Parameters:
   ///   - url: The provider page to open.
   ///   - redirectURL: The redirect URL of the flow, or `nil` when the client has none.

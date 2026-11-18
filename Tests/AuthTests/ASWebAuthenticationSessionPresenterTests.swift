@@ -269,8 +269,8 @@ import Testing
     // MARK: Callback
 
     @Test
-    func anHTTPSRedirectUsesAnHTTPSCallbackWhereAvailable() {
-      let callback = ASWebAuthenticationSessionPresenter.callback(
+    func anHTTPSRedirectUsesAnHTTPSCallbackWhereAvailable() throws {
+      let callback = try ASWebAuthenticationSessionPresenter.callback(
         for: URL(string: "https://example.com/auth/callback?x=1")!,
         httpsCallbacksAvailable: true
       )
@@ -283,26 +283,32 @@ import Testing
       ("https://example.com", "/"),
       ("https://example.com/my%20app/callback", "/my app/callback"),
     ])
-    func anHTTPSCallbackKeepsThePathAsTheRedirectWritesIt(redirect: String, path: String) {
-      let callback = ASWebAuthenticationSessionPresenter.callback(
+    func anHTTPSCallbackKeepsThePathAsTheRedirectWritesIt(redirect: String, path: String) throws {
+      let callback = try ASWebAuthenticationSessionPresenter.callback(
         for: URL(string: redirect)!, httpsCallbacksAvailable: true)
 
       #expect(callback == .https(host: "example.com", path: path))
     }
 
     @Test
-    func anHTTPSRedirectFallsBackToTheSchemeWhereUnavailable() {
-      let callback = ASWebAuthenticationSessionPresenter.callback(
-        for: URL(string: "https://example.com/auth/callback")!,
-        httpsCallbacksAvailable: false
-      )
+    @MainActor
+    func anHTTPSRedirectThrowsWithoutStartingASessionWhereUnavailable() async throws {
+      let sessions = FakeWebAuthSessions()
+      let presenter = makePresenter(sessions, httpsCallbacksAvailable: false)
 
-      #expect(callback == .scheme("https"))
+      let error = await #expect(throws: AuthError.self) {
+        try await presenter.authenticate(
+          url: Self.authorizeURL, redirectURL: URL(string: "https://example.com/auth/callback"))
+      }
+
+      #expect(error?.kind == .oauthFlowFailed)
+      #expect(error?.message.contains("17.4") == true)
+      #expect(sessions.created.isEmpty)
     }
 
     @Test(arguments: [true, false])
-    func aCustomSchemeRedirectAlwaysUsesTheScheme(httpsCallbacksAvailable: Bool) {
-      let callback = ASWebAuthenticationSessionPresenter.callback(
+    func aCustomSchemeRedirectAlwaysUsesTheScheme(httpsCallbacksAvailable: Bool) throws {
+      let callback = try ASWebAuthenticationSessionPresenter.callback(
         for: URL(string: "myapp://callback")!,
         httpsCallbacksAvailable: httpsCallbacksAvailable
       )
@@ -311,9 +317,20 @@ import Testing
     }
 
     @Test
-    func aRedirectWithoutASchemeHasNoCallback() {
+    func anHTTPSRedirectWithoutAHostThrows() {
+      let error = #expect(throws: AuthError.self) {
+        try ASWebAuthenticationSessionPresenter.callback(
+          for: URL(string: "https:/callback")!, httpsCallbacksAvailable: true)
+      }
+
+      #expect(error?.kind == .oauthFlowFailed)
+      #expect(error?.message.contains("no host") == true)
+    }
+
+    @Test
+    func aRedirectWithoutASchemeHasNoCallback() throws {
       #expect(
-        ASWebAuthenticationSessionPresenter.callback(
+        try ASWebAuthenticationSessionPresenter.callback(
           for: URL(string: "/callback")!, httpsCallbacksAvailable: true) == nil)
     }
 
