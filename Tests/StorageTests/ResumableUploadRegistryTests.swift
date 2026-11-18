@@ -317,6 +317,25 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
+  func startingAHandleWhoseSourceTheStoreRefusesSendsNothing() async throws {
+    let saved = try saveRecord(fingerprint: .repeating("a"))
+    let record = ResumableUploadRecord(
+      fingerprint: saved.fingerprint, bucketID: saved.bucketID, path: saved.path,
+      totalBytes: saved.totalBytes, source: .container(relativePath: "../outside.mp4"),
+      sourceModificationDate: saved.sourceModificationDate, uploadURL: saved.uploadURL,
+      createdAt: saved.createdAt, expiresAt: saved.expiresAt,
+      lastKnownOffset: saved.lastKnownOffset, chunkSize: saved.chunkSize, upsert: saved.upsert,
+      contentType: saved.contentType, cacheControl: saved.cacheControl, metadata: saved.metadata)
+    let upload = ResumableUpload.handle(record: record, api: try storage.api)
+    store.removeFiles(fingerprint: .repeating("a"))
+
+    let error = await #expect(throws: StorageError.self) { try await upload.start() }
+
+    #expect(error?.kind == .invalidRequest)
+    #expect(requests.value.isEmpty)
+  }
+
+  @Test
   func clearKeepsTheRecordOfAnUploadThatIsStillStarting() async throws {
     let record = try saveRecord(fingerprint: .repeating("a"))
     let upload = try #require(try await storage.resumableUploads.pending().first)

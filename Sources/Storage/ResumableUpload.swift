@@ -517,6 +517,13 @@ public actor ResumableUpload {
   private func createRecord(source: ResumableSource, with tus: TusSession) async throws
     -> ResumableUploadRecord
   {
+    // A handle can keep the source of a record the store has since refused, for example after
+    // a link in its path moved outside the container.
+    guard store.isValid(source) else {
+      throw StorageError(
+        kind: .invalidRequest,
+        message: "The upload source is not inside the app container.")
+    }
     let key = try ObjectKey(path)
     let (_, modificationDate) = try ResumableStore.attributes(
       of: store.fileURL(for: source, fingerprint: fingerprint))

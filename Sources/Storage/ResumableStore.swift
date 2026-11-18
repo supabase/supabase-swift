@@ -276,7 +276,13 @@ struct ResumableStore: Sendable {
     guard record.chunkSize > 0, record.lastKnownOffset >= 0,
       record.lastKnownOffset <= record.totalBytes
     else { return false }
-    guard case .container(let relativePath) = record.source else { return true }
+    return isValid(record.source)
+  }
+
+  /// Whether `source` names a file the store may read: its sandbox copy, or a file inside the
+  /// container once symbolic links are resolved.
+  func isValid(_ source: ResumableSource) -> Bool {
+    guard case .container(let relativePath) = source else { return true }
     guard !relativePath.isEmpty, !relativePath.hasPrefix("/"),
       !relativePath.split(separator: "/").contains(where: { $0 == "." || $0 == ".." })
     else { return false }
