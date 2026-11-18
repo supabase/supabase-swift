@@ -182,6 +182,10 @@ extension RealtimeClientStatus {
 public enum RealtimeChannelEvent: Hashable, Sendable {
   /// The channel joined again after it was subscribed, for example after a reconnect. Events
   /// sent while it was away were missed; reload any state built from them.
+  ///
+  /// For Postgres changes, the server may set up the subscriptions after this event, unless
+  /// ``RealtimeChannelConfiguration/PostgresChanges-swift.struct/waitsForSubscription`` is set.
+  /// To miss no change, reload after ``postgresChangesReady``, or set that option.
   case resubscribed
 
   /// The server set up the channel's Postgres changes subscriptions ("Subscribed to

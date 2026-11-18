@@ -259,6 +259,30 @@ struct RealtimeCorePostgresTests {
     #expect(effects.first == .send(Self.leave(joinRef: "1", ref: "2")))
   }
 
+  /// A reply that comes after a `system` ok confirmed the join still stores the server's
+  /// bindings, and changes nothing else.
+  @Test
+  func replyAfterASystemConfirmationStoresTheServerChanges() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(Self.subscribe(harness.waiter(), snapshot: Self.withMessages))
+    _ = harness.send(.frame(Self.system(joinRef: "1", extension: "postgres_changes")))
+
+    let effects = harness.send(
+      .frame(
+        Self.reply(
+          ref: "1",
+          response: [
+            "postgres_changes": [
+              ["event": "INSERT", "schema": "public", "table": "messages", "id": 7]
+            ]
+          ])))
+
+    #expect(effects == [])
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
+    #expect(
+      harness.core.channels[.room]?.serverChanges == [ServerPostgresBinding(Self.messages, id: 7)])
+  }
+
   @Test
   func serverChangesFromReplyDriveMatching() {
     var harness = CoreHarness.connected()
