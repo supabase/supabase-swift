@@ -15,7 +15,7 @@ package import HTTPTypes
 /// The one ``ClientMiddleware`` that retries failed requests, for every HTTP module.
 ///
 /// Driven by a ``RetryPolicy``: which methods and statuses are retryable, how many attempts, and
-/// how long to wait (equal-jitter backoff or `Retry-After`). Sends `X-Retry-Count: n` on the
+/// how long to wait (full-jitter backoff or `Retry-After`). Sends `X-Retry-Count: n` on the
 /// n-th retry so a server can tell a replay from a first attempt.
 ///
 /// Runs outermost — ahead of the caller's middlewares and the SDK's own — so every attempt

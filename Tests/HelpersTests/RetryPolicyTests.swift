@@ -44,12 +44,20 @@ struct RetryPolicyTests {
   }
 
   @Test
-  func backoffIsEqualJitterBetweenHalfTheCapAndTheCap() {
+  func backoffIsFullJitterBetweenZeroAndTheCap() {
     let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(60))
     for _ in 0..<50 {
-      #expect((Duration.milliseconds(500)...(.seconds(1))).contains(policy.backoffDelay(retry: 1)))
-      #expect((Duration.seconds(2)...(.seconds(4))).contains(policy.backoffDelay(retry: 3)))
+      #expect((Duration.zero...(.seconds(1))).contains(policy.backoffDelay(retry: 1)))
+      #expect((Duration.zero...(.seconds(4))).contains(policy.backoffDelay(retry: 3)))
     }
+  }
+
+  @Test(arguments: [(1, 1.0), (2, 2.0), (3, 4.0), (7, 60.0)])
+  func backoffJitterSpansTheWholeWindow(retry: Int, cap: Double) {
+    let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(60))
+    #expect(policy.backoffDelay(retry: retry, random: { $0.lowerBound }) == .zero)
+    #expect(policy.backoffDelay(retry: retry, random: { $0.upperBound }) == .seconds(cap))
+    #expect(policy.backoffDelay(retry: retry, random: { _ in 0.5 }) == .seconds(cap / 2))
   }
 
   @Test
@@ -100,7 +108,7 @@ struct RetryPolicyTests {
     #expect(RetryPolicy.retryAfterDelay(exactlyNow, now: now) == nil)
 
     let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(20))
-    let backoff = Duration.milliseconds(500)...(.seconds(1))
+    let backoff = Duration.zero...(.seconds(1))
     #expect(backoff.contains(policy.delay(retry: 1, retryAfter: past, now: now)))
   }
 
@@ -120,7 +128,7 @@ struct RetryPolicyTests {
   @Test
   func missingOrInvalidRetryAfterFallsBackToBackoff() {
     let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(20))
-    let backoff = Duration.milliseconds(500)...(.seconds(1))
+    let backoff = Duration.zero...(.seconds(1))
     #expect(backoff.contains(policy.delay(retry: 1, retryAfter: nil, now: now)))
     #expect(backoff.contains(policy.delay(retry: 1, retryAfter: "soon", now: now)))
   }

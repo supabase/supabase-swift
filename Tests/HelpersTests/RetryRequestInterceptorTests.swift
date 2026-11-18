@@ -377,8 +377,8 @@ struct RetryRequestInterceptorTests {
 
     let durations = clock.durations.value
     #expect(durations.count == 2)
-    #expect((Duration.milliseconds(500)...(.seconds(1))).contains(durations[0]))
-    #expect((Duration.seconds(1)...(.seconds(2))).contains(durations[1]))
+    #expect((Duration.zero...(.seconds(1))).contains(durations[0]))
+    #expect((Duration.zero...(.seconds(2))).contains(durations[1]))
   }
 
   @Test
