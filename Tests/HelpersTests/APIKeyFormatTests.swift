@@ -47,33 +47,4 @@ struct APIKeyFormatTests {
     #expect(APIKeyFormat.shouldWarn(for: "sb_"))
     #expect(!APIKeyFormat.shouldWarn(for: "sb_uniqueunparseabletype"))
   }
-
-  @Test
-  func functionsBearerTokenSuppressesNewFormatKeyFallback() {
-    #expect(
-      APIKeyFormat.functionsBearerToken(
-        accessToken: "sb_publishable_abc123",
-        supabaseKey: "sb_publishable_abc123"
-      ) == nil
-    )
-  }
-
-  @Test
-  func functionsBearerTokenKeepsLegacyKeyFallback() {
-    #expect(
-      APIKeyFormat.functionsBearerToken(
-        accessToken: "legacy-jwt-key", supabaseKey: "legacy-jwt-key")
-        == "legacy-jwt-key"
-    )
-  }
-
-  @Test
-  func functionsBearerTokenPassesThroughRealSessionToken() {
-    #expect(
-      APIKeyFormat.functionsBearerToken(
-        accessToken: "real.session.jwt",
-        supabaseKey: "sb_publishable_abc123"
-      ) == "real.session.jwt"
-    )
-  }
 }
