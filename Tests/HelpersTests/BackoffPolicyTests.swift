@@ -34,6 +34,24 @@ struct BackoffPolicyTests {
     #expect(min == .zero)
   }
 
+  @Test(arguments: [(1, 1.0), (2, 2.0), (3, 4.0), (5, 16.0), (6, 30.0), (40, 30.0)])
+  func equalJitterDrawsFromHalfToTheWholeCappedExponential(attempt: Int, upper: Double) {
+    let policy = BackoffPolicy.equalJitter(base: .seconds(1), cap: .seconds(30))
+
+    let max = policy.delay(forAttempt: attempt, random: { $0.upperBound })
+    let min = policy.delay(forAttempt: attempt, random: { $0.lowerBound })
+
+    #expect(max == .seconds(upper))
+    #expect(min == .seconds(upper / 2))
+  }
+
+  @Test
+  func equalJitterDoesNotOverflowForAHugeBase() {
+    let policy = BackoffPolicy.equalJitter(base: .seconds(Int.max), cap: .seconds(5))
+
+    #expect(policy.delay(forAttempt: 40, random: { $0.upperBound }) == .seconds(5))
+  }
+
   @Test
   func attemptsBelowOneCountAsTheFirst() {
     let policy = BackoffPolicy.fullJitter(base: .seconds(1), cap: .seconds(30))
