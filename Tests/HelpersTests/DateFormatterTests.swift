@@ -50,6 +50,31 @@ struct DateFormatterTests {
     #expect(iso8601String.contains(":"))  // Should have time separators
   }
 
+  @Test
+  func dateToISO8601StringEndsWithUTCDesignator() {
+    let date = Date(timeIntervalSince1970: 1_704_164_645.5)
+
+    #expect(date.iso8601String == "2024-01-02T03:04:05.500Z")
+  }
+
+  @Test
+  func supabaseEncoderWritesDatesWithUTCDesignator() throws {
+    let date = Date(timeIntervalSince1970: 1_704_164_645.5)
+
+    let data = try JSONEncoder.supabase().encode([date])
+
+    #expect(String(decoding: data, as: UTF8.self) == #"["2024-01-02T03:04:05.500Z"]"#)
+  }
+
+  @Test
+  func roundTripIsExactForWholeMilliseconds() throws {
+    let date = Date(timeIntervalSince1970: 1_704_164_645.5)
+
+    let parsedDate = try #require(date.iso8601String.date)
+
+    #expect(parsedDate == date)
+  }
+
   // MARK: - String to Date Parsing Tests
 
   @Test
@@ -209,6 +234,34 @@ struct DateFormatterTests {
       // These might not all parse depending on the formatter, but at least test them
       let _ = format.date
     }
+  }
+
+  // MARK: - Non-UTC Offset Tests (SDK-2090)
+
+  @Test(
+    arguments: [
+      // Postgres `timestamptz` forms: fractional seconds, offset with/without colon, `Z`, short offset.
+      ("2024-01-02T03:04:05.123456+00:00", 1_704_164_645.123456),
+      ("2024-01-02T03:04:05+02:00", 1_704_157_445.0),
+      ("2024-01-02T03:04:05+0200", 1_704_157_445.0),
+      ("2024-01-02T03:04:05+02", 1_704_157_445.0),
+      ("2024-01-02T03:04:05Z", 1_704_164_645.0),
+      // Postgres `timestamp` (no time zone): read as UTC.
+      ("2024-01-02T03:04:05.123456", 1_704_164_645.123456),
+    ]
+  )
+  func parsesOffset(input: String, expectedTimeIntervalSince1970: Double) throws {
+    let date = try #require(input.date, "Failed to parse: \(input)")
+    #expect(
+      abs(date.timeIntervalSince1970 - expectedTimeIntervalSince1970) < 0.000_001,
+      "\(input) parsed as \(date.timeIntervalSince1970), expected \(expectedTimeIntervalSince1970)"
+    )
+  }
+
+  @Test
+  func rejectsSpaceSeparatedTimestampWithOffset() {
+    // Not a Postgres JSON/REST wire format (PostgREST always emits `T`); explicitly unsupported.
+    #expect("2024-01-02 03:04:05.123456+00".date == nil)
   }
 
   // MARK: - Multiple Date Conversion Tests
