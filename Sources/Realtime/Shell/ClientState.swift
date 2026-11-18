@@ -16,7 +16,7 @@ enum Input: Sendable {
   case socket(SocketInput, generation: Int)
   case connectEnded(Result<any WebSocketConnection, any Error>, attempt: Int)
   case timerFired(TimerID, token: UInt64)
-  case tokenFetched(String?, generation: Int)
+  case tokenFetched(RealtimeCore.TokenFetchResult, generation: Int)
   case streamEnded(StreamID)
   case waiterCancelled(WaiterID)
   /// A caller of `refreshAccessToken()` waiting for the call in flight was cancelled.

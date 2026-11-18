@@ -7,13 +7,16 @@
 // Linux: the official Swift images' libcurl is built without WebSocket support. See
 // RealtimeIntegrationTests.
 #if !os(Android) && !os(Linux)
+  import Clocks
+  import ConcurrencyExtras
   import Crypto
   import Foundation
   import PostgREST
+  import TestHelpers
   import Testing
 
   @testable import Helpers
-  @testable import Realtime
+  @_spi(Testing) @testable import Realtime
 
   /// Broadcast join options and binary REST sends, against the local stack.
   ///
@@ -224,6 +227,46 @@
 
       #expect(received?.event == "bytes")
       #expect(received?.payload == .binary(bytes))
+    }
+
+    // MARK: - No signed-in user
+
+    /// SWIFT-V3-004: an `accessToken` callback that returns `nil` after a user's token signs the
+    /// user out. The joined private channel gets the API key, so the server closes it, and a new
+    /// private join carries no token, so the server checks the API key's role and refuses it.
+    @Test
+    func aNilTokenRevokesTheSignedOutUsersPrivateChannels() async throws {
+      let clock = TestClock<Duration>()
+      let userToken = signedToken(role: "authenticated")
+      let signedIn = LockIsolated(true)
+      var configuration = RealtimeClient.Configuration(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        headers: [.apikey: DotEnv.supabasePublishableKey],
+        observesAppLifecycle: false,
+        accessToken: { signedIn.value ? userToken : nil }
+      )
+      configuration.clock = clock
+      let realtime = try RealtimeClient(configuration: configuration)
+      try await realtime.connect()
+      let joined = await realtime.channel("swift-private:revoked-\(UUID().uuidString)") {
+        $0.isPrivate = true
+      }
+      try await joined.subscribe()
+
+      signedIn.setValue(false)
+      await clock.advance(by: RealtimeClient.accessTokenRefreshInterval)
+      await realtime.setAuth()
+      let closed = await waitUntil { await joined.status != .subscribed }
+
+      let later = await realtime.channel("swift-private:after-\(UUID().uuidString)") {
+        $0.isPrivate = true
+      }
+      let error = await #expect(throws: RealtimeError.self) { try await later.subscribe() }
+      await realtime.removeAllChannels()
+
+      #expect(await realtime.accessToken == nil)
+      #expect(closed)
+      #expect(error?.kind == .unauthorized)
     }
 
     // MARK: - Helpers

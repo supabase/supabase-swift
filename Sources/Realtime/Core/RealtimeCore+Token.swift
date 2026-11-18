@@ -37,10 +37,19 @@ extension RealtimeCore {
     return [.fetchAccessToken(generation: generation)]
   }
 
+  /// How one `accessToken` callback call ended.
+  enum TokenFetchResult {
+    /// The callback returned. `nil` means no signed-in user.
+    case returned(String?)
+    /// The callback threw or did not return in time. The stored token stays.
+    case failed
+  }
+
   /// Applies the result of the fetch in flight; a result for any other fetch is ignored. Its
-  /// token is dropped when a newer token was set during the fetch. The channels waiting for a
-  /// token then join with the stored one, and a new token goes to the joined channels.
-  mutating func tokenFetched(_ token: String?, generation: Int) -> [Effect] {
+  /// token is dropped when a newer token was set during the fetch. A `nil` token clears the
+  /// stored one; a failure keeps it. The channels waiting for a token then join with the stored
+  /// one, and a change goes to the joined channels.
+  mutating func tokenFetched(_ result: TokenFetchResult, generation: Int) -> [Effect] {
     guard generation == tokenFetchGeneration else {
       logger.debug("Ignoring the result of access token fetch \(generation): not in flight")
       return []
@@ -50,7 +59,9 @@ extension RealtimeCore {
     var effects: [Effect] = []
     var stored = false
     if generation == tokens.generation {
-      stored = tokens.apply(token, generation: generation)
+      if case .returned(let token) = result {
+        stored = tokens.apply(token, generation: generation)
+      }
       // Scheduled even when nothing changed, so a callback that failed or returned the same
       // token is asked again.
       effects += scheduleTokenRefresh()
@@ -74,7 +85,9 @@ extension RealtimeCore {
         effects += pushJoin(channel, attempt: attempt)
       }
     }
-    if stored, let token = tokens.token {
+    // The server ignores an `access_token` push of `null`, so a cleared token is replaced by the
+    // API key on the joined channels.
+    if stored, let token = tokens.token ?? options.apiKey {
       effects += pushAccessToken(token)
     }
     return effects
@@ -130,14 +143,18 @@ extension RealtimeCore {
   }
 
   /// Sends `token` to every subscribed channel, and to every channel whose `phx_join` already
-  /// went out with another token. A channel still waiting for a token joins with this one.
+  /// went out and that last sent another token. A channel still waiting for a token joins with
+  /// this one.
   private mutating func pushAccessToken(_ token: String) -> [Effect] {
     guard isConnected else { return [] }
     var effects: [Effect] = []
     for channel in channels.ids.sorted() {
       guard let record = channels[channel], let joinRef = record.currentJoinRef else { continue }
       let isSubscribed = if case .subscribed = record.phase { true } else { false }
-      guard isSubscribed || record.joinAccessToken != token else { continue }
+      // Compared with the last token sent, not the join's: the server may hold a token pushed
+      // after the join.
+      guard isSubscribed || record.sentAccessToken != token else { continue }
+      channels.update(channel) { $0.sentAccessToken = token }
       logger.debug("Updating auth token for channel '\(topic(of: channel))'")
       effects.append(
         .send(

@@ -128,10 +128,14 @@ Changes that still compile but behave differently. Check each one by hand.
   calls it at most once every 10 seconds; `setAuth()` inside that window keeps the current
   token. Channel joins no longer call it every time. `httpSend` still calls it for every request;
   if it throws, `httpSend` throws a `RealtimeError` of kind `.accessToken`. While connected, it
-  also calls it one minute before a JWT's `exp`. A `nil` result keeps the current token instead of sending a
-  `null` token to channels, and `setAuth()` without a callback no longer clears the stored
-  token. The callback runs in a task of its own with the client's `requestTimeout`, so cancelling a
-  `subscribe()` no longer cancels it. Search for `setAuth()` calls that expect the callback to
+  also calls it one minute before a JWT's `exp`. A `nil` result still means no signed-in user:
+  the client clears the stored token, a later join carries no token, and `httpSend` sends only
+  `apikey`, without an `Authorization` header from `headers`. Joined channels now get the
+  `apikey` value instead of a `null` token; the server ignores an `sb_` key there, so with one a
+  joined channel keeps the old token until it rejoins or the token expires. A callback that throws or times out keeps the current
+  token, and `setAuth()` without a callback no longer clears the stored token. The callback runs
+  in a task of its own with the client's `requestTimeout`, so cancelling a `subscribe()` no
+  longer cancels it. Search for `setAuth()` calls that expect the callback to
   run every time.
 - **`topic` has no `realtime:` prefix.** `channel.topic` is the name you pass to `channel(_:)`.
   Search for `"realtime:"` in code that reads or compares topics.

@@ -572,16 +572,24 @@ public final class SupabaseClient: Sendable {
   ///
   /// Calling it records the token as pushed, so call it once per change.
   func realtimeTokenToPush(event: AuthEvent, session: Session?) -> String? {
-    mutableState.withValue {
+    let signedOutToken = realtimeSignedOutToken
+    return mutableState.withValue {
       if event == .signedOut {
         $0.changedAccessToken = nil
-        return supabaseKey
+        return signedOutToken
       }
 
       guard $0.changedAccessToken != session?.accessToken else { return nil }
       $0.changedAccessToken = session?.accessToken
-      return session?.accessToken ?? supabaseKey
+      return session?.accessToken ?? signedOutToken
     }
+  }
+
+  /// The token Realtime uses with no signed-in user: the bearer token of its own headers. That
+  /// is the API key, unless ``Configuration/Realtime/headers`` sets another `Authorization`.
+  var realtimeSignedOutToken: String {
+    headers.merging(with: configuration.realtime.headers)[.authorization]
+      .flatMap { $0.split(separator: " ").last.map(String.init) } ?? supabaseKey
   }
 
   private func _initFunctionsClient() -> FunctionsClient {
@@ -621,7 +629,11 @@ public final class SupabaseClient: Sendable {
       observesAppLifecycle: realtime.observesAppLifecycle,
       monitorsNetworkPath: realtime.monitorsNetworkPath,
       serverLogLevel: realtime.serverLogLevel,
-      accessToken: { [weak self] in try await self?._getAccessToken() },
+      // The signed-out token when no user is signed in, as `.signedOut` pushes: Realtime treats
+      // `nil` as a sign-out of its own.
+      accessToken: { [weak self, signedOutToken = realtimeSignedOutToken] in
+        try await self?._getAccessToken() ?? signedOutToken
+      },
       webSocketTransport: realtime.webSocketTransport
         ?? Self.webSocketTransport(sharingDelegateOf: http.transport, logger: logger),
       http: http,

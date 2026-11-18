@@ -78,7 +78,7 @@ extension RealtimeCore {
     record.joinedBindings = config.postgresChanges
     record.hasTrackedSinceJoin = false
     record.pendingTracks = []
-    record.joinAccessToken = tokens.token
+    record.sentAccessToken = tokens.token
     // A new join waits for its own first presence state.
     record.presence.waitForNextState()
     channels.setRecord(record, for: channel)
@@ -87,7 +87,7 @@ extension RealtimeCore {
 
     var effects = setPhase(.joining(ref: ref, attempt: attempt, stage: .reply), for: channel)
     let payload = RealtimeJoinPayload(
-      config: config, accessToken: record.joinAccessToken, version: options.version)
+      config: config, accessToken: record.sentAccessToken, version: options.version)
     if let encoded = try? JSONObject(payload) {
       effects.append(
         .send(

@@ -255,8 +255,14 @@ struct InboxTests {
     await fetch.timeout.value
     await host.client.flushInbox()
 
-    let expected = race == .callWins ? "fresh" : "stored"
-    #expect(join.payload["access_token"] == .string(expected))
+    // A timeout keeps the stored token; a `nil` result means no signed-in user and clears it.
+    let expected: String? =
+      switch race {
+      case .callWins: "fresh"
+      case .timeoutWins: "stored"
+      case .callReturnsNil: nil
+      }
+    #expect(join.payload["access_token"] == expected.map { .string($0) })
     #expect(host.frames.filter { $0.event == ChannelEvent.join }.count == 1)
     #expect(await host.client.accessToken == expected)
     #expect(await host.client.tokenFetch == nil)

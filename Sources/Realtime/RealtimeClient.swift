@@ -331,6 +331,7 @@ public actor RealtimeClient {
       retryDelay: { reconnectBackoff.delay(forAttempt: $0, random: jitter) },
       rejoinDelay: { RealtimeChannel.rejoinBackoff.delay(forAttempt: $0) },
       version: headers[.xClientInfo],
+      apiKey: headers[.apikey],
       hasRegisteredChannels: { !registeredChannels.isEmpty }
     )
     let initialToken = headers[.authorization]?.split(separator: " ").last.map(String.init)
@@ -620,8 +621,8 @@ public actor RealtimeClient {
 
   /// The token an `httpSend` request sends, or `nil` to send only `apikey`. The `accessToken`
   /// callback runs for every request, with no refresh interval, so its failure reaches the
-  /// caller. A `nil` result, or no callback, sends the stored token: one set with
-  /// ``setAuth(_:)``, or the key from the `Authorization` header.
+  /// caller, and its `nil` means no signed-in user. Without a callback, the request sends the
+  /// stored token: one set with ``setAuth(_:)``, or the key from the `Authorization` header.
   ///
   /// - Throws: ``RealtimeError`` with kind `.accessToken` when the callback throws.
   func httpSendAccessToken() async throws -> String? {
@@ -635,7 +636,7 @@ public actor RealtimeClient {
         } onCancel: {
           fetch.cancel()
         }
-        if let token { return token }
+        return token
       } catch let failure as AccessTokenFailure {
         throw RealtimeError(
           kind: .accessToken, message: AccessTokenFailure.message,
@@ -657,8 +658,10 @@ public actor RealtimeClient {
   /// calls the callback one minute before the token's `exp`, so channels are not closed when it
   /// expires.
   ///
-  /// If the callback throws or returns `nil`, the client keeps the current token and no update
-  /// is sent to channels. A callback result that arrives after a newer token was set with this
+  /// A `nil` from the callback means no signed-in user: the client clears the stored token, later
+  /// joins carry none, so the server uses the API key, and the joined channels get the `apikey`
+  /// header's value. If the callback throws, the client keeps the current token and no update is
+  /// sent to channels. A callback result that arrives after a newer token was set with this
   /// method is discarded.
   /// - Parameter token: A JWT string, or `nil` to refresh from the configured `accessToken` callback.
   public func setAuth(_ token: String? = nil) async {
