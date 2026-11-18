@@ -32,37 +32,30 @@
     let client: SupabaseClient
     let client2: SupabaseClient
     init() async throws {
-      var global1 = SupabaseClient.Configuration.Global(
-        logger: Logging.Logger(label: "client1") {
-          OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-        }
-      )
-      global1.clock = testClock
-      client = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL)!,
-        supabaseKey: DotEnv.supabasePublishableKey,
-        configuration: SupabaseClient.Configuration(
-          auth: .init(storage: InMemoryTestStorage()),
-          global: global1
-        )
-      )
-      var global2 = SupabaseClient.Configuration.Global(
-        logger: Logging.Logger(label: "client2") {
-          OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
-        }
-      )
-      global2.clock = testClock
-      client2 = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL)!,
-        supabaseKey: DotEnv.supabasePublishableKey,
-        configuration: SupabaseClient.Configuration(
-          auth: .init(storage: InMemoryTestStorage()),
-          global: global2
-        )
-      )
+      client = try Self.makeClient(label: "client1", clock: testClock)
+      client2 = try Self.makeClient(label: "client2", clock: testClock)
       _ = try? await client.from("key_value_storage").delete().neq("key", value: UUID().uuidString)
         .execute()
     }
+    private static func makeClient(label: String, clock: TestClock<Duration>) throws
+      -> SupabaseClient
+    {
+      var global = SupabaseClient.Configuration.Global(
+        logger: Logging.Logger(label: label) {
+          OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
+        }
+      )
+      global.clock = clock
+      return try SupabaseClient(
+        supabaseURL: URL(string: DotEnv.supabaseURL)!,
+        supabaseKey: DotEnv.supabasePublishableKey,
+        configuration: SupabaseClient.Configuration(
+          auth: .init(storage: InMemoryTestStorage()),
+          global: global
+        )
+      )
+    }
+
     deinit {
       let client = client
       let client2 = client2

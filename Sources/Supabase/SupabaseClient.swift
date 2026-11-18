@@ -471,11 +471,10 @@ public final class SupabaseClient: Sendable {
     global: HTTPClientConfiguration,
     sdkMiddlewares: [any ClientMiddleware] = []
   ) -> HTTPClientConfiguration {
-    HTTPClientConfiguration(
-      transport: global.transport ?? URLSessionTransport(),
-      middlewares: global.middlewares + [TraceContextMiddleware()] + sdkMiddlewares,
-      timeout: global.timeout
-    )
+    var http = global
+    http.transport = global.transport ?? URLSessionTransport()
+    http.middlewares += [TraceContextMiddleware()] + sdkMiddlewares
+    return http
   }
 
   /// The SDK middleware that sets the bearer: the session token, else the key.

@@ -17,6 +17,9 @@ request path or at the log metadata.
 | Edge Functions | `/functions/v1/` | `functions` |
 | Realtime (`httpSend`) | `/realtime/v1/` | `realtime` |
 
+If your project URL has a path, such as `https://example.com/supabase`, the request path starts
+with it. Add it to the prefix.
+
 ### Add a middleware for one sub-client
 
 Wrap your middleware in one that checks the path. Other requests go straight to `next`.

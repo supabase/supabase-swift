@@ -514,37 +514,13 @@ For a longer timeout on one call, use `PostgrestRequestBuilder.timeout(_:)` or
 // v2
 options: .init(realtime: RealtimeClientOptions(logger: realtimeLogger))
 
-// v3: a middleware for Storage requests only
-struct StorageOnly: ClientMiddleware {
-  let inner: any ClientMiddleware
-
-  func intercept(
-    _ request: HTTPRequest,
-    body: HTTPBody?,
-    next: nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws -> (
-      HTTPResponse, HTTPBody?
-    )
-  ) async throws -> (HTTPResponse, HTTPBody?) {
-    guard request.path?.hasPrefix("/storage/v1/") == true else {
-      return try await next(request, body)
-    }
-    return try await inner.intercept(request, body: body, next: next)
-  }
-}
-
+// v3: one logger for every sub-client; filter on `metadata["system"]` to keep Realtime only
 var configuration = SupabaseClient.Configuration()
-configuration.global.http.middlewares = [StorageOnly(inner: uploadMetrics)]
-
-// v3: Realtime logs only, at debug level
-configuration.global.logger = Logger(label: "io.supabase") { label in
-  SystemFilter(system: "realtime", base: StreamLogHandler.standardOutput(label: label))
-}
-configuration.global.logger.logLevel = .debug
+configuration.global.logger = realtimeLogger
 ```
 
-`SystemFilter` is your own `LogHandler`: it forwards a message when `metadata["system"]` is
-`"realtime"`, and drops it otherwise. The "Configuring One Module" article in the Supabase
-documentation has a complete one, and a transport that sends one sub-client elsewhere.
+The "Configuring One Module" article in the Supabase documentation has a complete middleware
+and transport for one sub-client, and a `LogHandler` that keeps the logs of one sub-client.
 
 The clock the SDK sleeps on is a test hook. Import Supabase with `@_spi(Testing)` and set
 `configuration.global.clock`.
