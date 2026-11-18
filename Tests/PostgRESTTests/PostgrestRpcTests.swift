@@ -5,9 +5,7 @@
 //  Created by Guilherme Souza on 07/10/26.
 //
 
-import ConcurrencyExtras
 import Foundation
-import IssueReporting
 import Testing
 
 @_spi(Experimental) @testable import PostgREST
@@ -203,16 +201,48 @@ struct PostgrestRpcTests {
     #expect(read.header("Accept-Profile") == "private")
   }
 
+  /// A function with no arguments sends a `GET` with an empty query, as the untyped
+  /// `rpc(_:get:)` does.
   @Test
-  func aNonObjectArgumentReportsAndStaysAPost() async throws {
+  func readOnlyWithNoArgumentsSendsAnEmptyQuery() async throws {
+    let typed = try QueryCapture(body: "")
+    _ = try await typed.client.rpc(Ping()).readOnly().execute()
+    #expect(typed.httpMethod == "GET")
+    #expect(typed.bodyString == nil)
+
+    let untyped = try QueryCapture(body: "")
+    _ = try await untyped.client.rpc("ping", get: true).execute()
+    #expect(untyped.httpMethod == "GET")
+    #expect(untyped.bodyString == nil)
+    #expect(typed.query == nil)
+    #expect(untyped.query == nil)
+  }
+
+  /// A second `readOnly()` keeps the arguments the first one moved into the query.
+  @Test
+  func readOnlyTwiceKeepsTheArguments() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.rpc(search).readOnly().readOnly().execute()
+    #expect(capture.httpMethod == "GET")
+    #expect(capture.bodyString == nil)
+    #expect(capture.query == "keyword=milk&limit=3&tags={a,b c}")
+  }
+
+  /// Arguments that are not a JSON object cannot go in a query string. Both spellings throw the
+  /// same error before they send anything; neither falls back to a `POST`.
+  @Test
+  func aNonObjectArgumentThrowsOnBothPaths() throws {
     let capture = try QueryCapture(body: "1")
     let call = try capture.client.rpc(Pair())
-    let reporter = RecordingIssueReporter()
-    let readOnly = withIssueReporters([reporter]) { call.readOnly() }
-    #expect(reporter.messages.value.count == 1)
-    _ = try await readOnly.execute()
-    #expect(capture.httpMethod == "POST")
-    #expect(capture.bodyString == "[1,2]")
+
+    let typed = #expect(throws: PostgrestError.self) { try call.readOnly() }
+    let untyped = #expect(throws: PostgrestError.self) {
+      try capture.client.rpc("pair", params: [1, 2], get: true)
+    }
+    #expect(typed?.kind == .invalidRequest)
+    #expect(typed?.kind == untyped?.kind)
+    #expect(typed?.message == untyped?.message)
+    #expect(capture.httpMethod == nil)
   }
 }
 
@@ -222,21 +252,5 @@ extension _PostgrestFunctions {
     -> _PostgrestFunctionQuery<[PostgrestRpcTests.Todo]>
   {
     try call(PostgrestRpcTests.SearchTodos(keyword: keyword, limit: limit, tags: tags))
-  }
-}
-
-private final class RecordingIssueReporter: IssueReporter {
-  let messages = LockIsolated<[String]>([])
-
-  func reportIssue(
-    _ message: @autoclosure () -> String?,
-    severity: IssueSeverity,
-    fileID: StaticString,
-    filePath: StaticString,
-    line: UInt,
-    column: UInt
-  ) {
-    let message = message() ?? ""
-    messages.withValue { $0.append(message) }
   }
 }
