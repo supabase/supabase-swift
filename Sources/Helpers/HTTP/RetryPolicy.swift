@@ -71,9 +71,8 @@ extension RetryPolicy {
 
   /// Full-jitter backoff for the `retry`-th retry (1-based): a random duration in `0...cap`,
   /// where `cap = min(maxDelay, baseDelay · 2^(retry-1))`. Full jitter spreads the clients that
-  /// lost the same connection over the whole window, so they do not retry in step.
-  ///
-  /// - Parameter random: Draws the jitter factor from `0...1`. Tests pin it.
+  /// lost the same connection over the whole window, so they do not retry in step. `random`
+  /// draws the jitter factor from `0...1`; tests pin it.
   package func backoffDelay(
     retry: Int,
     random: (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
