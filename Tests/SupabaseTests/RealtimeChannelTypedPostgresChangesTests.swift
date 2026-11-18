@@ -206,6 +206,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
       url: URL(string: "https://localhost:54321/realtime/v1")!)
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .secondsSince1970
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
     configuration.typedRowDecoder = decoder
     let client = try RealtimeClient(configuration: configuration)
     let channel = await client.channel("todos")

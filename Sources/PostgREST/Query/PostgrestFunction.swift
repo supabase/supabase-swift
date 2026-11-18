@@ -80,9 +80,8 @@ extension _PostgrestFunctionQuery where Result: Decodable {
   /// - Throws: ``PostgrestError`` when the request fails or the response cannot be decoded.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Result> {
-    let decoder = client.configuration.typedDecoder
-    return try await request.execute(on: client) {
-      try decoder.decode(Result.self, from: $0)
+    try await request.execute(on: client) { [client] in
+      try client.configuration.typedDecoder.decode(Result.self, from: $0)
     }
   }
 }

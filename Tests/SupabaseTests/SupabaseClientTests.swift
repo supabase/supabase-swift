@@ -31,7 +31,7 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func typedRealtimeRowsDecodeWithTheDatabaseDecoderButNoKeyStrategy() throws {
+  func typedRealtimeRowsDecodeWithTheDatabaseDecoderButNoKeyStrategy() async throws {
     struct Row: Decodable {
       var dueDate: Date
 
@@ -52,7 +52,9 @@ struct SupabaseClientTests {
       )
     )
 
-    let rowDecoder = try #require(client.realtime.configuration.typedRowDecoder)
+    #expect(client.realtime.configuration.typedRowDecoder === decoder)
+    let channel = await client.realtime.channel("rows")
+    let rowDecoder = try #require(channel.typedRowDecoder)
     let row = try rowDecoder.decode(Row.self, from: Data(#"{"due_date":1000}"#.utf8))
     #expect(row.dueDate == Date(timeIntervalSince1970: 1_000))
   }

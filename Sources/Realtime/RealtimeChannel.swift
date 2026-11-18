@@ -95,8 +95,11 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// keeps after releasing the client must not keep the client (and its socket) alive.
   var client: RealtimeClient? { clientReference.value }
 
-  /// The `typedRowDecoder` of the client configuration, or `nil` once the client is gone.
-  package var typedRowDecoder: JSONDecoder? { client?.configuration.typedRowDecoder }
+  /// The `typedRowDecoder` of the client configuration with its key strategy ignored, or `nil`
+  /// once the client is gone.
+  package var typedRowDecoder: JSONDecoder? {
+    client?.configuration.typedRowDecoder?.ignoringKeyStrategy()
+  }
   private let clientReference: WeakClient
 
   init(

@@ -627,7 +627,7 @@ public final class SupabaseClient: Sendable {
       logger: configuration.global.logger
     )
     realtimeConfiguration.clock = configuration.global.clock
-    realtimeConfiguration.typedRowDecoder = configuration.database.decoder.ignoringKeyStrategy()
+    realtimeConfiguration.typedRowDecoder = configuration.database.decoder
 
     // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
     // swift-format-ignore: NeverUseForceTry
