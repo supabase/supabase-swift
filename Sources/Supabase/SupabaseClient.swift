@@ -628,7 +628,11 @@ public final class SupabaseClient: Sendable {
         observesAppLifecycle: realtime.observesAppLifecycle,
         monitorsNetworkPath: realtime.monitorsNetworkPath,
         serverLogLevel: realtime.serverLogLevel,
-        accessToken: { [weak self] in try await self?._getAccessToken() },
+        // The API key when no user is signed in, as `.signedOut` pushes: Realtime treats `nil` as
+        // a sign-out of its own.
+        accessToken: { [weak self, supabaseKey] in
+          try await self?._getAccessToken() ?? supabaseKey
+        },
         webSocketTransport: realtime.webSocketTransport,
         http: Self.resolveHTTP(
           global: configuration.global.http,

@@ -51,6 +51,28 @@ struct SupabaseClientRealtimeTokenTests {
     #expect(client.realtimeTokenToPush(event: .signedIn, session: .stub(accessToken: "a")) == "a")
   }
 
+  /// SWIFT-V3-004: a standalone `RealtimeClient` clears its token when the callback returns
+  /// `nil`. Under `SupabaseClient`, Realtime keeps the API key with no user, as before.
+  @Test
+  func realtimeKeepsTheKeyWithNoSession() async throws {
+    let client = try makeClient()
+
+    await client.realtime.setAuth()
+
+    #expect(await client.realtime.accessToken == "PUBLISHABLE_KEY")
+  }
+
+  @Test
+  func realtimeGetsTheKeyWhenTheAccessTokenClosureReturnsNil() async throws {
+    let token = LockIsolated<String?>("user-token")
+    let client = try makeClient(accessToken: { token.value })
+    await client.realtime.setAuth()
+    #expect(await client.realtime.accessToken == "user-token")
+
+    token.setValue(nil)
+    #expect(try await client.realtime.configuration.accessToken?() == "PUBLISHABLE_KEY")
+  }
+
   @Test
   func mfaVerifyPushesTheAAL2TokenToRealtime() async throws {
     let transport = RecordingTransport()

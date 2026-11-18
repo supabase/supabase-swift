@@ -27,7 +27,8 @@ The initializer throws a ``RealtimeError`` of kind
 
 ``RealtimeClient/Configuration/accessToken`` supplies the token for every join. The client calls
 it before a join, when a heartbeat goes out, and shortly before the token expires. A call that
-throws or returns `nil` keeps the current token. To set a token yourself, call
+throws keeps the current token. A call that returns `nil` means no signed-in user: the client
+clears the token and uses the API key. To set a token yourself, call
 ``RealtimeClient/setAuth(_:)``.
 
 Do not add an `AccessTokenMiddleware` to ``RealtimeClient/Configuration/http``. See <doc:Auth>.

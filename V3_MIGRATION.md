@@ -419,6 +419,10 @@ Changes that still compile but behave differently. Check each one by hand.
   token whenever it differs from the last one it pushed, whatever the event was. In v2 only
   `.initialSession`, `.signedIn`, `.tokenRefreshed` and `.signedOut` did. After `mfa.verify` or
   `linkIdentity(idToken:)`, channels now use the new token instead of the old one. `.signedOut` resets Realtime to the API key.
+- **Realtime uses the API key when there is no user.** With no session, or when your
+  `Configuration.Auth.accessToken` closure returns `nil`, channel joins and `httpSend` use the API
+  key. A standalone `RealtimeClient` whose `accessToken` callback returns `nil` clears the old
+  user's token; see the `accessToken` entry in [Realtime.md](docs/migrations/v3/Realtime.md#silent-changes).
 - **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
   for certificate pinning), pass `SupabaseClient.Configuration.Realtime(webSocketTransport:)` a
   `URLSessionWebSocketTransport` built from the session.

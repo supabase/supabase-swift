@@ -23,12 +23,13 @@ struct TokenState: Sendable {
     return generation
   }
 
-  /// Stores `token` and returns whether it changed. A `nil`, an unchanged token, or a result
-  /// from an older refresh leaves the state as it was.
+  /// Stores `token` and returns whether it changed. `nil` means no signed-in user: it clears the
+  /// token and its expiry. An unchanged token, or a result from an older refresh, leaves the
+  /// state as it was.
   mutating func apply(_ token: String?, generation: Int) -> Bool {
-    guard generation == self.generation, let token, token != self.token else { return false }
+    guard generation == self.generation, token != self.token else { return false }
     self.token = token
-    expiresAt = (JWT.decodePayload(token)?["exp"] as? TimeInterval).map(
+    expiresAt = token.flatMap { JWT.decodePayload($0)?["exp"] as? TimeInterval }.map(
       Date.init(timeIntervalSince1970:))
     return true
   }

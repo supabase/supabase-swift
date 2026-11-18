@@ -449,6 +449,7 @@ struct RealtimeChannelTests {
   }
 
   private func makeHTTPSendSUT(
+    headers: HTTPFields = [.apikey: "test-key"],
     accessToken: @escaping @Sendable () async throws -> String?,
     httpClient: RecordingTransport
   ) -> RealtimeClient {
@@ -456,7 +457,7 @@ struct RealtimeChannelTests {
     return RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: [.apikey: "test-key"],
+        headers: headers,
         accessToken: accessToken
       ),
       wsTransport: { _, _ in client },
@@ -527,8 +528,10 @@ struct RealtimeChannelTests {
     parked.value?.resume()
   }
 
+  /// SWIFT-V3-004: a `nil` from the callback means no signed-in user, so the stored token of an
+  /// earlier user is not sent and the server authorizes the request with `apikey`.
   @Test
-  func httpSendFallsBackToTheStoredTokenWhenTheProviderReturnsNil() async throws {
+  func httpSendSendsOnlyTheAPIKeyWhenTheProviderReturnsNilAfterAToken() async throws {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
     let socket = makeHTTPSendSUT(accessToken: { nil }, httpClient: httpClient)
@@ -537,7 +540,25 @@ struct RealtimeChannelTests {
 
     try await channel.httpSend(event: "test", payload: ["data": "test"])
 
-    #expect(httpClient.requests.first?.head.headerFields[.authorization] == "Bearer stored-token")
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[.authorization] == nil)
+    #expect(headers[.apikey] == "test-key")
+  }
+
+  @Test
+  func httpSendDropsAConfiguredAuthorizationWhenTheProviderReturnsNil() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let socket = makeHTTPSendSUT(
+      headers: [.apikey: "test-key", .authorization: "Bearer configured-user-token"],
+      accessToken: { nil }, httpClient: httpClient)
+    let channel = await socket.channel("test-topic")
+
+    try await channel.httpSend(event: "test", payload: ["data": "test"])
+
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[.authorization] == nil)
+    #expect(headers[.apikey] == "test-key")
   }
 
   @Test

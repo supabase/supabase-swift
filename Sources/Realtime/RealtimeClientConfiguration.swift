@@ -142,12 +142,17 @@ extension RealtimeClient {
     /// Returns the access token channels join with and `httpSend` sends.
     ///
     /// The client calls it before a join, when a heartbeat goes out, and one minute before the
-    /// token's `exp`, at most once every 10 seconds. A call that throws, returns `nil`, or does not
-    /// return within ``requestTimeout`` keeps the current token. `SupabaseClient` sets it to the
-    /// signed-in user's token.
+    /// token's `exp`, at most once every 10 seconds. A call that throws or does not return within
+    /// ``requestTimeout`` keeps the current token. Return `nil` when no user is signed in: the
+    /// client clears the current token, joins without one, so the server uses the API key, and
+    /// sends the `apikey` header's value to the joined channels. The server ignores that value when
+    /// it is an `sb_` key, so a joined channel then keeps the old token until it rejoins or the
+    /// token expires; remove the channels at sign-out to end access at once. `SupabaseClient` sets
+    /// it to the signed-in user's token, or the API key when no user is signed in.
     ///
     /// `httpSend` calls it for every request. If it throws, `httpSend` throws ``RealtimeError``
-    /// with kind ``RealtimeError/Kind-swift.struct/accessToken``.
+    /// with kind ``RealtimeError/Kind-swift.struct/accessToken``. If it returns `nil`, the request
+    /// sends only `apikey`, with no `Authorization` header.
     ///
     /// This is Realtime's only token source. Do not add an `AccessTokenMiddleware` to ``http``.
     public var accessToken: (@Sendable () async throws -> String?)?

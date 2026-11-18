@@ -63,8 +63,8 @@ extension RealtimeClient {
       guard timers.claimFire(id, token: token) else { return }
       apply(.timerFired(id))
 
-    case .tokenFetched(let token, let generation):
-      tokenFetchEnded(token, generation: generation)
+    case .tokenFetched(let result, let generation):
+      tokenFetchEnded(result, generation: generation)
 
     case .streamEnded(let id):
       streamEnded(id)
@@ -373,8 +373,8 @@ extension RealtimeClient {
   // MARK: Access token
 
   /// Starts two edges that race to yield ``Input/tokenFetched(_:generation:)``: the
-  /// `accessToken` callback call, which reports `nil` when the call fails, and a timer that
-  /// reports `nil` after `requestTimeout`. The first to arrive for the fetch wins, and the
+  /// `accessToken` callback call, which reports `.failed` when the call throws, and a timer that
+  /// reports `.failed` after `requestTimeout`. The first to arrive for the fetch wins, and the
   /// actor cancels the other.
   private func fetchAccessToken(generation: Int) {
     tokenFetch?.call.cancel()
@@ -388,15 +388,19 @@ extension RealtimeClient {
   private nonisolated func callAccessToken(generation: Int) -> Task<Void, Never> {
     let provider = configuration.accessToken
     return Task(priority: .medium) { [inbox, logger] in
-      var token: String?
-      if let provider {
-        do {
-          token = try await provider()
-        } catch {
-          logger.error("Failed to fetch access token: \(LogRedaction.summary(of: error))")
-        }
+      // The core fetches only when a callback is set. Without one, no `nil` signs the user out.
+      guard let provider else {
+        inbox.yield(.tokenFetched(.failed, generation: generation))
+        return
       }
-      inbox.yield(.tokenFetched(token, generation: generation))
+      let result: RealtimeCore.TokenFetchResult
+      do {
+        result = .returned(try await provider())
+      } catch {
+        logger.error("Failed to fetch access token: \(LogRedaction.summary(of: error))")
+        result = .failed
+      }
+      inbox.yield(.tokenFetched(result, generation: generation))
     }
   }
 
@@ -406,20 +410,23 @@ extension RealtimeClient {
     let clock = clock
     return sleepThenRun(on: clock, after: timeout) { [inbox, logger] in
       logger.error("The access token callback did not return within \(timeout)")
-      inbox.yield(.tokenFetched(nil, generation: generation))
+      inbox.yield(.tokenFetched(.failed, generation: generation))
     }
   }
 
   /// Applies the first result for the fetch in flight and cancels both of its edges, so
   /// `.tokenFetched` reaches the core once per fetch. The callers of ``refreshAccessToken()``
   /// resume after it.
-  private func tokenFetchEnded(_ token: String?, generation: Int) {
+  private func tokenFetchEnded(_ result: RealtimeCore.TokenFetchResult, generation: Int) {
     guard let fetch = tokenFetch, fetch.generation == generation else { return }
     // Cleared before the event: the core may start the next fetch while it applies it.
     tokenFetch = nil
     fetch.call.cancel()
     fetch.timeout.cancel()
-    apply(.tokenFetched(token: token, generation: generation))
+    switch result {
+    case .returned(let token): apply(.tokenFetched(token: token, generation: generation))
+    case .failed: apply(.tokenFetchFailed(generation: generation))
+    }
     let waiting = tokenFetchWaiters.values
     tokenFetchWaiters = [:]
     for waiter in waiting {
