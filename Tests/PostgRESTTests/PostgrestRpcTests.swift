@@ -213,7 +213,19 @@ struct PostgrestRpcTests {
     let untyped = try QueryCapture(body: "")
     _ = try await untyped.client.rpc("ping", get: true).execute()
     #expect(untyped.httpMethod == "GET")
-    #expect(typed.query == untyped.query)
+    #expect(untyped.bodyString == nil)
+    #expect(typed.query == nil)
+    #expect(untyped.query == nil)
+  }
+
+  /// A second `readOnly()` keeps the arguments the first one moved into the query.
+  @Test
+  func readOnlyTwiceKeepsTheArguments() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.rpc(search).readOnly().readOnly().execute()
+    #expect(capture.httpMethod == "GET")
+    #expect(capture.bodyString == nil)
+    #expect(capture.query == "keyword=milk&limit=3&tags={a,b c}")
   }
 
   /// Arguments that are not a JSON object cannot go in a query string. Both spellings throw the

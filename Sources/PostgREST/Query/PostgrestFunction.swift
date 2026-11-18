@@ -63,9 +63,10 @@ public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
   ///   a JSON object, as the untyped `rpc(_:params:get:)` does. `@Function` always encodes an
   ///   object, so only a hand-written conformance can throw. Nothing is sent.
   public func readOnly() throws -> Self {
+    // `rpc(_:)` always sets a body, so a call without one is already read-only.
+    guard let body = request.body else { return self }
+    let arguments = try PostgrestClient.queryArguments(forJSONObject: body)
     var copy = self
-    let arguments = try PostgrestClient.queryArguments(
-      forJSONObject: request.body ?? Data("{}".utf8))
     copy.request.method = .get
     copy.request.body = nil
     copy.request.leadingQuery = arguments
