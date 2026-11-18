@@ -120,9 +120,9 @@ public struct PostgrestClient: Sendable {
     /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
     /// can override this per call.
     ///
-    /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
-    /// always uses a fixed `JSONEncoder.supabase()`, so a key strategy here cannot change the
-    /// column names it derives from `CodingKeys`.
+    /// The typed API (`from(_:)` with a relation type, and `rpc(_:)` with a function type) uses
+    /// this encoder too, with one change: it ignores `keyEncodingStrategy`. The typed API takes
+    /// column names from `CodingKeys`, and a key strategy would rename them.
     public var encoder: JSONEncoder
 
     /// The `JSONDecoder` used to deserialize response bodies.
@@ -134,9 +134,9 @@ public struct PostgrestClient: Sendable {
     /// can override this per call. Never used to decode ``PostgrestError/ServerError`` — that
     /// always uses a fixed internal decoder, decoupled from this setting.
     ///
-    /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
-    /// always uses a fixed `JSONDecoder.supabase()`, so a key strategy here cannot change the
-    /// column names it derives from `CodingKeys`.
+    /// The typed API (`from(_:)` with a relation type, and `rpc(_:)` with a function type) uses
+    /// this decoder too, with one change: it ignores `keyDecodingStrategy`. The typed API takes
+    /// column names from `CodingKeys`, and a key strategy would rename them.
     public var decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.

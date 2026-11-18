@@ -421,7 +421,7 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   public func update(
     _ values: _PostgrestUpdate<R>
   ) throws -> _PostgrestMutation<R, _PostgrestUnscopedPhase> {
-    mutation(.patch, body: try PostgrestClient.Configuration.jsonEncoder.encodeRequestBody(values))
+    mutation(.patch, body: try client.configuration.typedEncoder.encodeRequestBody(values))
   }
 
   /// Deletes the rows matched by the filters applied to the returned value.
@@ -539,7 +539,7 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
     onConflict: String? = nil,
     resolution: _PostgrestConflictResolution? = nil
   ) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
-    let body = try PostgrestClient.Configuration.jsonEncoder.encodeRequestBody(values)
+    let body = try client.configuration.typedEncoder.encodeRequestBody(values)
     var mutation: _PostgrestMutation<R, _PostgrestInsertPhase> = mutation(
       .post, body: body, preferences: resolution.map { ["resolution=\($0.rawValue)"] } ?? [])
     if let onConflict {

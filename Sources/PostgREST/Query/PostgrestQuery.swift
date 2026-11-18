@@ -34,13 +34,14 @@ public struct _PostgrestQuery<R: _PostgrestRelation, Output: Decodable & Sendabl
   init(
     client: PostgrestClient,
     request: _PostgrestRequest,
-    decode: @escaping @Sendable (Data) throws -> Output = {
-      try Self.decoder.decode(Output.self, from: $0)
-    }
+    decode: (@Sendable (Data) throws -> Output)? = nil
   ) {
     self.client = client
     self.request = request
-    self.decode = decode
+    self.decode =
+      decode ?? { [decoder = client.configuration.typedDecoder] in
+        try decoder.decode(Output.self, from: $0)
+      }
   }
 }
 
@@ -129,8 +130,6 @@ extension _PostgrestQuery {
   private func send(_ request: _PostgrestRequest) async throws -> PostgrestResponse<Output> {
     try await request.execute(on: client, decode: decode)
   }
-
-  static var decoder: JSONDecoder { PostgrestClient.Configuration.jsonDecoder }
 
   private static var objectMediaType: String { "application/vnd.pgrst.object+json" }
 }

@@ -9,13 +9,51 @@ import ConcurrencyExtras
 package import Foundation
 
 extension PostgrestClient.Configuration {
-  /// The fixed decoder of the typed API. Not public, so no caller can change the settings the
-  /// column names depend on. Typed Postgres changes decode with it too.
+  /// The default decoder of typed Postgres changes. Not public, so no caller can change the
+  /// settings the column names depend on.
   package static let jsonDecoder = JSONDecoder.supabase()
 
-  /// The fixed encoder of the typed API. Not public, so no caller can change the settings the
-  /// column names depend on.
+  /// A shared `JSONEncoder.supabase()` for tests and package code that needs no configuration.
   package static let jsonEncoder = JSONEncoder.supabase()
+
+  /// The encoder of the typed API: ``encoder`` with its key strategy forced to
+  /// `.useDefaultKeys`.
+  ///
+  /// The typed API takes column names from `CodingKeys` and from the keys of the encoded body.
+  /// A key strategy would rename those keys, so the body and the `columns` query item would
+  /// name columns that do not exist. Every other setting, such as the date strategy, applies.
+  var typedEncoder: JSONEncoder {
+    guard case .useDefaultKeys = encoder.keyEncodingStrategy else {
+      let copy = JSONEncoder()
+      copy.outputFormatting = encoder.outputFormatting
+      copy.dateEncodingStrategy = encoder.dateEncodingStrategy
+      copy.dataEncodingStrategy = encoder.dataEncodingStrategy
+      copy.nonConformingFloatEncodingStrategy = encoder.nonConformingFloatEncodingStrategy
+      copy.userInfo = encoder.userInfo
+      return copy
+    }
+    return encoder
+  }
+
+  /// The decoder of the typed API: ``decoder`` with its key strategy forced to
+  /// `.useDefaultKeys`.
+  ///
+  /// The `CodingKeys` of a typed row already hold the column names. A key strategy would rename
+  /// the response keys first, so they would no longer match. Every other setting, such as the
+  /// date strategy, applies.
+  var typedDecoder: JSONDecoder {
+    guard case .useDefaultKeys = decoder.keyDecodingStrategy else {
+      let copy = JSONDecoder()
+      copy.dateDecodingStrategy = decoder.dateDecodingStrategy
+      copy.dataDecodingStrategy = decoder.dataDecodingStrategy
+      copy.nonConformingFloatDecodingStrategy = decoder.nonConformingFloatDecodingStrategy
+      copy.userInfo = decoder.userInfo
+      copy.allowsJSON5 = decoder.allowsJSON5
+      copy.assumesTopLevelDictionary = decoder.assumesTopLevelDictionary
+      return copy
+    }
+    return decoder
+  }
 
   /// Sent unless the configured headers set the same name.
   static let defaultHeaders: HTTPFields = [
