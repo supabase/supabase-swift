@@ -94,6 +94,9 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// Weak: the client owns its channels' state, which holds this handle, and a channel the app
   /// keeps after releasing the client must not keep the client (and its socket) alive.
   var client: RealtimeClient? { clientReference.value }
+
+  /// The `typedRowDecoder` of the client configuration, or `nil` once the client is gone.
+  package var typedRowDecoder: JSONDecoder? { client?.configuration.typedRowDecoder }
   private let clientReference: WeakClient
 
   init(

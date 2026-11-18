@@ -616,28 +616,29 @@ public final class SupabaseClient: Sendable {
   private func _initRealtimeClient() -> RealtimeClient {
     let realtime = configuration.realtime
 
+    var realtimeConfiguration = RealtimeClient.Configuration(
+      url: supabaseURL.appendingPathComponent("/realtime/v1"),
+      headers: headers.merging(with: realtime.headers),
+      heartbeatInterval: realtime.heartbeatInterval,
+      requestTimeout: realtime.requestTimeout,
+      connectsOnSubscribe: realtime.connectsOnSubscribe,
+      disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
+      observesAppLifecycle: realtime.observesAppLifecycle,
+      monitorsNetworkPath: realtime.monitorsNetworkPath,
+      serverLogLevel: realtime.serverLogLevel,
+      accessToken: { [weak self] in try await self?._getAccessToken() },
+      webSocketTransport: realtime.webSocketTransport,
+      http: Self.resolveHTTP(
+        global: configuration.global.http,
+        override: realtime.http
+      ),
+      logger: realtime.logger ?? configuration.global.logger,
+      clock: realtime.clock ?? configuration.global.clock
+    )
+    realtimeConfiguration.typedRowDecoder = configuration.database.decoder.ignoringKeyStrategy()
+
     // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
     // swift-format-ignore: NeverUseForceTry
-    return try! RealtimeClient(
-      configuration: .init(
-        url: supabaseURL.appendingPathComponent("/realtime/v1"),
-        headers: headers.merging(with: realtime.headers),
-        heartbeatInterval: realtime.heartbeatInterval,
-        requestTimeout: realtime.requestTimeout,
-        connectsOnSubscribe: realtime.connectsOnSubscribe,
-        disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
-        observesAppLifecycle: realtime.observesAppLifecycle,
-        monitorsNetworkPath: realtime.monitorsNetworkPath,
-        serverLogLevel: realtime.serverLogLevel,
-        accessToken: { [weak self] in try await self?._getAccessToken() },
-        webSocketTransport: realtime.webSocketTransport,
-        http: Self.resolveHTTP(
-          global: configuration.global.http,
-          override: realtime.http
-        ),
-        logger: realtime.logger ?? configuration.global.logger,
-        clock: realtime.clock ?? configuration.global.clock
-      )
-    )
+    return try! RealtimeClient(configuration: realtimeConfiguration)
   }
 }

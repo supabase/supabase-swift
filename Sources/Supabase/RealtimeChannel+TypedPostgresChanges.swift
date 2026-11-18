@@ -47,8 +47,9 @@ extension RealtimeChannel {
   ///   - event: The change events to receive. Defaults to ``PostgresChangeEvent/all``.
   ///   - filter: Builds the filter from the relation's columns, or `nil` for every row.
   ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. `nil` uses the decoder of the
-  ///     typed query API, a `JSONDecoder.supabase()`, so a row decodes the same from a query and
-  ///     from a change.
+  ///     typed query API, so a row decodes the same from a query and from a change: on a
+  ///     `SupabaseClient` channel, ``SupabaseClient/Configuration/Database/decoder`` without its
+  ///     key strategy; on a standalone `RealtimeClient`, a `JSONDecoder.supabase()`.
   /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
   /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
   ///   when the Realtime filter grammar cannot write the filter. The message names the part.
@@ -62,7 +63,8 @@ extension RealtimeChannel {
     let rawFilter = try filter.map { try $0(R.columns).realtimeFilter }
     return await postgresChanges(
       of: R.self, event: event, schema: R.schema, table: R.relationName, rawFilter: rawFilter,
-      select: nil, decoder: decoder ?? PostgrestClient.Configuration.jsonDecoder
+      select: nil,
+      decoder: decoder ?? typedRowDecoder ?? PostgrestClient.Configuration.jsonDecoder
     )
   }
 

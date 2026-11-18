@@ -31,6 +31,33 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func typedRealtimeRowsDecodeWithTheDatabaseDecoderButNoKeyStrategy() throws {
+    struct Row: Decodable {
+      var dueDate: Date
+
+      enum CodingKeys: String, CodingKey {
+        case dueDate = "due_date"
+      }
+    }
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        database: SupabaseClient.Configuration.Database(decoder: decoder),
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
+      )
+    )
+
+    let rowDecoder = try #require(client.realtime.configuration.typedRowDecoder)
+    let row = try rowDecoder.decode(Row.self, from: Data(#"{"due_date":1000}"#.utf8))
+    #expect(row.dueDate == Date(timeIntervalSince1970: 1_000))
+  }
+
+  @Test
   func globalClockReachesEverySubClientThatWaits() throws {
     let clock = TestClock()
     let client = try SupabaseClient(

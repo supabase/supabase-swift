@@ -201,6 +201,54 @@ struct RealtimeChannelTypedPostgresChangesTests {
   }
 
   @Test
+  func decodesRowsWithTheClientTypedRowDecoderByDefault() async throws {
+    var configuration = RealtimeClient.Configuration(
+      url: URL(string: "https://localhost:54321/realtime/v1")!)
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+    configuration.typedRowDecoder = decoder
+    let client = try RealtimeClient(configuration: configuration)
+    let channel = await client.channel("todos")
+
+    let changes = try await channel.postgresChanges(of: RealtimeTodo.self, event: .insert)
+
+    await client.installSubscribedRecord(
+      of: channel,
+      serverChanges: [
+        PostgresJoinConfig(event: .insert, schema: "public", table: "todos", id: 1)
+      ])
+    await client.apply(
+      .frame(
+        RealtimeMessage(
+          joinRef: nil,
+          ref: nil,
+          topic: "realtime:todos",
+          event: ChannelEvent.postgresChanges,
+          payload: [
+            "ids": [1],
+            "data": [
+              "type": "INSERT",
+              "schema": "public",
+              "table": "todos",
+              "commit_timestamp": "2026-10-30T12:00:00.000Z",
+              "record": [
+                "id": 1, "title": "milk", "is_done": false, "priority": 5, "due_date": 1000,
+              ],
+            ],
+          ]
+        )
+      ))
+    await client.finishStreams(of: channel)
+
+    var received: [TypedPostgresChange<RealtimeTodo>] = []
+    for await change in changes {
+      received.append(change)
+    }
+
+    #expect(try received.first?.row().dueDate == Date(timeIntervalSince1970: 1_000))
+  }
+
+  @Test
   func usesTheRelationSchemaAndNoFilterByDefault() async throws {
     enum PrivateSchema: _PostgrestSchema {
       static let name = "private"
