@@ -13,9 +13,6 @@ extension PostgrestClient.Configuration {
   /// settings the column names depend on.
   package static let jsonDecoder = JSONDecoder.supabase()
 
-  /// A shared `JSONEncoder.supabase()` for tests and package code that needs no configuration.
-  package static let jsonEncoder = JSONEncoder.supabase()
-
   /// The encoder of the typed API: ``encoder`` with its key strategy forced to
   /// `.useDefaultKeys`.
   ///

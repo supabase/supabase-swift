@@ -77,8 +77,8 @@ struct PostgrestTypedCodersTests {
   /// Dates as seconds since 1970, which `JSONEncoder.supabase()` never writes. Pass
   /// `snakeCase: true` to add a key strategy the typed API must ignore.
   private static func secondsCapture(
-    body: String = "[]",
-    snakeCase: Bool = false
+    snakeCase: Bool = false,
+    body: String = "[]"
   ) throws -> QueryCapture {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .secondsSince1970
@@ -153,7 +153,7 @@ struct PostgrestTypedCodersTests {
   @Test
   func aKeyStrategyDoesNotDropTheOtherSettings() async throws {
     let capture = try Self.secondsCapture(
-      body: #"[{"id":1,"starts_at":1000}]"#, snakeCase: true)
+      snakeCase: true, body: #"[{"id":1,"starts_at":1000}]"#)
     let rows = try await capture.client.from(Event.self)
       .insert(.init(startsAt: Self.date)).returning().execute().value
     #expect(capture.bodyString == #"{"starts_at":1000}"#)
@@ -168,17 +168,9 @@ struct PostgrestTypedCodersTests {
     #expect(configuration.typedDecoder === configuration.decoder)
   }
 
-  private static func snakeCaseCapture(body: String = "[]") throws -> QueryCapture {
-    let encoder = JSONEncoder()
-    encoder.keyEncodingStrategy = .convertToSnakeCase
-    let decoder = JSONDecoder()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
-    return try QueryCapture(body: body, encoder: encoder, decoder: decoder)
-  }
-
   @Test
   func selectIgnoresTheKeyStrategyOfTheConfiguredDecoder() async throws {
-    let capture = try Self.snakeCaseCapture(body: #"[{"id":1,"is_done":true}]"#)
+    let capture = try Self.secondsCapture(snakeCase: true, body: #"[{"id":1,"is_done":true}]"#)
     let rows = try await capture.client.from(Todo.self).select().execute().value
     // `.convertFromSnakeCase` would look for the key "isDone" and fail on "is_done".
     #expect(rows.first?.isDone == true)
@@ -186,14 +178,14 @@ struct PostgrestTypedCodersTests {
 
   @Test
   func insertIgnoresTheKeyStrategyOfTheConfiguredEncoder() async throws {
-    let capture = try Self.snakeCaseCapture()
+    let capture = try Self.secondsCapture(snakeCase: true)
     try await capture.client.from(Todo.self).insert(.init(isDone: true)).execute()
     #expect(capture.bodyString == #"{"isDone":true}"#)
   }
 
   @Test
   func updateIgnoresTheKeyStrategyOfTheConfiguredEncoder() async throws {
-    let capture = try Self.snakeCaseCapture()
+    let capture = try Self.secondsCapture(snakeCase: true)
     try await capture.client.from(Todo.self).update { $0.dueAt = 3 }.all().execute()
     #expect(capture.bodyString == #"{"dueAt":3}"#)
   }

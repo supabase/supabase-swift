@@ -39,9 +39,7 @@ public struct _PostgrestQuery<R: _PostgrestRelation, Output: Decodable & Sendabl
     self.client = client
     self.request = request
     self.decode =
-      decode ?? { [decoder = client.configuration.typedDecoder] in
-        try decoder.decode(Output.self, from: $0)
-      }
+      decode ?? { try client.configuration.typedDecoder.decode(Output.self, from: $0) }
   }
 }
 
