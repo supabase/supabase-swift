@@ -17,7 +17,7 @@ import Testing
   import FoundationNetworking
 #endif
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 @Suite
 struct SessionManagerTests {
@@ -39,14 +39,15 @@ struct SessionManagerTests {
     http: any ClientTransport,
     date: @escaping @Sendable () -> Date = { Self.now }
   ) -> Dependencies {
-    .live(
-      configuration: .init(
-        url: clientURL,
-        storageKey: uniqueStorageKey(),
-        storage: InMemoryTestStorage(),
-        autoRefresh: .manual,
-        now: date
-      ),
+    var configuration = AuthClient.Configuration(
+      url: clientURL,
+      storageKey: uniqueStorageKey(),
+      storage: InMemoryTestStorage(),
+      autoRefresh: .manual
+    )
+    configuration.now = date
+    return .live(
+      configuration: configuration,
       http: HTTPClient(transport: http),
       logger: supabaseDefaultLogger(label: "io.supabase.auth")
     )

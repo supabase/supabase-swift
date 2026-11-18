@@ -56,10 +56,10 @@ your own ``WebSocketTransport`` to use another stack. See <doc:CustomTransports>
 
 See <doc:ConnectionBehavior> for reconnects, the app lifecycle and network changes.
 
-### Logger and clock
+### Logger
 
 ``RealtimeClient/Configuration/logger`` is a swift-log `Logger`. The client removes tokens,
 secrets and URL query strings from each line, and tags the logger with `system=realtime`.
 
-``RealtimeClient/Configuration/clock`` is the clock for the heartbeat timer and the reconnect
-backoff. Pass a test clock to control them in tests.
+Tests can control the heartbeat timer and the reconnect backoff with the `clock` test hook.
+Import Realtime with `@_spi(Testing)` to set it.

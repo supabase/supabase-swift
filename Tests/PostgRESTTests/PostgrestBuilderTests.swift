@@ -13,7 +13,7 @@ import Helpers
 import TestHelpers
 import Testing
 
-@testable import PostgREST
+@_spi(Testing) @testable import PostgREST
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -790,10 +790,15 @@ struct PostgrestBuilderTests {
       }
       return (head, data.isEmpty ? nil : HTTPBody(data))
     }
+    var configuration = PostgrestClient.Configuration(
+      url: url,
+      http: .init(transport: transport),
+      decoder: decoder,
+      retryEnabled: retryEnabled
+    )
+    configuration.clock = ImmediateRetryTestClock()
     return try PostgrestClient(
-      configuration: .init(
-        url: url, http: .init(transport: transport), decoder: decoder, retryEnabled: retryEnabled,
-        clock: ImmediateRetryTestClock())
+      configuration: configuration
     )
   }
 

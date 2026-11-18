@@ -14,7 +14,7 @@ import Logging
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 @Suite
 struct AuthClientConfigurationTests {
@@ -109,9 +109,9 @@ struct AuthClientConfigurationTests {
         transport: ClosureTransport { _, _ in
           requests.withValue { $0 += 1 }
           return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), nil)
-        }),
-      clock: ImmediateClock()
+        })
     )
+    configuration.clock = ImmediateClock()
     configuration.retryEnabled = retryEnabled
     let sut = try AuthClient(configuration: configuration)
 

@@ -39,10 +39,6 @@ extension AuthClient {
   ///
   /// ### Retries
   /// - ``retryEnabled``
-  ///
-  /// ### Testing
-  /// - ``clock``
-  /// - ``now``
   public struct Configuration: Sendable {
     /// The URL of the Auth server, such as `https://<project>.supabase.co/auth/v1`.
     public var url: URL
@@ -125,20 +121,26 @@ extension AuthClient {
 
     /// The clock auto refresh sleeps on until the refresh is due, and between retries.
     ///
-    /// Keep it in step with ``now``: the refresh deadline sleeps on this clock, and expiry checks
-    /// read ``now``.
+    /// Keep it in step with `now`: the refresh deadline sleeps on this clock, and expiry checks
+    /// read `now`.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
     /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
     /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
     /// yourself, as this package does not export it.
-    public var clock: any Clock<Duration>
+    ///
+    /// A test hook: import Auth with `@_spi(Testing)`, and set it on the configuration before
+    /// you create the client.
+    @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
 
     /// The time source for every expiry check and every receipt time the client records.
     ///
     /// Defaults to the system clock. Pass a fixed or stepped time in tests, together with a
-    /// ``clock`` you control.
-    public var now: @Sendable () -> Date
+    /// `clock` you control.
+    ///
+    /// A test hook: import Auth with `@_spi(Testing)`, and set it on the configuration before
+    /// you create the client.
+    @_spi(Testing) public var now: @Sendable () -> Date = { Date() }
 
     /// How long the client waits, when it is created with an expired stored session, for one
     /// refresh of that session before it delivers ``AuthEvent/initialSession``.
@@ -146,7 +148,7 @@ extension AuthClient {
     /// Defaults to 5 seconds. A refresh that finishes in time makes the initial session the
     /// refreshed one. A refresh that fails, or does not finish in time, makes it the expired
     /// session. A refresh that is still running then commits as ``AuthEvent/tokenRefreshed``. The
-    /// wait uses ``clock``.
+    /// wait uses `clock`.
     ///
     /// The client refreshes at start-up only under ``AuthClient/AutoRefreshPolicy/automatic``. A
     /// value of zero or less turns it off.
@@ -169,8 +171,6 @@ extension AuthClient {
     ///   - http: The transport and middleware chain every request goes through.
     ///   - logger: The logger to use. Defaults to a build-config-aware logger — see ``logger``.
     ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
-    ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
-    ///   - now: The time source for expiry checks. Defaults to the system clock.
     public init(
       url: URL,
       storageKey: String,
@@ -183,9 +183,7 @@ extension AuthClient {
       initialRefreshTimeout: Duration = .seconds(5),
       http: HTTPClientConfiguration = .init(),
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-      retryEnabled: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock(),
-      now: @escaping @Sendable () -> Date = { Date() }
+      retryEnabled: Bool = true
     ) {
       self.url = url
       self.storageKey = storageKey
@@ -198,8 +196,6 @@ extension AuthClient {
       self.autoRefresh = autoRefresh
       self.observesAppLifecycle = observesAppLifecycle
       self.retryEnabled = retryEnabled
-      self.clock = clock
-      self.now = now
       self.initialRefreshTimeout = initialRefreshTimeout
     }
   }

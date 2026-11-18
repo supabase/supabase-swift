@@ -111,9 +111,11 @@ Changes that still compile but behave differently. Check each one by hand.
 - **A `subscribe()` that gives up leaves the channel `.failed`.** v2 moved it back to
   `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
   `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
-- **`SupabaseClient` uses the global logger for Realtime when you pass none.** A `logger:` you
-  pass in `SupabaseClient.Configuration.Realtime` is kept. With `nil`, the default, Realtime uses
-  `Configuration.Global.logger`.
+- **`SupabaseClient` uses the global logger and HTTP settings for Realtime.**
+  `SupabaseClient.Configuration.Realtime` has no `logger` or `http`. Realtime uses
+  `Configuration.Global.logger` and `Configuration.Global.http`. See
+  [One `http` and one `logger`](../../../V3_MIGRATION.md#one-http-and-one-logger-for-every-sub-client)
+  to filter or change one sub-client only.
 - **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. For
   certificate pinning, pass a transport (see [`session:` is replaced by
   `webSocketTransport:`](#session-is-replaced-by-websockettransport)).

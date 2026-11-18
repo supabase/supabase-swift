@@ -5,7 +5,7 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
-@_spi(Experimental) @testable import Storage
+@_spi(Experimental) @_spi(Testing) @testable import Storage
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
