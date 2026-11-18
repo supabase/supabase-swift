@@ -353,13 +353,14 @@ struct WebSocketTests {
         wrappedDelegateQueue: queue
       )
       let session = URLSession(configuration: .default)
+      let disposition = LockIsolated<URLSession.AuthChallengeDisposition?>(nil)
 
-      await withCheckedContinuation { continuation in
-        delegate.urlSession(session, didReceive: makeChallenge()) { disposition, _ in
-          #expect(disposition == .useCredential)
-          continuation.resume()
-        }
+      delegate.urlSession(session, didReceive: makeChallenge()) { result, _ in
+        disposition.setValue(result)
       }
+      let completed = await waitUntil(timeout: 2) { disposition.value != nil }
+      #expect(completed)
+      #expect(disposition.value == .useCredential)
       #expect(wrappedDelegate.calledOn.value === queue)
     }
 

@@ -374,6 +374,7 @@ struct SupabaseClientTests {
     let delegate = PinningDelegate()
     let sessionConfiguration = URLSessionConfiguration.ephemeral
     sessionConfiguration.timeoutIntervalForRequest = 42
+    sessionConfiguration.httpAdditionalHeaders = ["X-App": "demo"]
     let session = URLSession(
       configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
     defer { session.invalidateAndCancel() }
@@ -398,6 +399,7 @@ struct SupabaseClientTests {
     #expect(transport.delegate === delegate)
     #expect(transport.delegateQueue === session.delegateQueue)
     #expect(transport.configuration.timeoutIntervalForRequest == 42)
+    #expect(transport.configuration.httpAdditionalHeaders == nil)
     #expect(!recorder.entries.contains { $0.contains("WebSocket") })
   }
 

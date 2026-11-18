@@ -425,7 +425,7 @@ Changes that still compile but behave differently. Check each one by hand.
   `URLSessionWebSocketTransport` built from that session's configuration and delegate. It calls
   the delegate on the session's `delegateQueue`. So certificate pinning covers the WebSocket
   upgrade. The WebSocket also gets the rest of that configuration, for example its timeouts and
-  proxy settings. A custom `ClientTransport` hides its
+  proxy settings, but not its `httpAdditionalHeaders`, which can break the upgrade on iOS. A custom `ClientTransport` hides its
   session: Realtime then logs a warning and uses the default transport. In that case, pass
   `SupabaseClient.Configuration.Realtime(webSocketTransport:)` a `URLSessionWebSocketTransport`
   built from the session.
