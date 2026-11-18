@@ -36,14 +36,15 @@ struct ResumableStoreTests {
   private func record(
     fingerprint: Fingerprint, source: ResumableSource, expiresAt: Date = .distantFuture,
     sourceModificationDate: Date = Date(timeIntervalSince1970: 1_700_000_000),
-    totalBytes: Int64 = 10
+    totalBytes: Int64 = 10, lastKnownOffset: Int64 = 0, chunkSize: Int64 = 6 << 20
   ) -> ResumableUploadRecord {
     ResumableUploadRecord(
       fingerprint: fingerprint, bucketID: "bucket", path: "video.mp4", totalBytes: totalBytes,
       source: source, sourceModificationDate: sourceModificationDate,
       uploadURL: URL(string: "http://localhost/upload/resumable/abc")!,
       createdAt: Date(timeIntervalSince1970: 1_700_000_000), expiresAt: expiresAt,
-      lastKnownOffset: 0, chunkSize: 6 << 20, upsert: false, contentType: "video/mp4",
+      lastKnownOffset: lastKnownOffset, chunkSize: chunkSize, upsert: false,
+      contentType: "video/mp4",
       cacheControl: "max-age=3600", metadata: ["key": "value"])
   }
 
@@ -253,6 +254,116 @@ struct ResumableStoreTests {
     #expect(try store.records() == [good])
     #expect(FileManager.default.fileExists(atPath: unreadable.path))
     #expect(throws: (any Error).self) { try store.record(fingerprint: .repeating("2")) }
+  }
+
+  @Test(arguments: ["../outside.mp4", "../../outside.mp4", "a/../../outside.mp4", "./video.mp4"])
+  func aRecordWhosePathLeavesTheContainerIsCorrupt(relativePath: String) throws {
+    _ = try writeFile("outside.mp4")
+    _ = try writeFile("video.mp4", in: container)
+    try store.save(
+      record(fingerprint: .repeating("1"), source: .container(relativePath: relativePath)))
+
+    #expect(try store.record(fingerprint: .repeating("1")) == nil)
+    #expect(!FileManager.default.fileExists(atPath: storeFile(.repeating("1"), "json").path))
+  }
+
+  @Test
+  func aRecordWithAnAbsolutePathIsCorrupt() throws {
+    let outside = try writeFile("outside.mp4")
+    try store.save(
+      record(fingerprint: .repeating("1"), source: .container(relativePath: outside.path)))
+
+    #expect(try store.record(fingerprint: .repeating("1")) == nil)
+    #expect(!FileManager.default.fileExists(atPath: storeFile(.repeating("1"), "json").path))
+  }
+
+  @Test
+  func aRecordWithAnEmptyPathIsCorrupt() throws {
+    try store.save(record(fingerprint: .repeating("1"), source: .container(relativePath: "")))
+
+    #expect(try store.record(fingerprint: .repeating("1")) == nil)
+  }
+
+  @Test
+  func aRecordWhosePathLeavesTheContainerThroughASymbolicLinkIsCorrupt() throws {
+    let outside = root.appendingPathComponent("outside")
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    _ = try writeFile("private.dat", in: outside)
+    try FileManager.default.createSymbolicLink(
+      at: container.appendingPathComponent("linked"), withDestinationURL: outside)
+    try store.save(
+      record(fingerprint: .repeating("1"), source: .container(relativePath: "linked/private.dat")))
+
+    #expect(try store.record(fingerprint: .repeating("1")) == nil)
+    #expect(!FileManager.default.fileExists(atPath: storeFile(.repeating("1"), "json").path))
+  }
+
+  @Test
+  func aFileReachedThroughASymbolicLinkOutOfTheContainerIsCopied() async throws {
+    let outside = root.appendingPathComponent("outside")
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    _ = try writeFile("private.dat", in: outside)
+    try FileManager.default.createSymbolicLink(
+      at: container.appendingPathComponent("linked"), withDestinationURL: outside)
+
+    let source = try await store.prepare(
+      fileURL: container.appendingPathComponent("linked/private.dat"),
+      fingerprint: .repeating("1"))
+
+    #expect(source == .sandboxCopy)
+  }
+
+  @Test
+  func aRecordWithANestedPathInsideTheContainerLoads() throws {
+    let folder = container.appendingPathComponent("Documents/videos")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    _ = try writeFile("video.mp4", in: folder)
+    let good = record(
+      fingerprint: .repeating("1"), source: .container(relativePath: "Documents/videos/video.mp4"))
+    try store.save(good)
+
+    #expect(try store.record(fingerprint: .repeating("1")) == good)
+  }
+
+  @Test(arguments: [
+    (chunkSize: Int64(0), lastKnownOffset: Int64(0)),
+    (chunkSize: -1, lastKnownOffset: 0),
+    (chunkSize: 8, lastKnownOffset: -1),
+    (chunkSize: 8, lastKnownOffset: 11),
+  ])
+  func aRecordWithAnImpossibleChunkSizeOrOffsetIsCorrupt(chunkSize: Int64, lastKnownOffset: Int64)
+    throws
+  {
+    _ = try writeFile("video.mp4", in: container)
+    try store.save(
+      record(
+        fingerprint: .repeating("1"), source: .container(relativePath: "video.mp4"),
+        lastKnownOffset: lastKnownOffset, chunkSize: chunkSize))
+
+    #expect(try store.record(fingerprint: .repeating("1")) == nil)
+    #expect(!FileManager.default.fileExists(atPath: storeFile(.repeating("1"), "json").path))
+  }
+
+  @Test
+  func aRecordWithANegativeSizeIsCorrupt() throws {
+    _ = try writeFile("video.mp4", in: container)
+    try store.save(
+      record(
+        fingerprint: .repeating("1"), source: .container(relativePath: "video.mp4"),
+        totalBytes: -1))
+
+    #expect(try store.record(fingerprint: .repeating("1")) == nil)
+  }
+
+  @Test
+  func aRecordAtItsLastByteLoads() throws {
+    _ = try writeFile("video.mp4", in: container)
+    let good = record(
+      fingerprint: .repeating("1"), source: .container(relativePath: "video.mp4"),
+      lastKnownOffset: 10)
+    try store.save(good)
+
+    #expect(try store.record(fingerprint: .repeating("1")) == good)
   }
 
   @Test
