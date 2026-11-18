@@ -72,6 +72,12 @@ The session lands in storage and the client emits one auth event. A view that fo
 Pass only URLs that reach your own callback. A URL with tokens (`#access_token=…`) signs in the
 account that the tokens belong to, and anyone who can make your app open a URL can send one.
 
+> Warning: ``AuthClient/verifyOTP(tokenHash:type:)`` and
+> ``AuthClient/verifyOTP(email:token:type:)`` work the same way. They sign in the account that owns
+> the token hash or the code, and nothing ties it to a sign-in that your app started. So a link
+> that an attacker sends can sign your app in to the attacker's account. When the app holds a
+> session already, ask the user to confirm before a redirect or a verification replaces it.
+
 ### Route auth URLs apart from other links
 
 When the app also opens other deep links, ask the client first with

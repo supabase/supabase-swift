@@ -883,6 +883,10 @@ public final class AuthClient: Sendable {
   /// no pending flow. Anyone who can make your app open a URL can sign it in to their own account
   /// this way. Pass only URLs that reach your own callback.
   ///
+  /// > Warning: The same is true of a token hash or a one-time code that you pass to
+  /// > ``verifyOTP(tokenHash:type:)`` or ``verifyOTP(email:token:type:)``. Before a redirect or a
+  /// > verification replaces a session that the app holds, ask the user to confirm.
+  ///
   /// The same URL can arrive more than once, for example from both a scene delegate and
   /// `onOpenURL`. A redelivery returns the same result, or throws the same error, and sends no
   /// request. That includes a transport error: to retry the exchange after one, call
@@ -1305,6 +1309,11 @@ public final class AuthClient: Sendable {
   /// email change returns ``VerifyOTPResult/emailChangePending(message:)``, with no session and no
   /// event.
   ///
+  /// > Warning: The call signs in the account that owns the code, and replaces the session that
+  /// > the client holds. Nothing ties the code to a sign-in that this app started. Someone can
+  /// > send your user their own email address and code, and so sign the app in to their account.
+  /// > When a user is signed in already, ask them to confirm before you call this method.
+  ///
   /// - Parameters:
   ///   - email: The email address that got the code.
   ///   - token: The code from the email.
@@ -1353,6 +1362,12 @@ public final class AuthClient: Sendable {
   ///
   /// Use it when your email template links to your own page with `{{ .TokenHash }}`. The client
   /// emits the same events as ``verifyOTP(email:token:type:)``.
+  ///
+  /// > Warning: The call signs in the account that owns the token hash, and replaces the session
+  /// > that the client holds. Nothing ties the link to a sign-in that this app started. Anyone who
+  /// > can make your app open a link can send one for their own account, and so sign the app in
+  /// > to that account. When a user is signed in already, ask them to confirm before you call
+  /// > this method.
   ///
   /// - Parameters:
   ///   - tokenHash: The token hash from the link.

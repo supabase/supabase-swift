@@ -75,10 +75,12 @@ Changes that still compile but behave differently. Check each one by hand.
   means only that no session is stored. Search for `.sessionMissing`. To send the user back to
   sign-in, react to the `.signedOut` event (see the next entry on refresh failures).
 - **The stored session has a new format.** The first read after the upgrade rewrites the stored
-  session in a versioned format with snake_case keys and ISO 8601 dates, and moves a session
-  stored under the old `supabase.session` key to the configured key. v2 cannot read the new
-  format, so going back to v2 signs users out. Code that reads the session JSON from your
-  `AuthStorage` directly must read the new format.
+  session in a versioned format with snake_case keys, and moves a session stored under the old
+  `supabase.session` key to the configured key. Dates are numbers, not ISO 8601 strings.
+  `expires_at` is seconds since 1970. Every other date, such as `received_at` and the user's
+  `created_at`, is seconds since 2001-01-01 00:00:00 UTC, the value that `Date` stores. v2 cannot
+  read the new format, so going back to v2 signs users out. Code that reads the session JSON from
+  your `AuthStorage` directly must read the new format.
 - **Storage errors surface.** When `storage` throws while the client saves or removes the
   session, the call that changed the session (a sign-in, `refreshSession`, `signOut`) throws that
   error and the session stays as it was. v2 logged the error and went on. When the read at launch
