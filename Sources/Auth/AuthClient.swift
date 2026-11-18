@@ -1690,15 +1690,25 @@ public final class AuthClient: Sendable {
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
   ///
-  /// When the identity belongs to the signed-in user, the client removes it from
-  /// ``currentUser`` and emits ``AuthEvent/userUpdated``.
+  /// When the identity belongs to the signed-in user, the client then fetches that user from the
+  /// server, stores it in ``currentUser``, and emits ``AuthEvent/userUpdated``. The server can
+  /// change more than the identities, such as the providers, the email, or the phone.
   ///
-  /// - Throws: ``AuthError`` when the request fails or no session is stored.
+  /// When that fetch or its storage fails, the method still returns: the identity is already
+  /// unlinked. ``currentUser`` then keeps the old user until the next refresh or user update.
+  ///
+  /// - Throws: ``AuthError`` when the unlink request fails or no session is stored.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
-    // The response carries no user, so the store drops the identity from the held one.
-    try await sessionStore.commit(
-      .identityUnlinked(identity.id, userID: identity.userID))
+    guard currentUser?.id == identity.userID else { return }
+    // A failure here must not report a failed unlink: the server already deleted the identity.
+    let fetchedUser = try? await api.authorizedExecute { accessToken in
+      var request = authAPI.user(accessToken: accessToken)
+      request.retriesServerFailures = false
+      return request
+    }
+    guard let user = fetchedUser, user.id == identity.userID else { return }
+    try? await sessionStore.commit(.userUpdated(user, event: .userUpdated))
   }
 
   /// Sends a password reset email.

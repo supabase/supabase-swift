@@ -237,9 +237,11 @@ Changes that still compile but behave differently. Check each one by hand.
   email change (`updateUser(_:redirectTo:)` with an email, or `resend(type: .emailChange)`) follows the
   `verifyOTP` rule above. Search for `.signedIn`
   handlers that expect these flows.
-- **`unlinkIdentity` updates the user.** It removes the identity from `currentUser`, and its
-  provider from `appMetadata["providers"]` when no other identity uses it. Then it emits
-  `.userUpdated`. v2 emitted nothing and kept the identity in `currentUser`.
+- **`unlinkIdentity` updates the user.** After the unlink, it fetches the user from the server,
+  stores it in `currentUser`, and emits `.userUpdated`. That user comes from the server, so its
+  identities, `appMetadata["providers"]`, `email`, and `phone` match it. When that fetch fails, the call
+  still succeeds and `currentUser` keeps the old user. v2 emitted nothing and kept the identity in
+  `currentUser`.
 - **No email or phone is `nil`.** `User.email` and `User.phone` are `nil`, not `""`, when the
   user has none. Search for `email == ""`, `phone == ""`, `email?.isEmpty`, and `phone?.isEmpty`.
 - **No MFA factors is `[]`.** `User.factors` is `[]`, not `nil`, when the user has no factors.

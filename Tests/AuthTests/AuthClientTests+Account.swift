@@ -351,10 +351,16 @@ extension AuthClientTests {
   }
 
   @Test
-  func unlinkIdentityEmitsUserUpdatedWithoutTheIdentity() async throws {
+  func unlinkIdentityStoresTheUserFromTheServer() async throws {
     let identities = try #require(Session.valid.user.identities)
     let unlinked = identities[0]
+    var serverUser = Session.valid.user
+    serverUser.identities = Array(identities.dropFirst())
+    serverUser.appMetadata["providers"] = ["github"]
+    serverUser.phone = nil
     transport.stub(.delete, "user/identities/\(unlinked.id.uuidString)", data: Data("{}".utf8))
+    let response = try AuthClient.Configuration.jsonEncoder.encode(serverUser)
+    transport.stub(.get, "user", data: response)
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
@@ -364,7 +370,55 @@ extension AuthClientTests {
       expectedEvents: [.initialSession, .userUpdated]
     )
 
-    expectNoDifference(sut.currentUser?.identities, Array(identities.dropFirst()))
+    expectNoDifference(
+      sut.currentUser, try AuthClient.Configuration.jsonDecoder.decode(User.self, from: response))
+    expectNoDifference(sut.currentSession?.accessToken, Session.valid.accessToken)
+    expectNoDifference(
+      transport.requests.map { "\($0.head.method) \($0.head.url?.path ?? "")" },
+      [
+        "DELETE /auth/v1/user/identities/\(unlinked.id.uuidString)",
+        "GET /auth/v1/user",
+      ]
+    )
+  }
+
+  @Test
+  func unlinkIdentityKeepsTheUserWhenTheRefetchFails() async throws {
+    let unlinked = try #require(Session.valid.user.identities?.first)
+    transport.stub(.delete, "user/identities/\(unlinked.id.uuidString)", data: Data("{}".utf8))
+    transport.stub(
+      .get, "user", status: .internalServerError,
+      data: Data(#"{"code":500,"msg":"Internal error"}"#.utf8))
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: { try await sut.unlinkIdentity(unlinked) },
+      expectedEvents: [.initialSession]
+    )
+
+    expectNoDifference(sut.currentUser, Session.valid.user)
+    #expect(transport.requests(.get, "user").count == 1)
+  }
+
+  @Test
+  func unlinkIdentityIgnoresAFetchedUserWithAnotherID() async throws {
+    let unlinked = try #require(Session.valid.user.identities?.first)
+    var otherUser = Session.valid.user
+    otherUser.id = UUID()
+    transport.stub(.delete, "user/identities/\(unlinked.id.uuidString)", data: Data("{}".utf8))
+    transport.stub(.get, "user", data: try AuthClient.Configuration.jsonEncoder.encode(otherUser))
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: { try await sut.unlinkIdentity(unlinked) },
+      expectedEvents: [.initialSession]
+    )
+
+    expectNoDifference(sut.currentUser, Session.valid.user)
   }
 
   @Test
@@ -382,6 +436,7 @@ extension AuthClientTests {
     )
 
     expectNoDifference(sut.currentUser, Session.valid.user)
+    #expect(transport.requests(.get, "user").isEmpty)
   }
 
   @Test
