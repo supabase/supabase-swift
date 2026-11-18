@@ -51,7 +51,7 @@ public struct FunctionMacro: ExtensionMacro {
     let properties = declaration.postgrestStoredProperties()
 
     var body: [String] = [
-      "  \(access)static let functionName = \"\(arguments.name)\"",
+      "  \(access)static let functionName = \"\(postgrestEscaped(arguments.name))\"",
       "  \(access)typealias Schema = \(schema)",
     ]
     // The arguments encode under their database names: `@Column` first, snake_case otherwise,

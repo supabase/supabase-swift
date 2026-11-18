@@ -190,13 +190,23 @@ struct StorageErrorTests {
   func plainTextBodyBecomesTheMessageWithoutACode() {
     let error = StorageAPI.serverError(
       HTTPResponse(status: .conflict, headerFields: [.contentType: "text/plain; charset=utf-8"]),
-      body: Data("The resource already exists\n".utf8))
+      body: Data("Upload-Offset conflict\n".utf8))
 
     #expect(error.kind == .server)
-    #expect(error.message == "The resource already exists")
+    #expect(error.message == "Upload-Offset conflict")
     #expect(error.code == nil)
     #expect(error.serverError?.statusCode == 409)
-    #expect(error.serverError?.message == "The resource already exists")
+    #expect(error.serverError?.message == "Upload-Offset conflict")
+  }
+
+  @Test
+  func plainTextDuplicateGetsKeyAlreadyExists() {
+    let error = StorageAPI.serverError(
+      HTTPResponse(status: .conflict, headerFields: [.contentType: "text/plain; charset=utf-8"]),
+      body: Data("The resource already exists\n".utf8))
+
+    #expect(error.code == .keyAlreadyExists)
+    #expect(error.message == "The resource already exists")
   }
 
   @Test

@@ -75,10 +75,12 @@ Changes that still compile but behave differently. Check each one by hand.
   means only that no session is stored. Search for `.sessionMissing`. To send the user back to
   sign-in, react to the `.signedOut` event (see the next entry on refresh failures).
 - **The stored session has a new format.** The first read after the upgrade rewrites the stored
-  session in a versioned format with snake_case keys and ISO 8601 dates, and moves a session
-  stored under the old `supabase.session` key to the configured key. v2 cannot read the new
-  format, so going back to v2 signs users out. Code that reads the session JSON from your
-  `AuthStorage` directly must read the new format.
+  session in a versioned format with snake_case keys, and moves a session stored under the old
+  `supabase.session` key to the configured key. Dates are numbers, not ISO 8601 strings.
+  `expires_at` is seconds since 1970. Every other date, such as `received_at` and the user's
+  `created_at`, is seconds since 2001-01-01 00:00:00 UTC, the value that `Date` stores. v2 cannot
+  read the new format, so going back to v2 signs users out. Code that reads the session JSON from
+  your `AuthStorage` directly must read the new format.
 - **Storage errors surface.** When `storage` throws while the client saves or removes the
   session, the call that changed the session (a sign-in, `refreshSession`, `signOut`) throws that
   error and the session stays as it was. v2 logged the error and went on. When the read at launch
@@ -185,10 +187,16 @@ Changes that still compile but behave differently. Check each one by hand.
   to start again.
 - **`handleRedirect(_:)` ignores URLs that are not auth redirects.** v2's `session(from:)` threw
   for them. v3 returns `nil`. Search for `catch` blocks that showed an "invalid URL" message.
-- **A redirect with tokens signs in without a pending flow.** `handleRedirect(_:)` accepts a URL
-  with implicit tokens (`#access_token=…`), as email links without PKCE and `generateLink` send.
-  It signs in the account that the tokens belong to, whoever made the URL. Pass only URLs that
-  reach your own callback, so another app or a web page cannot sign the user in to its account.
+- **A redirect with tokens throws by default.** `handleRedirect(_:)` throws an `AuthError` of kind
+  `.oauthFlowFailed` for a URL with implicit tokens (`#access_token=…`) and stores nothing. The
+  client's own flows use PKCE and get a code. Invites, `generateLink`, and email links that
+  another client or a v2 build requested send tokens. To accept them,
+  set `acceptsImplicitTokens: true` on `AuthClient.Configuration` or
+  `SupabaseClient.Configuration.Auth`. The URL then signs in the account that the tokens belong
+  to, whoever made it, so pass only URLs that reach your own callback.
+- **An OAuth callback must reach the redirect URL.** `signInWithOAuth`, `signInWithSSO` and
+  `linkIdentity` throw `.oauthFlowFailed` when the presenter returns a URL whose scheme, host,
+  port or path differs from the redirect URL. A custom presenter must return the callback URL.
 - **The same redirect URL is handled once.** A second delivery of a URL (a scene delegate and
   `onOpenURL` both fire) returns the first result and sends no request. v2 sent the code again and
   failed.
@@ -361,7 +369,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `SupabaseClient.Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
-| `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:logger:http:autoRefresh:...)` | `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:autoRefresh:observesAppLifecycle:initialRefreshTimeout:http:logger:clock:now:)`; `AuthClient.configuration` is public |
+| `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:logger:http:autoRefresh:...)` | `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:autoRefresh:observesAppLifecycle:initialRefreshTimeout:http:logger:retryEnabled:)`; `AuthClient.configuration` is public |
 | `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`, every `factorId:` | `UUID` (was `String`); the labels are `factorID:` |
 | `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `MFAChallenge.id`, `challengeID:`: `UUID` (was `String`) |
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
@@ -569,8 +577,9 @@ the page and throws `CancellationError` too. On tvOS, the system cannot close th
 call throws and the page stays until the user dismisses it. A new page cannot open before then.
 
 An HTTPS `redirectTo`, a universal link, works on iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1,
-and watchOS 10.4 and later. It needs the `webcredentials:` associated domain for the host of the
-redirect URL. Only one page can be open at a time.
+and watchOS 10.4 and later. On older systems the presenters throw `.oauthFlowFailed` for it; use a
+custom scheme there. It needs the `webcredentials:` associated domain for the host of the redirect
+URL. Only one page can be open at a time.
 
 ## `linkIdentity` shows the page and returns a session
 
@@ -710,9 +719,11 @@ only the last few redirects of the running process, so do not rely on it across 
 
 ## `flowType` is removed
 
-v3 always uses PKCE for the flows it starts, and `handleRedirect(_:)` reads the flow from the URL,
-so email links and implicit tokens still work. Remove `flowType:` from `AuthClient`,
-`AuthClient.Configuration` and `SupabaseClientOptions.AuthOptions`.
+v3 always uses PKCE for the flows it starts, so their links carry a code. `handleRedirect(_:)`
+refuses implicit tokens unless you set `acceptsImplicitTokens`. Remove `flowType:` from
+`AuthClient`, `AuthClient.Configuration` and `SupabaseClientOptions.AuthOptions`. Set
+`acceptsImplicitTokens: true` only if your app gets token links from outside its own flows: invites,
+`generateLink`, or links that another client or a v2 build requested.
 
 ```swift
 // v2

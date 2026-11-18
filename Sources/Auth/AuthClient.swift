@@ -785,6 +785,15 @@ public final class AuthClient: Sendable {
       throw error
     }
 
+    if let redirectURL, !AuthRedirect.url(callback, reaches: redirectURL) {
+      await removeFlow(flow.id)
+      throw AuthError.oauthFlowFailed(
+        """
+        The callback URL does not reach the flow's redirect URL. Check that the redirect URL is in \
+        the project's allowed redirect URLs: the server sends the Site URL instead of one that is not.
+        """)
+    }
+
     // The page is closed, so no other code can come back for this flow. Only an exchange that may
     // not have reached the server keeps it, so a retry can still finish it.
     let result: RedirectResult?
@@ -879,9 +888,14 @@ public final class AuthClient: Sendable {
   /// earlier email can still finish its own flow. The server may have made that link invalid
   /// already, for example when a later email went to the same user.
   ///
-  /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to, with
-  /// no pending flow. Anyone who can make your app open a URL can sign it in to their own account
-  /// this way. Pass only URLs that reach your own callback.
+  /// A URL with tokens (`#access_token=…`) throws, unless
+  /// ``Configuration/acceptsImplicitTokens`` is `true`. Then it signs in the account
+  /// that the tokens belong to, with no pending flow. Anyone who can make your app open a URL can
+  /// sign it in to their own account this way. Pass only URLs that reach your own callback.
+  ///
+  /// > Warning: The same is true of a token hash or a one-time code that you pass to
+  /// > ``verifyOTP(tokenHash:type:)`` or ``verifyOTP(email:token:type:)``. Before a redirect or a
+  /// > verification replaces a session that the app holds, ask the user to confirm.
   ///
   /// The same URL can arrive more than once, for example from both a scene delegate and
   /// `onOpenURL`. A redelivery returns the same result, or throws the same error, and sends no
@@ -899,7 +913,8 @@ public final class AuthClient: Sendable {
   /// - Parameter url: The URL that opened the app.
   /// - Returns: `nil` when `url` is not an auth redirect, else what the redirect did.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the URL
-  ///   reports an error or no pending flow matches its code, or the error of the request.
+  ///   reports an error, no pending flow matches its code, or it carries tokens that
+  ///   ``Configuration/acceptsImplicitTokens`` refuses. Else the error of the request.
   ///   `CancellationError` when ``signOut(scope:)`` finished while the redirect was handled; the
   ///   client then stores nothing.
   @discardableResult
@@ -1006,6 +1021,13 @@ public final class AuthClient: Sendable {
       }
 
     case .implicit(let tokens, let type):
+      guard configuration.acceptsImplicitTokens else {
+        throw AuthError.oauthFlowFailed(
+          """
+          The URL carries tokens, and Configuration.acceptsImplicitTokens is false. The client's own \
+          flows return a code. Set acceptsImplicitTokens to accept token links from other flows.
+          """)
+      }
       return try await dependencies.redirectDeduplicator.value(for: tokens.accessToken) { [self] in
         let session = try await signIn(with: tokens, type: type, signOuts: started)
         return .signedIn(session, verification: type)
@@ -1305,6 +1327,11 @@ public final class AuthClient: Sendable {
   /// email change returns ``VerifyOTPResult/emailChangePending(message:)``, with no session and no
   /// event.
   ///
+  /// > Warning: The call signs in the account that owns the code, and replaces the session that
+  /// > the client holds. Nothing ties the code to a sign-in that this app started. Someone can
+  /// > send your user their own email address and code, and so sign the app in to their account.
+  /// > When a user is signed in already, ask them to confirm before you call this method.
+  ///
   /// - Parameters:
   ///   - email: The email address that got the code.
   ///   - token: The code from the email.
@@ -1353,6 +1380,12 @@ public final class AuthClient: Sendable {
   ///
   /// Use it when your email template links to your own page with `{{ .TokenHash }}`. The client
   /// emits the same events as ``verifyOTP(email:token:type:)``.
+  ///
+  /// > Warning: The call signs in the account that owns the token hash, and replaces the session
+  /// > that the client holds. Nothing ties the link to a sign-in that this app started. Anyone who
+  /// > can make your app open a link can send one for their own account, and so sign the app in
+  /// > to that account. When a user is signed in already, ask them to confirm before you call
+  /// > this method.
   ///
   /// - Parameters:
   ///   - tokenHash: The token hash from the link.

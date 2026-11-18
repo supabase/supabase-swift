@@ -29,7 +29,7 @@ struct ObjectListingIntegrationTests {
 
     var pages: [ObjectPage] = []
     for try await page in bucket.objects(
-      prefix: "2026/", options: ObjectListingOptions(pageSize: 2)
+      prefix: "2026/", options: ObjectListingOptions(pageSize: 2, delimited: true)
     ).pages {
       pages.append(page)
     }
@@ -47,7 +47,7 @@ struct ObjectListingIntegrationTests {
 
     var names: [String] = []
     for try await object in bucket.objects(
-      prefix: "2026", options: ObjectListingOptions(pageSize: 2, delimited: false))
+      prefix: "2026", options: ObjectListingOptions(pageSize: 2))
     {
       names.append(object.name)
     }

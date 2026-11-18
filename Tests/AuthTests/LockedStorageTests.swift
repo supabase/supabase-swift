@@ -4,7 +4,7 @@ import IssueReporting
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 @Suite
 struct LockedStorageTests {
@@ -246,17 +246,18 @@ struct LockedStorageTests {
     var platform = AuthPlatform.live
     platform.hasBackgroundState = true
     platform.lifecycleEvents = { lifecycle }
+    var configuration = AuthClient.Configuration(
+      url: clientURL,
+      storageKey: key,
+      storage: storage,
+      autoRefresh: .automatic,
+      observesAppLifecycle: observesAppLifecycle,
+      http: HTTPClientConfiguration(transport: world.http)
+    )
+    configuration.clock = world.clock
+    configuration.now = world.now
     return AuthClient(
-      configuration: AuthClient.Configuration(
-        url: clientURL,
-        storageKey: key,
-        storage: storage,
-        autoRefresh: .automatic,
-        observesAppLifecycle: observesAppLifecycle,
-        http: HTTPClientConfiguration(transport: world.http),
-        clock: world.clock,
-        now: world.now
-      ),
+      configuration: configuration,
       pkce: .live,
       platform: platform
     )

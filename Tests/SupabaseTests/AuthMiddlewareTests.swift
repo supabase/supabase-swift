@@ -7,8 +7,8 @@ import Logging
 import TestHelpers
 import Testing
 
-@testable import Auth
-@testable import Supabase
+@_spi(Testing) @testable import Auth
+@_spi(Testing) @testable import Supabase
 
 @Suite(.timeLimit(.minutes(1)))
 struct AuthMiddlewareTests {
@@ -287,6 +287,10 @@ struct AuthMiddlewareTests {
   @Test
   func aRetriedRequestIsSignedWithTheSessionCurrentAtThatAttempt() async throws {
     let http = RecordingTransport()
+    var global = SupabaseClient.Configuration.Global(
+      http: .init(transport: http)
+    )
+    global.clock = ImmediateClock()
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
@@ -296,8 +300,7 @@ struct AuthMiddlewareTests {
           storageKey: "sb-test-\(UUID().uuidString)-auth-token",
           autoRefresh: .manual
         ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: http), clock: ImmediateClock())
+        global: global
       )
     )
     http.respond(when: { $0.path == "/auth/v1/token?grant_type=password" }) { _, _ in

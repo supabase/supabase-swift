@@ -61,7 +61,7 @@ public struct PostgrestClient: Sendable {
   ///
   /// ### Creating Configuration
   ///
-  /// - ``init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:clock:)``
+  /// - ``init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:)``
   ///
   /// ### Configuration Properties
   ///
@@ -73,7 +73,6 @@ public struct PostgrestClient: Sendable {
   /// - ``encoder``
   /// - ``decoder``
   /// - ``retryEnabled``
-  /// - ``clock``
   public struct Configuration: Sendable {
     /// The base URL of the PostgREST endpoint.
     public var url: URL
@@ -120,9 +119,9 @@ public struct PostgrestClient: Sendable {
     /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
     /// can override this per call.
     ///
-    /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
-    /// always uses a fixed `JSONEncoder.supabase()`, so a key strategy here cannot change the
-    /// column names it derives from `CodingKeys`.
+    /// The typed API (`from(_:)` with a relation type, and `rpc(_:)` with a function type) uses
+    /// this encoder too, with one change: it ignores `keyEncodingStrategy`. The typed API takes
+    /// column names from `CodingKeys`, and a key strategy would rename them.
     public var encoder: JSONEncoder
 
     /// The `JSONDecoder` used to deserialize response bodies.
@@ -134,9 +133,9 @@ public struct PostgrestClient: Sendable {
     /// can override this per call. Never used to decode ``PostgrestError/ServerError`` — that
     /// always uses a fixed internal decoder, decoupled from this setting.
     ///
-    /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
-    /// always uses a fixed `JSONDecoder.supabase()`, so a key strategy here cannot change the
-    /// column names it derives from `CodingKeys`.
+    /// The typed API (`from(_:)` with a relation type, and `rpc(_:)` with a function type) uses
+    /// this decoder too, with one change: it ignores `keyDecodingStrategy`. The typed API takes
+    /// column names from `CodingKeys`, and a key strategy would rename them.
     public var decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.
@@ -165,7 +164,10 @@ public struct PostgrestClient: Sendable {
     /// tests instead of waiting out real seconds. `TestClock` comes from
     /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
     /// yourself, as this package does not export it.
-    public var clock: any Clock<Duration>
+    ///
+    /// A test hook: import PostgREST with `@_spi(Testing)`, and set it on the configuration before
+    /// you create the client.
+    @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
 
     /// Creates a new ``Configuration``.
     ///
@@ -180,7 +182,6 @@ public struct PostgrestClient: Sendable {
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to a new
     ///     `JSONDecoder.supabase()`.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
-    ///   - clock: The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
     public init(
       url: URL,
       schema: String? = nil,
@@ -189,8 +190,7 @@ public struct PostgrestClient: Sendable {
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
       encoder: JSONEncoder = .supabase(),
       decoder: JSONDecoder = .supabase(),
-      retryEnabled: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock()
+      retryEnabled: Bool = true
     ) {
       self.url = url
       self.schema = schema
@@ -200,7 +200,6 @@ public struct PostgrestClient: Sendable {
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
-      self.clock = clock
     }
   }
 
@@ -274,14 +273,7 @@ public struct PostgrestClient: Sendable {
     var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      guard let arguments = Self.queryItems(forJSONObject: bodyData) else {
-        throw PostgrestError(
-          kind: .invalidRequest,
-          message: "Params should be a key-value type when using `GET` or `HEAD` options."
-        )
-      }
-
-      request.leadingQuery.append(contentsOf: arguments)
+      request.leadingQuery.append(contentsOf: try Self.queryArguments(forJSONObject: bodyData))
     } else if !(params is NoParams) {
       request.body = bodyData
     }
@@ -336,6 +328,20 @@ public struct PostgrestClient: Sendable {
     var configuration = configuration
     configuration.schema = schema
     return PostgrestClient(checkedConfiguration: configuration)
+  }
+
+  /// The arguments of a `GET` or `HEAD` function call, as ``queryItems(forJSONObject:)`` renders
+  /// them. The typed and untyped calls share it, so both reject the same arguments the same way.
+  ///
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `body` is not a JSON object.
+  static func queryArguments(forJSONObject body: Data) throws -> [URLQueryItem] {
+    guard let arguments = queryItems(forJSONObject: body) else {
+      throw PostgrestError(
+        kind: .invalidRequest,
+        message: "Params should be a key-value type when using `GET` or `HEAD` options."
+      )
+    }
+    return arguments
   }
 
   /// The arguments in `body`, one query item per key in key order, or `nil` when `body` is not a

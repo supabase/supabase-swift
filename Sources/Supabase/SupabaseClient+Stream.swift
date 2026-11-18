@@ -132,7 +132,11 @@ extension SupabaseClient {
     return LiveQuerySource(
       signals: signals,
       primaryKey: R.primaryKeyColumns,
-      decode: { try $0.decode(as: R.self) },
+      // The fetch decodes with the database decoder, so the change rows must too.
+      decode: {
+        try $0.decode(
+          as: R.self, decoder: realtime.configuration.typedRowDecoder?.ignoringKeyStrategy())
+      },
       subscribe: { try await channel.subscribe() },
       fetch: { try await Self.fetchAllPages(firstPage) },
       finish: { await realtime.removeChannel(channel) }

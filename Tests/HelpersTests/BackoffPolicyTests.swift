@@ -7,7 +7,7 @@
 
 import Testing
 
-@testable import Realtime
+import Helpers
 
 @Suite
 struct BackoffPolicyTests {
@@ -40,5 +40,15 @@ struct BackoffPolicyTests {
 
     #expect(policy.delay(forAttempt: 0, random: { $0.upperBound }) == .seconds(1))
     #expect(policy.delay(forAttempt: -3, random: { $0.upperBound }) == .seconds(1))
+  }
+
+  @Test
+  func defaultRandomSpreadsInsideTheWindow() {
+    let policy = BackoffPolicy.fullJitter(base: .seconds(1), cap: .seconds(30))
+    let delays = (0..<200).map { _ in policy.delay(forAttempt: 3) }
+
+    #expect(delays.allSatisfy { (Duration.zero...(.seconds(4))).contains($0) })
+    #expect(delays.contains { $0 < .seconds(2) })
+    #expect(delays.contains { $0 > .seconds(2) })
   }
 }

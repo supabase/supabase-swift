@@ -399,6 +399,10 @@ called from the main actor stays on the main actor. Move heavy decoding off it w
 
 Changes that still compile but behave differently. Check each one by hand.
 
+- **`handleRedirect(_:)` refuses implicit tokens.** A URL with `#access_token=…` throws an
+  `AuthError` of kind `.oauthFlowFailed` unless `Configuration.Auth.acceptsImplicitTokens` is
+  `true`. Set it if your app gets token links from invites, `generateLink`, or another client. See
+  [Auth.md](docs/migrations/v3/Auth.md).
 - **Your `Authorization` header wins.** PostgREST, Storage and Functions set `Authorization`
   only when the request does not have one. In v2, the session token replaced a header that you
   set with `setHeader`. Search for `Authorization` set on a builder, a Storage `setHeader`, or
@@ -410,18 +414,25 @@ Changes that still compile but behave differently. Check each one by hand.
   In v2 the request went out with the API key. Only a missing session still falls back to the key.
   A refresh the server rejects gives an `AuthError` of kind `.sessionInvalidated` in
   `underlyingError`.
-- **Realtime uses the global logger when you pass none.** `SupabaseClient` keeps a `logger`
-  you set in `SupabaseClient.Configuration.Realtime`. With `nil`, the default, it uses
-  `Configuration.Global.logger`.
 - **Auth events do not build the Realtime client.** `SupabaseClient` pushes a new token only to
   a Realtime client that already exists. A client built later fetches the current token itself.
 - **Realtime gets the token after every session change.** `SupabaseClient` pushes the access
   token whenever it differs from the last one it pushed, whatever the event was. In v2 only
   `.initialSession`, `.signedIn`, `.tokenRefreshed` and `.signedOut` did. After `mfa.verify` or
   `linkIdentity(idToken:)`, channels now use the new token instead of the old one. `.signedOut` resets Realtime to the API key.
-- **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
-  for certificate pinning), pass `SupabaseClient.Configuration.Realtime(webSocketTransport:)` a
-  `URLSessionWebSocketTransport` built from the session.
+- **Realtime uses the API key when there is no user.** With no session, or when your
+  `Configuration.Auth.accessToken` closure returns `nil`, channel joins and `httpSend` use the API
+  key. A standalone `RealtimeClient` whose `accessToken` callback returns `nil` clears the old
+  user's token; see the `accessToken` entry in [Realtime.md](docs/migrations/v3/Realtime.md#silent-changes).
+- **Realtime gets the global `URLSession` delegate, not the session.** When
+  `Configuration.Global.http` uses a `URLSessionTransport` whose session has a delegate, and you set no `webSocketTransport`, the WebSocket uses a
+  `URLSessionWebSocketTransport` built from that session's configuration and delegate. It calls
+  the delegate on the session's `delegateQueue`. So certificate pinning covers the WebSocket
+  upgrade. The WebSocket also gets the rest of that configuration, for example its timeouts and
+  proxy settings, but not its `httpAdditionalHeaders`, which can break the upgrade on iOS. A custom `ClientTransport` hides its
+  session: Realtime then logs a warning and uses the default transport. In that case, pass
+  `SupabaseClient.Configuration.Realtime(webSocketTransport:)` a `URLSessionWebSocketTransport`
+  built from the session.
 - **`supabase.functions` is cached.** Each access returns the same client. The default
   `Configuration.Functions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).
 
@@ -435,6 +446,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `SupabaseClientOptions.AuthOptions`, `GlobalOptions`, `FunctionsOptions`, `StorageOptions` | `SupabaseClient.Configuration.Auth`, `.Global`, `.Functions`, `.Storage` |
 | `SupabaseClientOptions(realtime: RealtimeClientOptions)` | `SupabaseClient.Configuration.Realtime`; no `accessToken` |
 | `RealtimeClientOptions(handleAppLifecycle:)` | `Configuration.Realtime(observesAppLifecycle:)` |
+| `RealtimeClientOptions(logger:)`, `RealtimeClientOptions(fetch:)` in `SupabaseClientOptions` | removed; use `Configuration.Global.logger` and `Configuration.Global.http`; see [One `http` and one `logger`](#one-http-and-one-logger-for-every-sub-client) |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
 | `supabase.realtimeV2` | `supabase.realtime`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.channel(_:options:)`, `supabase.channels` | `await supabase.channel(_:configure:)`, `await supabase.channels`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
@@ -482,9 +494,9 @@ let client = try SupabaseClient(supabaseURL: url, supabaseKey: key, configuratio
 
 ### `GlobalOptions.session` is removed
 
-Configure the `URLSession` on the transport. One `http` value covers every sub-client.
-`Configuration.Auth` also gains `http`, `logger` and `clock` to override the global value for Auth
-alone; `nil` means the global value.
+Configure the `URLSession` on the transport. One `http` value covers every sub-client; see
+[One `http` and one `logger`](#one-http-and-one-logger-for-every-sub-client) to change one
+sub-client only.
 
 ```swift
 // v2
@@ -502,10 +514,38 @@ configuration: .init(
 )
 ```
 
+### One `http` and one `logger` for every sub-client
+
+`SupabaseClient.Configuration` has one `http` and one `logger`, in `Global`. The module groups
+have no `http`, `logger` or `clock`. To change the HTTP behavior of one sub-client, branch on the
+request path in a middleware or a transport: `/auth/v1`, `/rest/v1`, `/storage/v1`,
+`/functions/v1` or `/realtime/v1`. To filter the logs of one sub-client, read the `system`
+metadata key (`auth`, `postgrest`, `storage`, `functions`, `realtime`) in your `LogHandler`.
+For a longer timeout on one call, use `PostgrestRequestBuilder.timeout(_:)` or
+`FunctionInvokeOptions.timeout`.
+
+```swift
+// v2
+options: .init(realtime: RealtimeClientOptions(logger: realtimeLogger))
+
+// v3: one swift-log `Logger` for every sub-client. `SystemFilter` is a `LogHandler` that keeps
+// only the entries whose `system` metadata is "realtime"; the article below shows it in full.
+var configuration = SupabaseClient.Configuration()
+configuration.global.logger = Logger(label: "io.supabase") { label in
+  SystemFilter(system: "realtime", base: StreamLogHandler.standardOutput(label: label))
+}
+```
+
+The "Configuring One Module" article in the Supabase documentation has a complete middleware
+and transport for one sub-client, and a `LogHandler` that keeps the logs of one sub-client.
+
+The clock the SDK sleeps on is a test hook. Import Supabase with `@_spi(Testing)` and set
+`configuration.global.clock`.
+
 ### `Configuration.Functions` takes a `FunctionRegion`
 
 The `String?` initializer is removed. A string literal still compiles; a `String` variable needs
-a conversion. `Configuration.Functions` also gains `http` and `logger`; `nil` means the global value.
+a conversion.
 
 ```swift
 // v2

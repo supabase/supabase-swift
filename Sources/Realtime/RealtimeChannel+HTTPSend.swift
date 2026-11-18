@@ -107,9 +107,9 @@ extension RealtimeChannel {
         timeout ?? client.configuration.requestTimeout, clock: client.clock
       ) { [headers] in
         var headers = headers
-        if let accessToken = try await client.httpSendAccessToken() {
-          headers[.authorization] = "Bearer \(accessToken)"
-        }
+        // Without a token, an `Authorization` from `headers` goes too: it may hold the token of
+        // a user who signed out, and the server falls back to `apikey`.
+        headers[.authorization] = try await client.httpSendAccessToken().map { "Bearer \($0)" }
         let request = HTTPRequest(method: .post, url: url, headerFields: headers)
         return try await client.http.send(request, body: body)
       }

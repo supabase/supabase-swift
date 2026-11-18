@@ -2,7 +2,7 @@ import Foundation
 import Logging
 import Testing
 
-@testable import PostgREST
+@_spi(Testing) @testable import PostgREST
 
 @Suite
 struct PostgrestClientConfigurationTests {
@@ -46,7 +46,11 @@ struct PostgrestClientConfigurationTests {
 
   @Test
   func schemaKeepsTheClock() throws {
-    let client = try PostgrestClient(configuration: .init(url: url, clock: SuspendingClock()))
+    var configuration = PostgrestClient.Configuration(
+      url: url
+    )
+    configuration.clock = SuspendingClock()
+    let client = try PostgrestClient(configuration: configuration)
 
     let scoped = client.schema("other")
 

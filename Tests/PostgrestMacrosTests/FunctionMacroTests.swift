@@ -70,6 +70,48 @@ struct FunctionMacroTests {
     }
   }
 
+  /// The name is a database identifier, so it can hold anything. It must come out as the same
+  /// string, never as an interpolation or the end of the literal.
+  @Test
+  func aNameWithAQuoteABackslashOrAnInterpolationRoundTrips() {
+    assertMacro {
+      #"""
+      @Function(#"x\(exit(0))"y\z"#)
+      struct Hostile {}
+      """#
+    } expansion: {
+      #"""
+      struct Hostile {}
+
+      nonisolated extension Hostile {
+        static let functionName = "x\\(exit(0))\"y\\z"
+
+        typealias Schema = PostgREST._PublicSchema
+      }
+      """#
+    }
+  }
+
+  @Test
+  func aNameWithANewlineStaysOnOneLine() {
+    assertMacro {
+      #"""
+      @Function("line\nbreak")
+      struct Multiline {}
+      """#
+    } expansion: {
+      #"""
+      struct Multiline {}
+
+      nonisolated extension Multiline {
+        static let functionName = "line\nbreak"
+
+        typealias Schema = PostgREST._PublicSchema
+      }
+      """#
+    }
+  }
+
   @Test
   func rejectsAClass() {
     assertMacro {

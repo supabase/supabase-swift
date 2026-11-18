@@ -7,7 +7,6 @@
 
 import Foundation
 import Helpers
-import IssueReporting
 
 /// A database function and its arguments, called through `rpc/<name>`.
 ///
@@ -59,19 +58,15 @@ public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
   ///
   /// The arguments are the JSON object the function encodes to, rendered one query item per key
   /// exactly as the untyped `rpc(_:params:get:)` renders them.
-  public func readOnly() -> Self {
+  ///
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when the function does not encode as
+  ///   a JSON object, as the untyped `rpc(_:params:get:)` does. `@Function` always encodes an
+  ///   object, so only a hand-written conformance can throw. Nothing is sent.
+  public func readOnly() throws -> Self {
+    // `rpc(_:)` always sets a body, so a call without one is already read-only.
+    guard let body = request.body else { return self }
+    let arguments = try PostgrestClient.queryArguments(forJSONObject: body)
     var copy = self
-    guard
-      let body = request.body,
-      let arguments = PostgrestClient.queryItems(forJSONObject: body)
-    else {
-      // `@Function` always encodes an object. A hand-written conformance that does not cannot be
-      // sent as query items, so the call stays a `POST` rather than losing its arguments.
-      reportIssue(
-        "\(request.relation) does not encode as a JSON object, so readOnly() cannot render its arguments."
-      )
-      return copy
-    }
     copy.request.method = .get
     copy.request.body = nil
     copy.request.leadingQuery = arguments
@@ -85,8 +80,8 @@ extension _PostgrestFunctionQuery where Result: Decodable {
   /// - Throws: ``PostgrestError`` when the request fails or the response cannot be decoded.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Result> {
-    try await request.execute(on: client) {
-      try PostgrestClient.Configuration.jsonDecoder.decode(Result.self, from: $0)
+    try await request.execute(on: client) { [client] in
+      try client.configuration.typedDecoder.decode(Result.self, from: $0)
     }
   }
 }
@@ -144,7 +139,7 @@ extension PostgrestClient {
   {
     let client = scoped(toDeclaredSchema: F.Schema.name)
     var request = client.makeRequest("rpc/\(F.functionName)", method: .post)
-    request.body = try PostgrestClient.Configuration.jsonEncoder.encodeRequestBody(function)
+    request.body = try client.configuration.typedEncoder.encodeRequestBody(function)
     return _PostgrestFunctionQuery(client: client, request: request)
   }
 

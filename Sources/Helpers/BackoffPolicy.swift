@@ -1,11 +1,11 @@
 //
 //  BackoffPolicy.swift
-//  Realtime
+//  Helpers
 //
 //  Created by Guilherme Souza on 06/10/26.
 //
 
-/// How long to wait before the n-th retry of a connect or a rejoin.
+/// How long to wait before the n-th retry: HTTP retries, Realtime connects and rejoins.
 package struct BackoffPolicy: Sendable, Hashable {
   private enum Strategy: Hashable {
     case fullJitter(base: Duration, cap: Duration)

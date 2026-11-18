@@ -180,9 +180,9 @@ struct StorageRequests: Sendable {
     options: UploadOptions
   ) throws -> StorageRequest {
     var headers = try uploadHeaders(key: key, options: options)
-    if method == .post {
-      headers[.xUpsert] = "\(options.upsert)"
-    } else if options.upsert {
+    if method == .post, let upsert = options.upsert {
+      headers[.xUpsert] = "\(upsert)"
+    } else if method != .post, options.upsert == true {
       reportIssue(
         "UploadOptions.upsert has no effect on update(path:): PUT always replaces the object.")
     }
@@ -237,7 +237,9 @@ struct StorageRequests: Sendable {
     headers[.tusResumable] = Self.tusVersion
     headers[.uploadLength] = "\(length)"
     headers[.uploadMetadata] = try tusMetadata(bucket: bucket, key: key, options: options)
-    headers[.xUpsert] = "\(options.upsert)"
+    if let upsert = options.upsert {
+      headers[.xUpsert] = "\(upsert)"
+    }
     if firstChunk != nil {
       headers[.contentType] = Self.tusContentType
     }
@@ -247,28 +249,76 @@ struct StorageRequests: Sendable {
       body: firstChunk.map { HTTPBody($0) })
   }
 
-  func tusOffset(of uploadURL: URL) -> StorageRequest {
+  func tusOffset(of uploadURL: URL, upsert: Bool?) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(
-        method: .head, url: uploadURL, headerFields: [.tusResumable: Self.tusVersion]))
+        method: .head, url: uploadURL, headerFields: tusFollowUpHeaders(upsert: upsert)))
   }
 
-  func tusAppend(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL) -> StorageRequest {
-    StorageRequest(
-      head: HTTPRequest(
-        method: .patch, url: uploadURL,
-        headerFields: [
-          .tusResumable: Self.tusVersion,
-          .contentType: Self.tusContentType,
-          .uploadOffset: "\(offset)",
-        ]),
-      body: chunk)
+  func tusAppend(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL, upsert: Bool?)
+    -> StorageRequest
+  {
+    var headers = tusFollowUpHeaders(upsert: upsert)
+    headers[.contentType] = Self.tusContentType
+    headers[.uploadOffset] = "\(offset)"
+    return StorageRequest(
+      head: HTTPRequest(method: .patch, url: uploadURL, headerFields: headers), body: chunk)
   }
 
-  func tusTerminate(_ uploadURL: URL) -> StorageRequest {
+  func tusTerminate(_ uploadURL: URL, upsert: Bool?) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(
-        method: .delete, url: uploadURL, headerFields: [.tusResumable: Self.tusVersion]))
+        method: .delete, url: uploadURL, headerFields: tusFollowUpHeaders(upsert: upsert)))
+  }
+
+  /// Storage checks `x-upsert` on every tus request, not only on creation: a `PATCH` or `DELETE`
+  /// without it over an existing object answers `409 The resource already exists`. Each one
+  /// sends the same value as ``tusCreate(bucket:key:length:options:firstChunk:)``.
+  private func tusFollowUpHeaders(upsert: Bool?) -> HTTPFields {
+    var headers: HTTPFields = [.tusResumable: Self.tusVersion]
+    if let upsert {
+      headers[.xUpsert] = "\(upsert)"
+    }
+    return headers
+  }
+
+  /// The upload URL for the resolved `Location` of a tus creation: its path and query on the
+  /// origin of the tus endpoint, or `nil` when the path is not an upload under
+  /// `upload/resumable/`.
+  ///
+  /// The origin is replaced rather than checked, since storage-api builds `Location` from
+  /// `X-Forwarded-Host`, and the hosted gateway sets that to the project host when the request
+  /// came in on a custom domain. So the access token never goes to a host the client was not
+  /// configured with.
+  func tusUploadURL(location: URL) -> URL? {
+    guard let source = URLComponents(url: location, resolvingAgainstBaseURL: true) else {
+      return nil
+    }
+    var components = resumableBase
+    components.percentEncodedPath = source.percentEncodedPath
+    components.percentEncodedQuery = source.percentEncodedQuery
+    guard let url = components.url, isTusUploadURL(url) else { return nil }
+    return url
+  }
+
+  /// Whether `url` is an upload under the tus endpoint, on its scheme, host and port. The
+  /// project host counts as the storage host, as ``StorageAPI/storageHost(_:)`` maps it.
+  func isTusUploadURL(_ url: URL) -> Bool {
+    guard let canonical = try? StorageAPI.storageHost(url),
+      let components = URLComponents(url: canonical, resolvingAgainstBaseURL: false),
+      components.user == nil, components.password == nil,
+      components.scheme?.lowercased() == resumableBase.scheme?.lowercased(),
+      components.host?.lowercased() == resumableBase.host?.lowercased(),
+      Self.effectivePort(of: components) == Self.effectivePort(of: resumableBase)
+    else { return false }
+    let prefix = resumableBase.percentEncodedPath + "/upload/resumable/"
+    return components.percentEncodedPath.hasPrefix(prefix)
+      && components.percentEncodedPath.count > prefix.count
+      && !components.path.split(separator: "/").contains { $0 == "." || $0 == ".." }
+  }
+
+  private static func effectivePort(of components: URLComponents) -> Int? {
+    components.port ?? ["http": 80, "https": 443][components.scheme?.lowercased() ?? ""]
   }
 
   private func tusMetadata(bucket: String, key: ObjectKey, options: UploadOptions) throws
@@ -433,29 +483,31 @@ struct StorageRequests: Sendable {
 
   private struct SortBody: Encodable {
     let column: String
-    let order: SortOrder
+    let order: SortOrder?
   }
 
   private struct ListBody: Encodable {
     let prefix: String
-    let limit: Int
-    let offset: Int
-    let sortBy: SortBody
+    let limit: Int?
+    let offset: Int?
+    let sortBy: SortBody?
     let search: String?
     let exactMatch: Bool?
     let noncurrentVersions: String?
     let deleteMarkers: String?
   }
 
-  /// Sends the server defaults for the fields the caller left `nil`, so a sort column without an
-  /// order (or the reverse) keeps the other half.
+  /// Leaves out the fields the caller left `nil`, so Storage applies its own defaults. Storage
+  /// rejects a `sortBy` without a column, so an order alone goes with the `name` column.
   func list(bucket: String, prefix: ObjectKey, options: ListOptions) throws -> StorageRequest {
+    let sortBy =
+      options.sortBy == nil && options.order == nil
+      ? nil : SortBody(column: (options.sortBy ?? .name).rawValue, order: options.order)
     let body = ListBody(
       prefix: prefix.path,
-      limit: options.limit ?? 100,
-      offset: options.offset ?? 0,
-      sortBy: SortBody(
-        column: (options.sortBy ?? .name).rawValue, order: options.order ?? .ascending),
+      limit: options.limit,
+      offset: options.offset,
+      sortBy: sortBy,
       search: options.search,
       exactMatch: options.exactMatch,
       noncurrentVersions: options.versions?.rawValue,
@@ -469,7 +521,7 @@ struct StorageRequests: Sendable {
     let prefix: String
     let limit: Int?
     let cursor: String?
-    let withDelimiter: Bool
+    let withDelimiter: Bool?
     let sortBy: SortBody?
     let exactMatch: Bool?
     let noncurrentVersions: String?

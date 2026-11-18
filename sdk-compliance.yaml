@@ -50,16 +50,12 @@ supporting_symbols:
   - JSONDecoder.supabase
   - JSONEncoder.supabase
 
-  # The injected clock is a testability seam shared across Auth's token auto-refresh, the
-  # request-retry backoff of Auth, PostgREST and Storage, and Realtime's heartbeat timer and
-  # reconnect backoff, rather than a capability any one feature implements. `SupabaseClient`
-  # forwards `Configuration.Global.clock`, or a module's own `clock` when set, to each sub-client,
-  # so these symbols spell the same knob at different layers.
+  # The injected clock is an `@_spi(Testing)` testability seam shared across Auth's token
+  # auto-refresh, the request-retry backoff of Auth, PostgREST and Storage, and Realtime's heartbeat
+  # timer and reconnect backoff, rather than a capability any one feature implements.
+  # `SupabaseClient` forwards `Configuration.Global.clock` to each sub-client, so these symbols
+  # spell the same knob at different layers.
   - SupabaseClient.Configuration.Global.clock
-  - SupabaseClient.Configuration.Auth.clock
-  - SupabaseClient.Configuration.Database.clock
-  - SupabaseClient.Configuration.Storage.clock
-  - SupabaseClient.Configuration.Realtime.clock
   - AuthClient.Configuration.clock
   - AuthClient.Configuration.now
   - RealtimeClient.Configuration.clock
@@ -69,12 +65,6 @@ supporting_symbols:
   - AuthClient.Configuration.redirectTo
   - Session.receivedAt
   - Session.encode
-  # A per-module logger override on the facade, mirroring `Configuration.Global.logger`; a logging
-  # knob, not a capability.
-  - SupabaseClient.Configuration.Functions.logger
-  - SupabaseClient.Configuration.Auth.logger
-  - SupabaseClient.Configuration.Database.logger
-  - SupabaseClient.Configuration.Storage.logger
 
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
@@ -592,8 +582,6 @@ supporting_symbols:
   - SupabaseClient.Configuration.Realtime.monitorsNetworkPath
   - SupabaseClient.Configuration.Realtime.serverLogLevel
   - SupabaseClient.Configuration.Realtime.webSocketTransport
-  - SupabaseClient.Configuration.Realtime.http
-  - SupabaseClient.Configuration.Realtime.logger
   - SupabaseClient.Configuration.Realtime.init
   - SupabaseClient.Configuration.init
 
@@ -1450,12 +1438,14 @@ features:
       - AuthClient.events
   client.authentication_integration.session_url_detection:
     status: implemented
-    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. A URL is an auth redirect only when its scheme, host, port, and path match the configured redirect URL or the redirectTo of a pending flow; the client then detects the flow from the URL's contents, returns nil for any other URL, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) (async, reads the pending flows) checks a URL with the same rule without handling it."
+    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. A URL is an auth redirect only when its scheme, host, port, and path match the configured redirect URL or the redirectTo of a pending flow; the client then detects the flow from the URL's contents, returns nil for any other URL, and replays the first result for a repeated delivery. A URL with implicit tokens (#access_token=...) throws oauthFlowFailed and stores nothing unless AuthClient.Configuration.acceptsImplicitTokens (default false) is set, matching supabase-js with flowType pkce. AuthClient.isAuthRedirect(_:) (async, reads the pending flows) checks a URL with the same rule without handling it."
     symbols:
       - SupabaseClient.handleRedirect
       - AuthClient.handleRedirect
       - AuthClient.isAuthRedirect
     supporting_symbols:
+      - AuthClient.Configuration.acceptsImplicitTokens
+      - SupabaseClient.Configuration.Auth.acceptsImplicitTokens
       - RedirectResult
       - RedirectResult.signedIn
       - RedirectResult.emailChangePending
@@ -1502,10 +1492,6 @@ features:
       - AuthClient.Configuration.http
       - PostgrestClient.Configuration.http
       - StorageClient.Configuration.http
-      - SupabaseClient.Configuration.Functions.http
-      - SupabaseClient.Configuration.Auth.http
-      - SupabaseClient.Configuration.Database.http
-      - SupabaseClient.Configuration.Storage.http
     supporting_symbols:
       - HTTPClientConfiguration
       - HTTPClientConfiguration.init

@@ -68,9 +68,10 @@ let urgent = try await supabase.from(Todo.self)
   .value
 ```
 
-The typed API always uses the SDK's default JSON coders. A key strategy in
-``PostgrestClient/Configuration/encoder`` or ``PostgrestClient/Configuration/decoder`` applies
-to the untyped builders only.
+The typed API uses ``PostgrestClient/Configuration/encoder`` and
+``PostgrestClient/Configuration/decoder``, the same as the untyped builders. So a custom date
+strategy applies to both. The one exception is the key strategy: the typed API ignores it,
+because column names come from the type's `CodingKeys` and a key strategy would rename them.
 
 ### Errors
 

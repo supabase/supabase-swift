@@ -32,6 +32,8 @@ struct RealtimeCore {
     var rejoinDelay: (_ attempt: Int) -> Duration
     /// The `version` a join sends: the client's `X-Client-Info` header.
     var version: String? = nil
+    /// The client's `apikey` header. Joined channels get it in place of a cleared token.
+    var apiKey: String? = nil
     /// Whether the client still registers a channel, read when the last channel record goes. A
     /// channel that never subscribed has no record, but it keeps the connection open.
     var hasRegisteredChannels: () -> Bool = { false }
@@ -77,7 +79,10 @@ struct RealtimeCore {
     case frame(RealtimeMessage)
     case binaryBroadcast(DecodedBroadcast)
     case timerFired(TimerID)
+    /// The `accessToken` callback returned. `nil` means no signed-in user.
     case tokenFetched(token: String?, generation: Int)
+    /// The `accessToken` callback threw or did not return in time.
+    case tokenFetchFailed(generation: Int)
     case waiterCancelled(WaiterID)
   }
 
@@ -113,9 +118,9 @@ struct RealtimeCore {
     /// End every stream of a channel.
     case finishChannel(ChannelID)
     /// Call the `accessToken` callback and apply `.tokenFetched` with `generation`, which is
-    /// unique to this fetch. The shell applies it once, also after `cancelAllTasks`: with `nil`
-    /// when the call fails or is cancelled. Until then, no other fetch starts and no waiting
-    /// channel joins. A `.tokenFetched` with any other generation is ignored.
+    /// unique to this fetch. The shell applies it, or `.tokenFetchFailed` when the call fails, is
+    /// cancelled, or times out, once, also after `cancelAllTasks`. Until then, no other fetch
+    /// starts and no waiting channel joins. A result with any other generation is ignored.
     case fetchAccessToken(generation: Int)
 
     /// Connections compare by identity, and errors with `isSameFailure(as:)`.
@@ -285,7 +290,9 @@ struct RealtimeCore {
     case .setAuth(let token):
       return setAuth(token)
     case .tokenFetched(let token, let generation):
-      return tokenFetched(token, generation: generation)
+      return tokenFetched(.returned(token), generation: generation)
+    case .tokenFetchFailed(let generation):
+      return tokenFetched(.failed, generation: generation)
     case .timerFired(.tokenRefresh):
       return tokenRefreshTimerFired()
 

@@ -39,6 +39,7 @@ of them conform to `SupabaseError`.
 ### Essentials
 
 - <doc:GettingStarted>
+- <doc:ConfiguringOneModule>
 - <doc:TestingWithAStubTransport>
 - <doc:EnumsAndOpenSets>
 - <doc:MigratingToV3>

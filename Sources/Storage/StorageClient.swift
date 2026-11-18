@@ -30,7 +30,7 @@ extension StorageClient {
   ///
   /// ### Creating a configuration
   ///
-  /// - ``init(url:headers:usesNewHostname:http:logger:retryEnabled:clock:)``
+  /// - ``init(url:headers:usesNewHostname:http:logger:retryEnabled:)``
   ///
   /// ### Configuration properties
   ///
@@ -40,7 +40,6 @@ extension StorageClient {
   /// - ``http``
   /// - ``logger``
   /// - ``retryEnabled``
-  /// - ``clock``
   public struct Configuration: Sendable {
     /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
     public var url: URL
@@ -87,7 +86,10 @@ extension StorageClient {
     /// tests instead of waiting out real seconds. `TestClock` comes from
     /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
     /// yourself, as this package does not export it.
-    public var clock: any Clock<Duration>
+    ///
+    /// A test hook: import Storage with `@_spi(Testing)`, and set it on the configuration before
+    /// you create the client.
+    @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
 
     /// Creates a configuration.
     ///
@@ -100,15 +102,13 @@ extension StorageClient {
     ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed
     ///     by `SwiftLogNoOpLogHandler` to disable logging entirely.
     ///   - retryEnabled: Whether transient failures of reads are retried.
-    ///   - clock: The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
     public init(
       url: URL,
       headers: HTTPFields = [:],
       usesNewHostname: Bool = false,
       http: HTTPClientConfiguration = .init(),
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
-      retryEnabled: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock()
+      retryEnabled: Bool = true
     ) {
       self.url = url
       self.headers = headers
@@ -116,7 +116,6 @@ extension StorageClient {
       self.http = http
       self.logger = logger
       self.retryEnabled = retryEnabled
-      self.clock = clock
     }
   }
 }

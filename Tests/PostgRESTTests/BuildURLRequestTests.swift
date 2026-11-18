@@ -294,7 +294,7 @@ struct BuildURLRequestTests {
   private func send(
     _ build: (PostgrestClient) throws -> any PostgrestExecutableBuilder
   ) async throws {
-    let encoder = PostgrestClient.Configuration.jsonEncoder
+    let encoder = JSONEncoder.supabase()
     encoder.outputFormatting = .sortedKeys
 
     let client = try PostgrestClient(

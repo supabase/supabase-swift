@@ -12,7 +12,7 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
-@testable import Storage
+@_spi(Testing) @testable import Storage
 
 @Suite
 struct StorageAPITests {

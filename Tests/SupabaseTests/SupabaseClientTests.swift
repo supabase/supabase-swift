@@ -10,10 +10,10 @@ import SnapshotTestingCustomDump
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 @testable import Functions
-@testable import Realtime
-@_spi(Experimental) @testable import Supabase
+@_spi(Testing) @testable import Realtime
+@_spi(Experimental) @_spi(Testing) @testable import Supabase
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -31,14 +31,45 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func typedRealtimeRowsDecodeWithTheDatabaseDecoderButNoKeyStrategy() async throws {
+    struct Row: Decodable {
+      var dueDate: Date
+
+      enum CodingKeys: String, CodingKey {
+        case dueDate = "due_date"
+      }
+    }
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        database: SupabaseClient.Configuration.Database(decoder: decoder),
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
+      )
+    )
+
+    #expect(client.realtime.configuration.typedRowDecoder === decoder)
+    let channel = await client.realtime.channel("rows")
+    let rowDecoder = try #require(channel.typedRowDecoder)
+    let row = try rowDecoder.decode(Row.self, from: Data(#"{"due_date":1000}"#.utf8))
+    #expect(row.dueDate == Date(timeIntervalSince1970: 1_000))
+  }
+
+  @Test
   func globalClockReachesEverySubClientThatWaits() throws {
     let clock = TestClock()
+    var global = SupabaseClient.Configuration.Global()
+    global.clock = clock
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
         auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
-        global: SupabaseClient.Configuration.Global(clock: clock)
+        global: global
       )
     )
 
@@ -307,7 +338,7 @@ struct SupabaseClientTests {
           storage: localStorage,
           autoRefresh: .manual
         ),
-        realtime: SupabaseClient.Configuration.Realtime(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: ClosureTransport { _, _ in throw URLError(.cancelled) }))
       )
     )
@@ -365,6 +396,96 @@ struct SupabaseClientTests {
       clientWithoutRealtimeTransport.realtime.transport is URLSessionWebSocketTransport,
       "the HTTP transport's URLSession must not leak into Realtime's WebSocket"
     )
+  }
+
+  @Test
+  func realtimeWebSocketUsesTheGlobalSessionDelegate() throws {
+    let delegate = PinningDelegate()
+    let sessionConfiguration = URLSessionConfiguration.ephemeral
+    sessionConfiguration.timeoutIntervalForRequest = 42
+    sessionConfiguration.httpAdditionalHeaders = ["X-App": "demo"]
+    let session = URLSession(
+      configuration: sessionConfiguration, delegate: delegate, delegateQueue: nil)
+    defer { session.invalidateAndCancel() }
+    let recorder = LogRecorder()
+
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
+        ),
+        global: SupabaseClient.Configuration.Global(
+          http: .init(transport: URLSessionTransport(session: session)),
+          logger: recorder.makeLogger()
+        )
+      )
+    )
+
+    let transport = try #require(client.realtime.transport as? URLSessionWebSocketTransport)
+    #expect(transport.delegate === delegate)
+    #expect(transport.delegateQueue === session.delegateQueue)
+    #expect(transport.configuration.timeoutIntervalForRequest == 42)
+    #expect(transport.configuration.httpAdditionalHeaders == nil)
+    #expect(!recorder.entries.contains { $0.contains("WebSocket") })
+  }
+
+  @Test
+  func realtimeWarnsOnceWhenACustomTransportHidesTheSessionDelegate() throws {
+    let session = URLSession(
+      configuration: .ephemeral, delegate: PinningDelegate(), delegateQueue: nil)
+    defer { session.invalidateAndCancel() }
+    let recorder = LogRecorder()
+
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
+        ),
+        global: SupabaseClient.Configuration.Global(
+          http: .init(transport: WrappingTransport(wrapped: URLSessionTransport(session: session))),
+          logger: recorder.makeLogger()
+        )
+      )
+    )
+
+    let transport = try #require(client.realtime.transport as? URLSessionWebSocketTransport)
+    _ = client.realtime
+    #expect(transport.delegate == nil)
+    #expect(recorder.entries.filter { $0.contains("webSocketTransport") }.count == 1)
+  }
+
+  @Test
+  func realtimeDoesNotWarnWhenItHasItsOwnWebSocketTransport() throws {
+    let recorder = LogRecorder()
+    let realtimeTransport = MarkerWebSocketTransport()
+    let session = URLSession(
+      configuration: .ephemeral, delegate: PinningDelegate(), delegateQueue: nil)
+    defer { session.invalidateAndCancel() }
+
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
+        ),
+        global: SupabaseClient.Configuration.Global(
+          http: .init(transport: URLSessionTransport(session: session)),
+          logger: recorder.makeLogger()
+        ),
+        realtime: SupabaseClient.Configuration.Realtime(webSocketTransport: realtimeTransport)
+      )
+    )
+
+    #expect(client.realtime.transport as AnyObject === realtimeTransport)
+    #expect(!recorder.entries.contains { $0.contains("webSocketTransport") })
   }
 
   @Test
@@ -683,50 +804,17 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsHTTPOverridesTheGlobalTransport() async throws {
-    let globalSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
-    let functionsSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      configuration: SupabaseClient.Configuration(
-        auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
-        global: .init(
-          http: .init(
-            transport: ClosureTransport { request, _ in
-              globalSeen.withValue { $0.append(request) }
-              return (HTTPTypes.HTTPResponse(status: .ok), nil)
-            },
-            middlewares: [TagMiddleware()])),
-        functions: .init(
-          http: .init(
-            transport: ClosureTransport { request, _ in
-              functionsSeen.withValue { $0.append(request) }
-              return (HTTPTypes.HTTPResponse(status: .ok), nil)
-            }))
-      )
-    )
-
-    try await client.functions.invoke("hello")
-
-    #expect(globalSeen.value.isEmpty)
-    let request = try #require(functionsSeen.value.first)
-    #expect(request.headerFields[.tag] == "yes")
-  }
-
-  @Test
-  func functionsLoggerIsNotOverwrittenByTheGlobalLogger() throws {
+  func functionsUsesTheGlobalLogger() throws {
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage()),
-        global: .init(logger: Logging.Logger(label: "global")),
-        functions: .init(logger: Logging.Logger(label: "functions"))
+        global: .init(logger: Logging.Logger(label: "global"))
       )
     )
 
-    #expect(client.functions.configuration.logger.label == "functions")
+    #expect(client.functions.configuration.logger.label == "global")
   }
 
   @Test
@@ -807,7 +895,7 @@ struct SupabaseClientTests {
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        realtime: SupabaseClient.Configuration.Realtime(http: .init(middlewares: [TagMiddleware()]))
+        global: SupabaseClient.Configuration.Global(http: .init(middlewares: [TagMiddleware()]))
       )
     )
 
@@ -851,18 +939,17 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeLoggerIsNotOverwrittenByTheGlobalLogger() throws {
+  func realtimeUsesTheGlobalLogger() throws {
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
-        global: .init(logger: Logging.Logger(label: "global")),
-        realtime: SupabaseClient.Configuration.Realtime(logger: Logging.Logger(label: "realtime"))
+        global: .init(logger: Logging.Logger(label: "global"))
       )
     )
 
-    #expect(client.realtime.logger.label == "realtime")
+    #expect(client.realtime.logger.label == "global")
     #expect(client.realtime.logger[metadataKey: "system"] == "realtime")
   }
 
@@ -931,6 +1018,18 @@ private func authorization(
 
 extension HTTPField.Name {
   fileprivate static let tag = HTTPField.Name("X-Tag")!
+}
+
+private final class PinningDelegate: NSObject, URLSessionDelegate {}
+
+private struct WrappingTransport: ClientTransport {
+  let wrapped: URLSessionTransport
+
+  func send(_ request: HTTPTypes.HTTPRequest, body: HTTPBody?) async throws -> (
+    HTTPTypes.HTTPResponse, HTTPBody?
+  ) {
+    try await wrapped.send(request, body: body)
+  }
 }
 
 private final class MarkerWebSocketTransport: WebSocketTransport {

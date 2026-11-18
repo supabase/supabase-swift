@@ -22,8 +22,9 @@
   ///
   /// An HTTPS redirect URL, like `https://example.com/auth/callback`, is a universal link. The
   /// presenter listens for it on iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1, and watchOS 10.4
-  /// and later. Before those versions, it listens for the scheme `https`, which the system does
-  /// not accept. To use a universal link, add the `webcredentials:` associated domain for the
+  /// and later. Before those versions, it throws an error of kind
+  /// ``AuthError/Kind-swift.struct/oauthFlowFailed``, so use a custom scheme there. To use a
+  /// universal link, add the `webcredentials:` associated domain for the
   /// host of the redirect URL to your app, and host the matching `apple-app-site-association`
   /// file there.
   ///
@@ -69,13 +70,15 @@
     ///
     /// - Throws: `CancellationError` when the user cancels or the task is cancelled. An error of
     ///   kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when `redirectURL` is `nil` or has
-    ///   no scheme, or when another page is open. Else the error of the session.
+    ///   no scheme, when it is an HTTPS URL that the system cannot listen for (before iOS 17.4,
+    ///   macOS 14.4, tvOS 17.4, visionOS 1.1, and watchOS 10.4) or that has no host, or when
+    ///   another page is open. Else the error of the session.
     @MainActor
     public func authenticate(url: URL, redirectURL: URL?) async throws -> URL {
       try await authenticate(
         url: url,
-        callback: redirectURL.flatMap {
-          Self.callback(for: $0, httpsCallbacksAvailable: httpsCallbacksAvailable)
+        callback: try redirectURL.flatMap {
+          try Self.callback(for: $0, httpsCallbacksAvailable: httpsCallbacksAvailable)
         }
       )
     }
@@ -134,15 +137,30 @@
       }
     }
 
-    /// The callback to listen for: the host and path of an HTTPS `redirectURL` where the system
-    /// supports it, else the scheme. `nil` when `redirectURL` has no scheme.
-    static func callback(for redirectURL: URL, httpsCallbacksAvailable: Bool) -> WebAuthCallback? {
+    /// The callback to listen for: the host and path of an HTTPS `redirectURL`, else the scheme.
+    /// `nil` when `redirectURL` has no scheme.
+    ///
+    /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` for an HTTPS
+    ///   `redirectURL` with no host, or where the system cannot listen for a host and path.
+    ///   Listening for the `https` scheme alone would take the first HTTPS page the browser opens
+    ///   as the callback.
+    static func callback(
+      for redirectURL: URL, httpsCallbacksAvailable: Bool
+    ) throws -> WebAuthCallback? {
       guard let scheme = redirectURL.scheme else { return nil }
-      if httpsCallbacksAvailable, scheme.lowercased() == "https", let host = redirectURL.host {
-        let path = redirectURL.path(percentEncoded: false)
-        return .https(host: host, path: path.isEmpty ? "/" : path)
+      guard scheme.lowercased() == "https" else { return .scheme(scheme) }
+      guard let host = redirectURL.host, !host.isEmpty else {
+        throw AuthError.oauthFlowFailed("The HTTPS redirect URL has no host.")
       }
-      return .scheme(scheme)
+      guard httpsCallbacksAvailable else {
+        throw AuthError.oauthFlowFailed(
+          """
+          An HTTPS redirect URL needs iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1, or watchOS \
+          10.4. Use a redirect URL with a custom scheme on older systems.
+          """)
+      }
+      let path = redirectURL.path(percentEncoded: false)
+      return .https(host: host, path: path.isEmpty ? "/" : path)
     }
 
     static let sessionContractViolation =

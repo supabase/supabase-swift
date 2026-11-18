@@ -49,7 +49,7 @@ struct RealtimeCoreTokenTests {
       ])
     #expect(
       harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
-    #expect(harness.core.channels[.room]?.joinAccessToken == "t1")
+    #expect(harness.core.channels[.room]?.sentAccessToken == "t1")
   }
 
   @Test
@@ -89,15 +89,15 @@ struct RealtimeCoreTokenTests {
       ])
   }
 
-  /// Review Focus 4: a callback that throws or returns `nil` keeps the stored token, and the
-  /// joins waiting for it go ahead with that token.
+  /// Review Focus 4: a callback that throws or times out keeps the stored token, and the joins
+  /// waiting for it go ahead with that token.
   @Test
-  func joinsProceedWithStoredTokenWhenFetchReturnsNil() throws {
+  func joinsProceedWithStoredTokenWhenFetchFails() throws {
     var harness = CoreHarness.connected(options: Self.withProvider, initialToken: "t0")
     _ = harness.send(Self.subscribe(harness.waiter()))
 
     #expect(
-      harness.send(.tokenFetched(token: nil, generation: 1)) == [
+      harness.send(.tokenFetchFailed(generation: 1)) == [
         .send(try Self.join(ref: "1", token: "t0")),
         .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
       ])
@@ -222,13 +222,13 @@ struct RealtimeCoreTokenTests {
     let b = harness.channel()
     let c = harness.channel()
     _ = harness.send(Self.subscribe(harness.waiter(), channel: a, topic: "a"))
-    _ = harness.send(.tokenFetched(token: nil, generation: 1))
+    _ = harness.send(.tokenFetchFailed(generation: 1))
     _ = harness.send(.frame(Self.reply(ref: "1", topic: "a")))
     harness.advance(by: .seconds(5))
     _ = harness.send(Self.subscribe(harness.waiter(), channel: b, topic: "b"))
     harness.advance(by: .seconds(5))
     _ = harness.send(Self.subscribe(harness.waiter(), channel: c, topic: "c"))
-    #expect(harness.core.channels[b]?.joinAccessToken == "t0")
+    #expect(harness.core.channels[b]?.sentAccessToken == "t0")
 
     #expect(
       harness.send(.tokenFetched(token: "t1", generation: 2)) == [
@@ -252,6 +252,83 @@ struct RealtimeCoreTokenTests {
     #expect(harness.send(.setAuth(token: "t1")) == [])
     // No callback: `setAuth()` has nothing to fetch from.
     #expect(harness.send(.setAuth(token: nil)) == [])
+  }
+
+  /// A channel that joined with the API key and then got a user's token before its join reply
+  /// gets the API key again at sign-out: the server may already hold the user's token.
+  @Test
+  func aJoiningChannelGetsItsJoinTokenBackAfterAnotherToken() {
+    var harness = CoreHarness.connected(initialToken: "anon-key")
+    _ = harness.send(Self.subscribe(harness.waiter()))
+    _ = harness.send(.setAuth(token: "user-token"))
+
+    #expect(
+      harness.send(.setAuth(token: "anon-key")) == [
+        .send(Self.accessToken("anon-key", joinRef: "1", ref: "3"))
+      ])
+    #expect(harness.send(.setAuth(token: "anon-key")) == [])
+  }
+
+  // MARK: No signed-in user
+
+  /// SWIFT-V3-004: a `nil` from the callback after a token means no signed-in user. The token
+  /// is cleared, so the next join carries none and the server uses the API key.
+  @Test
+  func aNilTokenAfterATokenClearsIt() throws {
+    var harness = CoreHarness.connected(options: Self.withProvider, initialToken: "t0")
+    _ = harness.send(Self.subscribe(harness.waiter()))
+
+    #expect(
+      harness.send(.tokenFetched(token: nil, generation: 1)) == [
+        .send(try Self.join(ref: "1", token: nil)),
+        .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
+      ])
+    #expect(harness.core.tokens.token == nil)
+    #expect(harness.core.channels[.room]?.sentAccessToken == nil)
+  }
+
+  /// The server ignores an `access_token` push of `null`, so the joined channels get the API key
+  /// in place of the old user's token.
+  @Test
+  func aNilTokenPushesTheAPIKeyToJoinedChannels() {
+    var options = Self.withProvider
+    options.apiKey = "anon-key"
+    var harness = Self.subscribedWithUserToken(options: options)
+
+    #expect(harness.send(.setAuth(token: nil)) == [.fetchAccessToken(generation: 2)])
+    #expect(
+      harness.send(.tokenFetched(token: nil, generation: 2)) == [
+        .send(Self.accessToken("anon-key", joinRef: "1", ref: "2"))
+      ])
+  }
+
+  @Test
+  func aNilTokenWithoutAnAPIKeyPushesNothing() {
+    var harness = Self.subscribedWithUserToken()
+    _ = harness.send(.setAuth(token: nil))
+
+    #expect(harness.send(.tokenFetched(token: nil, generation: 2)) == [])
+    #expect(harness.core.tokens.token == nil)
+  }
+
+  @Test
+  func aNilTokenCancelsTheRefreshPlannedForTheOldToken() {
+    var harness = CoreHarness.connected(options: Self.withProvider)
+    _ = harness.send(.setAuth(token: makeJWT(exp: 3600)))
+    harness.advance(by: .seconds(10))
+    _ = harness.send(.setAuth(token: nil))
+
+    #expect(harness.send(.tokenFetched(token: nil, generation: 2)) == [.cancel(.tokenRefresh)])
+    #expect(harness.core.tokens.expiresAt == nil)
+  }
+
+  @Test
+  func aFailedFetchKeepsTheTokenAndPushesNothing() {
+    var harness = Self.subscribedWithUserToken()
+    _ = harness.send(.setAuth(token: nil))
+
+    #expect(harness.send(.tokenFetchFailed(generation: 2)) == [])
+    #expect(harness.core.tokens.token == "user-token")
   }
 
   @Test
@@ -489,6 +566,17 @@ struct RealtimeCoreTokenTests {
     .subscribe(
       channel: channel, topic: topic, configuration: RealtimeChannelConfiguration(), waiter: waiter,
       snapshot: JoinSnapshot(bindings: [], presenceEnabled: presence))
+  }
+
+  /// A connected harness with a callback, whose channel subscribed with `user-token` 10 seconds
+  /// ago, so the next `setAuth(nil)` calls the callback.
+  static func subscribedWithUserToken(options: RealtimeCore.Options = withProvider) -> CoreHarness {
+    var harness = CoreHarness.connected(options: options)
+    _ = harness.send(Self.subscribe(harness.waiter()))
+    _ = harness.send(.tokenFetched(token: "user-token", generation: 1))
+    _ = harness.send(.frame(Self.reply(ref: "1")))
+    harness.advance(by: .seconds(10))
+    return harness
   }
 
   static func join(ref: Ref, token: String?, topic: String = topic) throws -> RealtimeMessage {

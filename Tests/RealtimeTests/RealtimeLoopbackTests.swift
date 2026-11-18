@@ -11,7 +11,7 @@ import Helpers
 import TestHelpers
 import Testing
 
-@testable import Realtime
+@_spi(Testing) @testable import Realtime
 
 #if canImport(Network) && !os(Linux)
   import Network
