@@ -43,15 +43,6 @@ struct RetryPolicyTests {
     #expect(RetryPolicy.disabled.maxAttempts == 1)
   }
 
-  @Test
-  func backoffIsFullJitterBetweenZeroAndTheCap() {
-    let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(60))
-    for _ in 0..<50 {
-      #expect((Duration.zero...(.seconds(1))).contains(policy.backoffDelay(retry: 1)))
-      #expect((Duration.zero...(.seconds(4))).contains(policy.backoffDelay(retry: 3)))
-    }
-  }
-
   @Test(arguments: [(1, 1.0), (2, 2.0), (3, 4.0), (7, 60.0)])
   func backoffJitterSpansTheWholeWindow(retry: Int, cap: Double) {
     let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(60))

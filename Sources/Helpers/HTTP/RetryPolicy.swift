@@ -78,9 +78,8 @@ extension RetryPolicy {
     retry: Int,
     random: (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
   ) -> Duration {
-    let exponent = min(max(retry - 1, 0), 30)
-    let cap = baseDelay > maxDelay / (1 << exponent) ? maxDelay : baseDelay * (1 << exponent)
-    return cap * random(0...1)
+    BackoffPolicy.fullJitter(base: baseDelay, cap: maxDelay)
+      .delay(forAttempt: retry, random: random)
   }
 
   /// The wait before the `retry`-th retry: `Retry-After` when present and parseable, capped at

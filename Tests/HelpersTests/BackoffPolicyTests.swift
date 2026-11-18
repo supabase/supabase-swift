@@ -7,7 +7,7 @@
 
 import Testing
 
-@testable import Realtime
+import Helpers
 
 @Suite
 struct BackoffPolicyTests {
