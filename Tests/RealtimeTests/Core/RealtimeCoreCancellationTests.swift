@@ -84,30 +84,6 @@ struct RealtimeCoreCancellationTests {
   }
 
   @Test
-  func rollbackWhileWaitingForPostgresLeaves() {
-    var harness = CoreHarness.connected()
-    let w1 = harness.waiter()
-    _ = harness.send(
-      .subscribe(
-        channel: .room, topic: Self.topic, configuration: RealtimeChannelConfiguration(),
-        waiter: w1,
-        snapshot: JoinSnapshot(bindings: [Self.messages], presenceEnabled: false)))
-    _ = harness.send(.frame(Self.reply(ref: "1")))
-    #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .postgres))
-
-    #expect(
-      harness.send(.waiterCancelled(w1)) == [
-        .resume(w1, .cancelled),
-        .send(Self.leave(joinRef: "1", ref: "2")),
-        .publishChannelStatus(.room, .unsubscribed),
-        .cancel(.postgresTimeout(channel: .room, ref: "1")),
-      ])
-    #expect(harness.send(.frame(Self.system(joinRef: "1"))) == [])
-    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
-  }
-
-  @Test
   func rollbackDuringBackoffLeavesTheTimedOutJoin() {
     var harness = CoreHarness.connected()
     let w1 = harness.waiter()
@@ -152,7 +128,7 @@ struct RealtimeCoreCancellationTests {
 
     #expect(harness.send(.waiterCancelled(w1)) == [.resume(w1, .cancelled)])
     #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1))
     #expect(
       harness.send(.frame(Self.reply(ref: "1"))) == [
         .resume(w2, .success),
@@ -191,7 +167,7 @@ struct RealtimeCoreCancellationTests {
 
     #expect(harness.send(.waiterCancelled(w)) == [.resume(w, .cancelled)])
     #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "3", attempt: 1, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "3", attempt: 1))
   }
 
   @Test
@@ -343,13 +319,5 @@ struct RealtimeCoreCancellationTests {
   static func close(joinRef: Ref?) -> RealtimeMessage {
     RealtimeMessage(
       joinRef: joinRef, ref: nil, topic: "realtime:\(topic)", event: "phx_close", payload: [:])
-  }
-
-  static func system(joinRef: Ref?) -> RealtimeMessage {
-    RealtimeMessage(
-      joinRef: joinRef, ref: nil, topic: "realtime:\(topic)", event: "system",
-      payload: [
-        "status": "ok", "extension": "postgres_changes", "message": "Subscribed to PostgreSQL",
-      ])
   }
 }

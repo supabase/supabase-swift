@@ -229,7 +229,7 @@ struct RealtimeCorePushTests {
     _ = harness.send(
       .bindingsChanged(channel: .room, bindings: [messages]))
     #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "4", attempt: 1, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "4", attempt: 1))
 
     let denied = RealtimeError.joinError(
       reason: "Unauthorized: You do not have permissions to read from this Channel topic: room")

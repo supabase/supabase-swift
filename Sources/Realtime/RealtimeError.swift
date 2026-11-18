@@ -485,15 +485,6 @@ extension RealtimeError {
     isRetryable: false
   )
 
-  /// The server did not report "Subscribed to PostgreSQL" within
-  /// ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout``.
-  static let postgresChangesTimeout = RealtimeError(
-    kind: .timeout,
-    message:
-      "The server did not set up the channel's Postgres changes within the subscription timeout.",
-    isRetryable: false
-  )
-
   /// The server could not set up the channel's Postgres changes bindings.
   package static func postgresChangesFailed(reason: String) -> RealtimeError {
     RealtimeError(

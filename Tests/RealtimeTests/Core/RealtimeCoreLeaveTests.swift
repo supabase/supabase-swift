@@ -408,7 +408,7 @@ struct RealtimeCoreLeaveTests {
     }
     // The core rejoins channels in the order of their ids, not of their topics.
     #expect(joins == ["realtime:room", "realtime:other"])
-    #expect(harness.core.channels[.other]?.phase == .joining(ref: "4", attempt: 2, stage: .reply))
+    #expect(harness.core.channels[.other]?.phase == .joining(ref: "4", attempt: 2))
   }
 
   @Test

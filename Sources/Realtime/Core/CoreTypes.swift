@@ -67,7 +67,6 @@ enum TimerID: Hashable, Sendable {
   case idleDisconnect
   case joinTimeout(channel: ChannelID, ref: Ref)
   case rejoin(channel: ChannelID)
-  case postgresTimeout(channel: ChannelID, ref: Ref)
   case leaveTimeout(channel: ChannelID, ref: Ref)
   case pushTimeout(channel: ChannelID, ref: Ref)
 }

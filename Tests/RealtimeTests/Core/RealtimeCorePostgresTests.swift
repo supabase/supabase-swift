@@ -10,8 +10,8 @@ import Testing
 
 @testable import Realtime
 
-/// The Postgres changes transitions of ``RealtimeCore``: the wait for "Subscribed to PostgreSQL"
-/// after the join reply, its failure and timeout, and the rejoin that adds a new binding.
+/// The Postgres changes transitions of ``RealtimeCore``: the join reply that confirms the join,
+/// the `system` messages about the bindings, and the rejoin that adds a new binding.
 @Suite
 struct RealtimeCorePostgresTests {
   typealias Event = RealtimeCore.Event
@@ -23,38 +23,16 @@ struct RealtimeCorePostgresTests {
   static let withMessages = JoinSnapshot(bindings: [messages], presenceEnabled: false)
   static let noStreams = JoinSnapshot(bindings: [], presenceEnabled: false)
 
-  @Test
-  func joinWithBindingsWaitsForPostgresConfirmation() {
-    var harness = CoreHarness.connected()
-    let w = harness.waiter()
-    _ = harness.send(Self.subscribe(w, snapshot: Self.withMessages))
-
-    #expect(
-      harness.send(.frame(Self.reply(ref: "1"))) == [
-        .schedule(.postgresTimeout(channel: .room, ref: "1"), after: .seconds(15)),
-        .cancel(.joinTimeout(channel: .room, ref: "1")),
-      ])
-    #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .postgres))
-
-    #expect(
-      harness.send(.frame(Self.system(joinRef: "1", extension: "postgres_changes"))) == [
-        .resume(w, .success),
-        .publishChannelStatus(.room, .subscribed),
-        .cancel(.postgresTimeout(channel: .room, ref: "1")),
-        .deliver(.room, .event(.postgresChangesReady)),
-      ])
-    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
-  }
-
-  /// Today's rule: the join waits for "Subscribed to PostgreSQL" only when it has bindings and
-  /// the server does not hold the reply until they are set up.
-  @Test
-  func waitForSubscriptionConfirmsOnReply() {
+  /// The join reply `ok` confirms the join, as in realtime-js. With `waitsForSubscription`, the
+  /// server holds that reply until the bindings are set up; without it, it sends it at once.
+  @Test(arguments: [false, true])
+  func joinWithBindingsConfirmsOnReply(waitsForSubscription: Bool) {
     var harness = CoreHarness.connected()
     let w = harness.waiter()
     _ = harness.send(
-      Self.subscribe(w, configuration: Self.serverWaits, snapshot: Self.withMessages))
+      Self.subscribe(
+        w, configuration: Self.configuration(waitsForSubscription: waitsForSubscription),
+        snapshot: Self.withMessages))
 
     #expect(
       harness.send(.frame(Self.reply(ref: "1"))) == [
@@ -62,6 +40,13 @@ struct RealtimeCorePostgresTests {
         .publishChannelStatus(.room, .subscribed),
         .cancel(.joinTimeout(channel: .room, ref: "1")),
       ])
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
+
+    #expect(
+      harness.send(.frame(Self.system(joinRef: "1", extension: "postgres_changes"))) == [
+        .deliver(.room, .event(.postgresChangesReady))
+      ])
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
   }
 
   @Test
@@ -78,48 +63,16 @@ struct RealtimeCorePostgresTests {
       ])
   }
 
-  @Test
-  func postgresFailureLeavesAndFails() {
-    var harness = Self.waitingForPostgres()
-    let failure = RealtimeError.postgresChangesFailed(reason: "boom")
-
-    #expect(
-      harness.send(
-        .frame(Self.system(joinRef: "1", extension: "postgres_changes", error: "boom"))) == [
-          .send(Self.leave(joinRef: "1", ref: "2")),
-          .resume(WaiterID(rawValue: 1), .failure(failure)),
-          .publishChannelStatus(.room, .failed(failure)),
-          .cancel(.postgresTimeout(channel: .room, ref: "1")),
-          .deliver(.room, .event(.postgresChangesFailed("boom"))),
-        ])
-    #expect(harness.core.channels[.room]?.phase == .failed(failure))
-    #expect(harness.send(.timerFired(.postgresTimeout(channel: .room, ref: "1"))) == [])
-  }
-
-  @Test
-  func postgresFailureDuringTheReplyStageLeavesAndFails() {
-    var harness = CoreHarness.connected()
-    let w = harness.waiter()
-    _ = harness.send(Self.subscribe(w, snapshot: Self.withMessages))
-    let failure = RealtimeError.postgresChangesFailed(reason: "boom")
-
-    #expect(
-      harness.send(
-        .frame(Self.system(joinRef: "1", extension: "postgres_changes", error: "boom"))) == [
-          .send(Self.leave(joinRef: "1", ref: "2")),
-          .resume(w, .failure(failure)),
-          .publishChannelStatus(.room, .failed(failure)),
-          .cancel(.joinTimeout(channel: .room, ref: "1")),
-          .deliver(.room, .event(.postgresChangesFailed("boom"))),
-        ])
-  }
-
-  @Test
-  func postgresFailureOnSubscribedChannelOnlyDelivers() {
+  /// The server retries most failures, and realtime-js only passes the message on. The join
+  /// stands, so broadcast and presence keep working.
+  @Test(arguments: [false, true])
+  func postgresFailureOnSubscribedChannelOnlyDelivers(waitsForSubscription: Bool) {
     var harness = CoreHarness.connected()
     _ = harness.send(
       Self.subscribe(
-        harness.waiter(), configuration: Self.serverWaits, snapshot: Self.withMessages))
+        harness.waiter(),
+        configuration: Self.configuration(waitsForSubscription: waitsForSubscription),
+        snapshot: Self.withMessages))
     _ = harness.send(.frame(Self.reply(ref: "1")))
 
     #expect(
@@ -131,48 +84,35 @@ struct RealtimeCorePostgresTests {
   }
 
   @Test
-  func postgresTimeoutLeavesAndFails() {
-    var harness = Self.waitingForPostgres()
+  func postgresFailureBeforeTheReplyOnlyDelivers() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w, snapshot: Self.withMessages))
 
     #expect(
-      harness.send(.timerFired(.postgresTimeout(channel: .room, ref: "1"))) == [
-        .send(Self.leave(joinRef: "1", ref: "2")),
-        .resume(WaiterID(rawValue: 1), .failure(.postgresChangesTimeout)),
-        .publishChannelStatus(.room, .failed(.postgresChangesTimeout)),
-      ])
-    #expect(harness.core.channels[.room]?.phase == .failed(.postgresChangesTimeout))
-    #expect(harness.send(.frame(Self.system(joinRef: "1", extension: "postgres_changes"))) == [])
-    #expect(harness.core.channels[.room]?.phase == .failed(.postgresChangesTimeout))
+      harness.send(
+        .frame(Self.system(joinRef: "1", extension: "postgres_changes", error: "boom"))) == [
+          .deliver(.room, .event(.postgresChangesFailed("boom")))
+        ])
+    #expect(harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1))
+    #expect(harness.send(.frame(Self.reply(ref: "1"))).first == .resume(w, .success))
   }
 
   @Test
   func staleSystemMessageIsIgnored() {
-    var harness = Self.waitingForPostgres()
+    var harness = CoreHarness.connected()
+    _ = harness.send(Self.subscribe(harness.waiter(), snapshot: Self.withMessages))
 
     #expect(harness.send(.frame(Self.system(joinRef: "9", extension: "postgres_changes"))) == [])
-    #expect(harness.send(.timerFired(.postgresTimeout(channel: .room, ref: "9"))) == [])
-    #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .postgres))
+    #expect(harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1))
   }
 
-  @Test
-  func replicationSystemMessageDoesNotConfirmWhilePostgresPending() {
-    var harness = Self.waitingForPostgres()
-
-    #expect(
-      harness.send(.frame(Self.system(joinRef: "1", extension: "system"))) == [
-        .deliver(.room, .event(.replicationReady))
-      ])
-    #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .postgres))
-  }
-
-  /// Today's rule: with no Postgres wait pending, any `system` ok for the join confirms it.
-  @Test
-  func replicationSystemMessageConfirmsAJoinWithoutPostgresWait() {
+  /// A `system` ok for the join confirms it, even before the reply.
+  @Test(arguments: [noStreams, withMessages])
+  func systemMessageConfirmsTheJoinBeforeTheReply(snapshot: JoinSnapshot) {
     var harness = CoreHarness.connected()
     let w = harness.waiter()
-    _ = harness.send(Self.subscribe(w, snapshot: Self.noStreams))
+    _ = harness.send(Self.subscribe(w, snapshot: snapshot))
 
     #expect(
       harness.send(.frame(Self.system(joinRef: "1", extension: "system"))) == [
@@ -185,7 +125,7 @@ struct RealtimeCorePostgresTests {
   }
 
   @Test
-  func lateOkForAPostgresJoinWaitsForPostgres() {
+  func lateOkConfirmsATimedOutJoinWithBindings() {
     var harness = CoreHarness.connected()
     let w = harness.waiter()
     _ = harness.send(Self.subscribe(w, snapshot: Self.withMessages))
@@ -193,47 +133,30 @@ struct RealtimeCorePostgresTests {
 
     #expect(
       harness.send(.frame(Self.reply(ref: "1"))) == [
-        .publishChannelStatus(.room, .subscribing(attempt: 1)),
-        .schedule(.postgresTimeout(channel: .room, ref: "1"), after: .seconds(15)),
+        .resume(w, .success),
+        .publishChannelStatus(.room, .subscribed),
         .cancel(.rejoin(channel: .room)),
       ])
-    #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .postgres))
-    #expect(harness.core.channels[.room]?.subscribeWaiters == [w])
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
     #expect(harness.send(.timerFired(.rejoin(channel: .room))) == [])
-
-    #expect(
-      harness.send(.frame(Self.system(joinRef: "1", extension: "postgres_changes"))).first
-        == .resume(w, .success))
   }
 
   @Test
-  func postgresFailureForATimedOutJoinLeavesAndFails() {
+  func postgresFailureForATimedOutJoinOnlyDelivers() {
     var harness = CoreHarness.connected()
-    let first = harness.waiter()
-    let second = harness.waiter()
-    _ = harness.send(Self.subscribe(first, snapshot: Self.withMessages))
-    _ = harness.send(Self.subscribe(second, snapshot: Self.withMessages))
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w, snapshot: Self.withMessages))
     _ = harness.send(.timerFired(.joinTimeout(channel: .room, ref: "1")))
-    let failure = RealtimeError.postgresChangesFailed(reason: "boom")
 
     #expect(
       harness.send(
         .frame(Self.system(joinRef: "1", extension: "postgres_changes", error: "boom"))) == [
-          .send(Self.leave(joinRef: "1", ref: "2")),
-          .resume(first, .failure(failure)),
-          .resume(second, .failure(failure)),
-          .publishChannelStatus(.room, .failed(failure)),
-          .cancel(.rejoin(channel: .room)),
-          .deliver(.room, .event(.postgresChangesFailed("boom"))),
+          .deliver(.room, .event(.postgresChangesFailed("boom")))
         ])
-    #expect(harness.core.channels[.room]?.phase == .failed(failure))
-    #expect(harness.core.channels[.room]?.subscribeWaiters == [])
-
-    #expect(harness.send(.timerFired(.rejoin(channel: .room))) == [])
-    #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
-    #expect(harness.send(.frame(Self.system(joinRef: "1", extension: "postgres_changes"))) == [])
-    #expect(harness.core.channels[.room]?.phase == .failed(failure))
+    #expect(
+      harness.core.channels[.room]?.phase
+        == .waitingToRetry(attempt: 1, retryIn: .seconds(1), lastError: .joinTimeout))
+    #expect(harness.core.channels[.room]?.subscribeWaiters == [w])
   }
 
   @Test
@@ -276,13 +199,11 @@ struct RealtimeCorePostgresTests {
         .schedule(.joinTimeout(channel: .room, ref: "3"), after: .seconds(10)),
       ])
 
-    _ = harness.send(.frame(Self.reply(ref: "3")))
     #expect(
-      harness.send(.frame(Self.system(joinRef: "3", extension: "postgres_changes"))) == [
+      harness.send(.frame(Self.reply(ref: "3"))) == [
         .publishChannelStatus(.room, .subscribed),
         .deliver(.room, .event(.resubscribed)),
-        .cancel(.postgresTimeout(channel: .room, ref: "3")),
-        .deliver(.room, .event(.postgresChangesReady)),
+        .cancel(.joinTimeout(channel: .room, ref: "3")),
       ])
   }
 
@@ -338,12 +259,37 @@ struct RealtimeCorePostgresTests {
     #expect(effects.first == .send(Self.leave(joinRef: "1", ref: "2")))
   }
 
+  /// A reply that comes after a `system` ok confirmed the join still stores the server's
+  /// bindings, and changes nothing else.
+  @Test
+  func replyAfterASystemConfirmationStoresTheServerChanges() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(Self.subscribe(harness.waiter(), snapshot: Self.withMessages))
+    _ = harness.send(.frame(Self.system(joinRef: "1", extension: "postgres_changes")))
+
+    let effects = harness.send(
+      .frame(
+        Self.reply(
+          ref: "1",
+          response: [
+            "postgres_changes": [
+              ["event": "INSERT", "schema": "public", "table": "messages", "id": 7]
+            ]
+          ])))
+
+    #expect(effects == [])
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
+    #expect(
+      harness.core.channels[.room]?.serverChanges == [ServerPostgresBinding(Self.messages, id: 7)])
+  }
+
   @Test
   func serverChangesFromReplyDriveMatching() {
     var harness = CoreHarness.connected()
     _ = harness.send(
       Self.subscribe(
-        harness.waiter(), configuration: Self.serverWaits, snapshot: Self.withMessages))
+        harness.waiter(), configuration: Self.configuration(waitsForSubscription: true),
+        snapshot: Self.withMessages))
 
     _ = harness.send(
       .frame(
@@ -365,7 +311,9 @@ struct RealtimeCorePostgresTests {
     var harness = CoreHarness.connected()
     let w = harness.waiter()
     _ = harness.send(
-      Self.subscribe(w, configuration: Self.serverWaits, snapshot: Self.withMessages))
+      Self.subscribe(
+        w, configuration: Self.configuration(waitsForSubscription: true),
+        snapshot: Self.withMessages))
 
     #expect(
       harness.send(
@@ -390,7 +338,9 @@ struct RealtimeCorePostgresTests {
     var harness = CoreHarness.connected()
     let w = harness.waiter()
     _ = harness.send(
-      Self.subscribe(w, configuration: Self.serverWaits, snapshot: Self.withMessages))
+      Self.subscribe(
+        w, configuration: Self.configuration(waitsForSubscription: true),
+        snapshot: Self.withMessages))
 
     #expect(
       harness.send(
@@ -433,10 +383,11 @@ struct RealtimeCorePostgresTests {
 
   // MARK: Helpers
 
-  /// The server holds the join reply until the Postgres changes are set up.
-  static var serverWaits: RealtimeChannelConfiguration {
+  /// With `waitsForSubscription`, the server holds the join reply until the Postgres changes
+  /// are set up.
+  static func configuration(waitsForSubscription: Bool) -> RealtimeChannelConfiguration {
     var configuration = RealtimeChannelConfiguration()
-    configuration.postgresChanges.waitsForSubscription = true
+    configuration.postgresChanges.waitsForSubscription = waitsForSubscription
     return configuration
   }
 
@@ -450,24 +401,12 @@ struct RealtimeCorePostgresTests {
       snapshot: snapshot)
   }
 
-  /// A connected harness whose join with ref `"1"` carried ``messages`` and got its reply, so it
-  /// waits for "Subscribed to PostgreSQL". It used waiter id 1.
-  static func waitingForPostgres() -> CoreHarness {
-    var harness = CoreHarness.connected()
-    _ = harness.send(subscribe(harness.waiter(), snapshot: withMessages))
-    _ = harness.send(.frame(reply(ref: "1")))
-    return harness
-  }
-
   /// A connected harness whose channel joined with ref `"1"` and `snapshot`. It used waiter id 1.
   static func subscribed(snapshot: JoinSnapshot) -> CoreHarness {
     var harness = CoreHarness.connected()
     let room = harness.channel()
     _ = harness.send(subscribe(harness.waiter(), channel: room, snapshot: snapshot))
     _ = harness.send(.frame(reply(ref: "1")))
-    if !snapshot.bindings.isEmpty {
-      _ = harness.send(.frame(system(joinRef: "1", extension: "postgres_changes")))
-    }
     return harness
   }
 

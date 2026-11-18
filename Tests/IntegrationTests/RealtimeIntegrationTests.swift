@@ -590,11 +590,11 @@
       }
     }
 
-    /// The server refuses a Postgres changes binding on a table that does not exist. The join
-    /// is still in flight when it does, so `subscribe()` throws and the channel ends `failed`;
+    /// The server refuses a Postgres changes binding on a table that does not exist. It does so
+    /// after the join reply, so `subscribe()` returns, the channel stays subscribed, and
     /// `events()` carries the server's message.
     @Test
-    func aPostgresChangesBindingTheServerRefusesFailsTheSubscribe() async throws {
+    func aPostgresChangesBindingTheServerRefusesIsAnEvent() async throws {
       let client = client
       try await withMainSerialExecutor {
         try await client.realtime.connect()
@@ -604,7 +604,29 @@
         let changes = await channel.postgresChanges(
           event: .insert, schema: "public", table: "no_such_table")
 
-        try await expectSubscribeRefused(channel, containing: "no_such_table")
+        try await expectBindingRefused(channel, containing: "no_such_table")
+        withExtendedLifetime(changes) {}
+        await channel.unsubscribe()
+      }
+    }
+
+    /// With `waitsForSubscription`, the server refuses the join itself when it cannot set up a
+    /// Postgres changes binding, so `subscribe()` throws and the channel ends `failed`.
+    @Test
+    func aPostgresChangesBindingTheServerRefusesFailsAWaitingSubscribe() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-refused-binding-wait") {
+          $0.postgresChanges.waitsForSubscription = true
+          $0.postgresChanges.subscriptionTimeout = .seconds(2)
+        }
+        let changes = await channel.postgresChanges(
+          event: .insert, schema: "public", table: "no_such_table")
+
+        await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(await channel.status == .failed)
         withExtendedLifetime(changes) {}
       }
     }
@@ -847,10 +869,10 @@
     }
 
     /// The SDK sends every typed filter the Realtime grammar can write and lets the server judge
-    /// it. The server refuses a bad filter after the join reply, so `subscribe()` throws the
-    /// server's message.
+    /// it. The server refuses a bad filter after the join reply, so `subscribe()` returns and
+    /// `events()` carries the server's message.
     @Test(arguments: RefusedFilter.allCases)
-    func aTypedFilterTheServerRefusesFailsTheSubscribe(_ refused: RefusedFilter) async throws {
+    func aTypedFilterTheServerRefusesIsAnEvent(_ refused: RefusedFilter) async throws {
       let client = client
       try await withMainSerialExecutor {
         try await client.realtime.connect()
@@ -859,7 +881,7 @@
         let changes = try await channel.postgresChanges(
           of: KeyValueStorage.self, event: .insert, where: refused.refusal.filter)
 
-        try await expectSubscribeRefused(channel, containing: refused.refusal.part)
+        try await expectBindingRefused(channel, containing: refused.refusal.part)
         withExtendedLifetime(changes) {}
         await client.realtime.removeChannel(channel)
       }
@@ -1278,18 +1300,16 @@
       }
     }
 
-    /// Polls the channel's presence state until `condition` holds, for at most five seconds.
-    /// `subscribe()` returns only once the server's Postgres changes are live, so a row
-    /// inserted right after it arrives. With `waitsForSubscription`, the server holds the join
-    /// reply instead of the SDK waiting for "Subscribed to PostgreSQL".
-    @Test(arguments: [false, true])
-    func subscribeReturnsWhenPostgresChangesAreLive(waitsForSubscription: Bool) async throws {
+    /// With `waitsForSubscription`, the server holds the join reply until the Postgres changes
+    /// are live, so a row inserted right after `subscribe()` returns arrives.
+    @Test
+    func waitingSubscribeReturnsWhenPostgresChangesAreLive() async throws {
       let client = client
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = await client.realtime.channel("postgres-live-\(waitsForSubscription)") {
-          $0.postgresChanges.waitsForSubscription = waitsForSubscription
+        let channel = await client.realtime.channel("postgres-live-wait") {
+          $0.postgresChanges.waitsForSubscription = true
         }
         let testKey = UUID().uuidString
         let inserts = await channel.postgresChanges(
@@ -1328,6 +1348,9 @@
           await events.first(where: { $0 == .resubscribed })
         }
         #expect(await channel.status == .subscribed)
+        _ = try await withTimeout(.seconds(10)) {
+          await events.first(where: { $0 == .postgresChangesReady })
+        }
 
         try await client.from("key_value_storage").insert(["key": testKey, "value": "v"]).execute()
         let change = try await withTimeout(.seconds(5)) {
@@ -1519,19 +1542,15 @@
       }
     }
 
-    /// Expects the server to refuse the channel's Postgres changes binding: `subscribe()` throws a
-    /// `.server` error that is not retryable, the channel ends `failed`, and `events()` carries
-    /// the server's message.
-    private func expectSubscribeRefused(
+    /// Subscribes `channel`, then waits for the server to refuse a binding with a message that
+    /// contains `part`. The channel stays subscribed.
+    private func expectBindingRefused(
       _ channel: RealtimeChannel, containing part: String
     ) async throws {
       let events = await channel.events()
 
-      let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
-      #expect(error?.kind == .server)
-      #expect(error?.isRetryable == false)
-      #expect(error?.message.contains(part) == true, "\(String(describing: error))")
-      #expect(await channel.status == .failed)
+      try await channel.subscribe()
+      #expect(await channel.status == .subscribed)
 
       let event = try await withTimeout(.seconds(5)) {
         await events.first(where: {
@@ -1543,6 +1562,7 @@
         return
       }
       #expect(reason.contains(part))
+      #expect(await channel.status == .subscribed)
     }
 
     private func subscribeMany(_ channels: [RealtimeChannel]) async throws {

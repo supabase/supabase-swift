@@ -114,9 +114,10 @@ struct RealtimeClientConnectionTests {
   }
 
   /// `disconnect()` restarts the refs, so the next join can reuse the ref of the last confirmed
-  /// one. That old confirmation must not settle the new join's Postgres changes wait.
+  /// one. The new join's reply confirms it, and a later Postgres changes error leaves it
+  /// subscribed.
   @Test(.timeLimit(.minutes(1)))
-  func aJoinAfterDisconnectIsNotSettledByTheOldConfirmation() async throws {
+  func aJoinAfterDisconnectIsConfirmedByItsOwnReply() async throws {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")
     let changes = await channel.postgresChanges(table: "t")
@@ -134,10 +135,16 @@ struct RealtimeClientConnectionTests {
     let rejoin = try #require(host.frames.filter { $0.event == "phx_join" }.dropFirst().first)
     try #require(rejoin.ref == join.ref)
     host.confirmJoin(rejoin)
-    host.server?.send(Self.postgresChangesSystem(rejoin, status: "error"))
+    try await resubscription.value
+    #expect(await channel.status == .subscribed)
 
-    await #expect(throws: RealtimeError.self) { try await resubscription.value }
-    #expect(await channel.status.error != nil)
+    var events = await channel.events().makeAsyncIterator()
+    host.server?.send(Self.postgresChangesSystem(rejoin, status: "error"))
+    guard case .postgresChangesFailed? = await events.next() else {
+      Issue.record("Expected postgresChangesFailed")
+      return
+    }
+    #expect(await channel.status == .subscribed)
     withExtendedLifetime(changes) {}
   }
 

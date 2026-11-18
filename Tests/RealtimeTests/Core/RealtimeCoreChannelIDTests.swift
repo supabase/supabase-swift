@@ -182,7 +182,7 @@ extension TimerID {
     switch self {
     case .heartbeat, .livenessProbe, .tokenRefresh, .reconnect, .idleDisconnect:
       nil
-    case .joinTimeout(let channel, _), .rejoin(let channel), .postgresTimeout(let channel, _),
+    case .joinTimeout(let channel, _), .rejoin(let channel),
       .leaveTimeout(let channel, _), .pushTimeout(let channel, _):
       channel
     }

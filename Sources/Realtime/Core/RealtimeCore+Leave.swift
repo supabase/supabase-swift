@@ -60,7 +60,7 @@ extension RealtimeCore {
       return effects + record.subscribeWaiters.map { .resume($0, subscribers) }
 
     case .subscribed(let joinRef) where isConnected,
-      .joining(let joinRef, _, _) where isConnected && removing:
+      .joining(let joinRef, _) where isConnected && removing:
       // A join in flight leaves only for `removeChannel`: the server has the join, so it
       // answers the leave, and the channel must not outlive it.
       let leaveRef = makeRef()
@@ -187,7 +187,7 @@ extension RealtimeCore {
       // The lost join counts as attempt 1.
       attempt = 1
       channels.update(channel) { $0.isAutomaticRejoin = true }
-    case .joining(_, let joinAttempt, _):
+    case .joining(_, let joinAttempt):
       attempt = joinAttempt
     case .waitingToRetry:
       // The join that timed out is gone. The wait for the next attempt goes on.
@@ -261,7 +261,7 @@ extension RealtimeCore {
       }
       effects += failPendingPushes(channel, with: .notConnected)
       switch phase {
-      case .joining(_, let attempt, _), .refreshingToken(let attempt):
+      case .joining(_, let attempt), .refreshingToken(let attempt):
         effects += waitForNextSocket(channel, attempt: attempt)
       case .waitingToRetry(let attempt, _, _):
         effects += waitForNextSocket(channel, attempt: attempt + 1)

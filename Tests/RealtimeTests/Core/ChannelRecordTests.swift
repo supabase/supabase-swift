@@ -19,8 +19,7 @@ struct ChannelRecordTests {
       (.unsubscribed, .unsubscribed),
       (.waitingForSocket(attempt: 1), .subscribing(attempt: 1)),
       (.refreshingToken(attempt: 2), .subscribing(attempt: 2)),
-      (.joining(ref: "1", attempt: 3, stage: .reply), .subscribing(attempt: 3)),
-      (.joining(ref: "1", attempt: 3, stage: .postgres), .subscribing(attempt: 3)),
+      (.joining(ref: "1", attempt: 3), .subscribing(attempt: 3)),
       (
         .waitingToRetry(attempt: 2, retryIn: .seconds(2), lastError: Self.timedOut),
         .resubscribing(attempt: 2, retryIn: .seconds(2), lastError: Self.timedOut)
@@ -50,7 +49,7 @@ struct ChannelRecordTests {
     (.leaving(joinRef: "1", leaveRef: "2"), true),
     (.waitingForSocket(attempt: 1), false),
     (.refreshingToken(attempt: 1), false),
-    (.joining(ref: "1", attempt: 1, stage: .reply), false),
+    (.joining(ref: "1", attempt: 1), false),
     (.waitingToRetry(attempt: 1, retryIn: .seconds(1), lastError: Self.timedOut), false),
     (.subscribed(joinRef: "1"), false),
   ])
@@ -66,7 +65,7 @@ struct ChannelRecordTests {
   @Test(arguments: [
     Phase.waitingForSocket(attempt: 1),
     .refreshingToken(attempt: 1),
-    .joining(ref: "1", attempt: 1, stage: .reply),
+    .joining(ref: "1", attempt: 1),
     .waitingToRetry(attempt: 1, retryIn: .seconds(1), lastError: Self.timedOut),
     .subscribed(joinRef: "1"),
   ])
@@ -107,8 +106,6 @@ struct ChannelRecordTests {
       Phase.failed(Self.timedOut)
         == .failed(RealtimeError(kind: .timeout, message: "join timed out")))
     #expect(Phase.failed(Self.timedOut) != .failed(.heartbeatTimeout))
-    #expect(
-      Phase.joining(ref: "1", attempt: 1, stage: .reply)
-        != .joining(ref: "1", attempt: 1, stage: .postgres))
+    #expect(Phase.joining(ref: "1", attempt: 1) != .joining(ref: "1", attempt: 2))
   }
 }

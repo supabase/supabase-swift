@@ -122,19 +122,26 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
 
   /// Postgres changes options of a channel.
   public struct PostgresChanges: Sendable, Hashable {
-    /// Whether the server holds the join reply until the channel's Postgres changes bindings are
-    /// set up. Defaults to `false`.
+    /// Whether ``RealtimeChannel/subscribe()`` returns only once the channel's Postgres changes
+    /// bindings are set up. Defaults to `false`.
     ///
-    /// Either way, ``RealtimeChannel/subscribe()`` returns only once changes are live. When
-    /// `true`, the server waits before it replies to the join, and the join timeout grows by
-    /// ``subscriptionTimeout``. When `false`, the server replies at once and the SDK then waits
-    /// for the server's "Subscribed to PostgreSQL" message.
+    /// When `false`, ``RealtimeChannel/subscribe()`` returns when the server accepts the join.
+    /// The server sets up the bindings after that, so changes made right after `subscribe()`
+    /// returns can be missed. ``RealtimeChannel/events()`` then emits
+    /// ``RealtimeChannelEvent/postgresChangesReady`` when changes are live, or
+    /// ``RealtimeChannelEvent/postgresChangesFailed(_:)`` when the server could not set them up.
+    ///
+    /// When `true`, the server holds the join reply until the bindings are set up, and the join
+    /// timeout grows by ``subscriptionTimeout``. If the server cannot set them up in time, it
+    /// refuses the join and ``RealtimeChannel/subscribe()`` throws.
+    ///
+    /// This setting has no effect on a channel with no Postgres changes bindings.
     public var waitsForSubscription = false
 
-    /// How long ``RealtimeChannel/subscribe()`` waits for the Postgres changes bindings to be set
-    /// up, after the join itself. Defaults to 15 seconds.
+    /// How long the server waits for the Postgres changes bindings to be set up before it refuses
+    /// the join. Defaults to 15 seconds.
     ///
-    /// When ``waitsForSubscription`` is on, the server caps this value.
+    /// Used only when ``waitsForSubscription`` is `true`. The server caps this value.
     public var subscriptionTimeout: Duration = .seconds(15)
 
     /// Creates Postgres changes options with the defaults.

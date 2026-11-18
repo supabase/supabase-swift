@@ -117,9 +117,10 @@ extension SupabaseClient {
     }
 
     let realtime = realtime
+    // The first fetch must not start before changes are live, or it could miss some.
     let channel = await realtime.channel(
       "live:\(R.schema).\(R.relationName):\(UUID().uuidString.lowercased())"
-    )
+    ) { $0.postgresChanges.waitsForSubscription = true }
     let signals = await channel.postgresChangesSignals(bindings: bindings)
 
     let selection = from(R.self).select(LiveRowSelection<R>.self)
