@@ -375,6 +375,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   ///     ``_PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
   ///   - defaultToNull: `false` gives a column that a row leaves out its `DEFAULT` instead of
   ///     `null`, as in ``insert(_:defaultToNull:)``.
+  ///     When a row merges into an existing row, that `DEFAULT` or `null` overwrites the stored
+  ///     value.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
   ///   is sent.
@@ -532,6 +534,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
   ///     ``_PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
   ///   - defaultToNull: `false` gives a column that a row leaves out its `DEFAULT` instead of
   ///     `null`, as in ``insert(_:defaultToNull:)``.
+  ///     When a row merges into an existing row, that `DEFAULT` or `null` overwrites the stored
+  ///     value.
   ///     A row that leaves out a generated key then gets a new key, so it is inserted.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing

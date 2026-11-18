@@ -153,7 +153,7 @@ struct PostgrestServiceDefaultsIntegrationTests {
   }
 
   @Test
-  func raggedBulkInsertStoresNullForAMissingColumnByDefault() async throws {
+  func raggedBulkInsertFailsOnANotNullColumnByDefault() async throws {
     let (ids, drafts) = raggedDrafts()
 
     await #expect(throws: PostgrestError.self) {
@@ -179,6 +179,8 @@ struct PostgrestServiceDefaultsIntegrationTests {
   @Test
   func raggedBulkUpsertWithoutDefaultToNullAppliesTheColumnDefault() async throws {
     let (ids, drafts) = raggedDrafts()
+    try await client.from(Todos.self)
+      .insert(Todos.Draft(id: ids[1], description: "stored", isComplete: true)).execute()
 
     await #expect(throws: PostgrestError.self) {
       try await client.from(Todos.self).upsert(drafts).execute()
@@ -187,6 +189,10 @@ struct PostgrestServiceDefaultsIntegrationTests {
     let response = try await client.from(Todos.self)
       .upsert(drafts, defaultToNull: false).returning().execute()
 
+    let applied = appliedPreferences(response.headers)
+    #expect(applied.contains("resolution=merge-duplicates"))
+    #expect(applied.contains("missing=default"))
+    #expect(response.value.map(\.description) == ["a", "b"])
     #expect(response.value.map(\.isComplete) == [true, false])
 
     try await client.from(Todos.self).delete().where { $0.id.in(ids) }.execute()
