@@ -1669,12 +1669,12 @@ public final class AuthClient: Sendable {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
     guard currentUser?.id == identity.userID else { return }
     // A failure here must not report a failed unlink: the server already deleted the identity.
-    let refetched = try? await api.authorizedExecute { accessToken in
+    let fetchedUser = try? await api.authorizedExecute { accessToken in
       var request = authAPI.user(accessToken: accessToken)
       request.retriesServerFailures = false
       return request
     }
-    guard let user = refetched, user.id == identity.userID else { return }
+    guard let user = fetchedUser, user.id == identity.userID else { return }
     try? await sessionStore.commit(.userUpdated(user, event: .userUpdated))
   }
 
