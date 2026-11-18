@@ -99,13 +99,17 @@ import Testing
 
     @Test
     @available(iOS 16.4, macOS 13.3, tvOS 16.4, watchOS 9.4, *)
-    func anHTTPSRedirectFallsBackToTheSchemeWhereUnavailable() async throws {
+    func anHTTPSRedirectThrowsWithoutOpeningThePageWhereUnavailable() async throws {
       let calls = SessionCalls(result: .success(Self.callbackURL))
 
-      _ = try await makePresenter(calls, httpsCallbacksAvailable: false).authenticate(
-        url: Self.authorizeURL, redirectURL: URL(string: "https://example.com/auth/callback"))
+      let error = await #expect(throws: AuthError.self) {
+        try await makePresenter(calls, httpsCallbacksAvailable: false).authenticate(
+          url: Self.authorizeURL, redirectURL: URL(string: "https://example.com/auth/callback"))
+      }
 
-      #expect(calls.calls.map(\.callback) == [.scheme("https")])
+      #expect(error?.kind == .oauthFlowFailed)
+      #expect(error?.message.contains("17.4") == true)
+      #expect(calls.calls.isEmpty)
     }
 
     @Test

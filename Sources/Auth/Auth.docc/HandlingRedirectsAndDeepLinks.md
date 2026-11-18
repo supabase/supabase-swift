@@ -69,8 +69,11 @@ struct MyApp: App {
 The session lands in storage and the client emits one auth event. A view that follows
 <doc:ObservingAuthStateInSwiftUI> updates with no more code.
 
-Pass only URLs that reach your own callback. A URL with tokens (`#access_token=…`) signs in the
-account that the tokens belong to, and anyone who can make your app open a URL can send one.
+Pass only URLs that reach your own callback. A URL with tokens (`#access_token=…`) throws an error
+of kind ``AuthError/Kind-swift.struct/oauthFlowFailed``, because it signs in the account that the
+tokens belong to, and anyone who can make your app open a URL can send one. The client's own flows
+use PKCE and return a code. If your app gets token links from outside them, such as invites or
+links from `generateLink`, set ``AuthClient/Configuration/acceptsImplicitTokens`` to `true`.
 
 ### Route auth URLs apart from other links
 
@@ -141,9 +144,13 @@ An HTTPS redirect URL, such as `https://example.com/auth/callback`, is a univers
 `apple-app-site-association` file on that domain.
 
 ``ASWebAuthenticationSessionPresenter`` and ``WebAuthenticationSessionPresenter`` listen for the
-HTTPS callback on iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1, and watchOS 10.4 and later. Use
-one of them for a universal link, because they know the full redirect URL. A ``ClosurePresenter``
-gets only the scheme, which is `https`, so it cannot tell your link from any other.
+HTTPS callback on iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1, and watchOS 10.4 and later. On
+older systems they throw ``AuthError/Kind-swift.struct/oauthFlowFailed``, so use a custom scheme
+there. Use one of them for a universal link, because they know the full redirect URL. A
+``ClosurePresenter`` gets only the scheme, which is `https`, so it cannot tell your link from any
+other. The client checks the callback URL that a presenter returns: when its scheme, host, port,
+or path differs from the redirect URL, the sign-in throws
+``AuthError/Kind-swift.struct/oauthFlowFailed``.
 
 ### Route each URL once
 

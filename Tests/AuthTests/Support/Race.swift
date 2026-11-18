@@ -51,13 +51,15 @@ struct Race: Sendable {
     autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
     storage: (any AuthStorage)? = nil,
     redirectTo: URL? = Race.callback,
+    acceptsImplicitTokens: Bool = false,
     clock: (any Clock<Duration>)? = nil,
     lifecycleEvents: (@Sendable () async -> AsyncStream<AppLifecycleEvent>)? = nil,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     makeClient(
       autoRefresh: autoRefresh, storage: storage ?? localStorage,
-      redirectTo: redirectTo, clock: clock ?? self.clock,
+      redirectTo: redirectTo, acceptsImplicitTokens: acceptsImplicitTokens,
+      clock: clock ?? self.clock,
       lifecycleEvents: lifecycleEvents ?? { AsyncStream { $0.finish() } },
       beforeRefreshingHeldSession: beforeRefreshingHeldSession)
   }
@@ -74,6 +76,7 @@ struct Race: Sendable {
     autoRefresh: AuthClient.AutoRefreshPolicy,
     storage: any AuthStorage,
     redirectTo: URL? = nil,
+    acceptsImplicitTokens: Bool = false,
     clock: any Clock<Duration>,
     lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent>,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
@@ -86,6 +89,7 @@ struct Race: Sendable {
         storageKey: storageKey,
         storage: storage,
         redirectTo: redirectTo,
+        acceptsImplicitTokens: acceptsImplicitTokens,
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,
         http: HTTPClientConfiguration(transport: transport),

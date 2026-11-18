@@ -785,6 +785,15 @@ public final class AuthClient: Sendable {
       throw error
     }
 
+    if let redirectURL, !AuthRedirect.url(callback, reaches: redirectURL) {
+      await removeFlow(flow.id)
+      throw AuthError.oauthFlowFailed(
+        """
+        The callback URL does not reach the flow's redirect URL. Check that the redirect URL is in \
+        the project's allowed redirect URLs: the server sends the Site URL instead of one that is not.
+        """)
+    }
+
     // The page is closed, so no other code can come back for this flow. Only an exchange that may
     // not have reached the server keeps it, so a retry can still finish it.
     let result: RedirectResult?
@@ -879,9 +888,10 @@ public final class AuthClient: Sendable {
   /// earlier email can still finish its own flow. The server may have made that link invalid
   /// already, for example when a later email went to the same user.
   ///
-  /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to, with
-  /// no pending flow. Anyone who can make your app open a URL can sign it in to their own account
-  /// this way. Pass only URLs that reach your own callback.
+  /// A URL with tokens (`#access_token=…`) throws, unless
+  /// ``Configuration/acceptsImplicitTokens`` is `true`. Then it signs in the account
+  /// that the tokens belong to, with no pending flow. Anyone who can make your app open a URL can
+  /// sign it in to their own account this way. Pass only URLs that reach your own callback.
   ///
   /// The same URL can arrive more than once, for example from both a scene delegate and
   /// `onOpenURL`. A redelivery returns the same result, or throws the same error, and sends no
@@ -899,7 +909,8 @@ public final class AuthClient: Sendable {
   /// - Parameter url: The URL that opened the app.
   /// - Returns: `nil` when `url` is not an auth redirect, else what the redirect did.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the URL
-  ///   reports an error or no pending flow matches its code, or the error of the request.
+  ///   reports an error, no pending flow matches its code, or it carries tokens that
+  ///   ``Configuration/acceptsImplicitTokens`` refuses. Else the error of the request.
   ///   `CancellationError` when ``signOut(scope:)`` finished while the redirect was handled; the
   ///   client then stores nothing.
   @discardableResult
@@ -1006,6 +1017,13 @@ public final class AuthClient: Sendable {
       }
 
     case .implicit(let tokens, let type):
+      guard configuration.acceptsImplicitTokens else {
+        throw AuthError.oauthFlowFailed(
+          """
+          The URL carries tokens, and Configuration.acceptsImplicitTokens is false. The client's own \
+          flows return a code. Set acceptsImplicitTokens to accept token links from other flows.
+          """)
+      }
       return try await dependencies.redirectDeduplicator.value(for: tokens.accessToken) { [self] in
         let session = try await signIn(with: tokens, type: type, signOuts: started)
         return .signedIn(session, verification: type)
