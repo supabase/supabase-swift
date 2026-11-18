@@ -41,4 +41,11 @@ struct BackoffPolicyTests {
     #expect(policy.delay(forAttempt: 0, random: { $0.upperBound }) == .seconds(1))
     #expect(policy.delay(forAttempt: -3, random: { $0.upperBound }) == .seconds(1))
   }
+
+  @Test
+  func defaultRandomStaysInsideTheWindow() {
+    let policy = BackoffPolicy.fullJitter(base: .seconds(1), cap: .seconds(30))
+
+    #expect((Duration.zero...(.seconds(4))).contains(policy.delay(forAttempt: 3)))
+  }
 }
