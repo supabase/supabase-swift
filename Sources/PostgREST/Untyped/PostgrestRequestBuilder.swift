@@ -325,7 +325,16 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   /// - Returns: A new builder with the header set.
   public func settingHeader(name: HTTPField.Name, value: String) -> Self {
     var copy = self
-    copy.request.headerFields[name] = value
+    if name == .prefer {
+      for preference in value.split(separator: ",") {
+        let preference = preference.trimmingCharacters(in: .whitespaces)
+        if !preference.isEmpty {
+          copy.request.setPreference(preference)
+        }
+      }
+    } else {
+      copy.request.headerFields[name] = value
+    }
     return copy
   }
 
