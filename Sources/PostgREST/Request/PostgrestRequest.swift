@@ -68,9 +68,15 @@ public struct _PostgrestRequest: Sendable {
     self.headerFields = headerFields
   }
 
-  /// Adds or replaces one preference in the `Prefer` header and keeps the others.
+  /// Adds or replaces each comma-separated preference in `value` in the `Prefer` header, and
+  /// keeps the others.
   mutating func setPreference(_ value: String) {
-    headerFields.appendOrUpdate(.prefer, value: value)
+    for preference in value.split(separator: ",") {
+      let preference = preference.trimmingCharacters(in: .whitespaces)
+      if !preference.isEmpty {
+        headerFields.appendOrUpdate(.prefer, value: preference)
+      }
+    }
   }
 
   /// Sends the request and decodes a successful response.
