@@ -321,7 +321,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   ///
   /// A `Prefer` header is merged with the one the builder already carries instead of replacing
   /// it, so the preferences the SDK built, such as `resolution=merge-duplicates` from
-  /// ``PostgrestQueryBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``,
+  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``,
   /// are kept. Each comma-separated preference in `value` replaces the one with the same name,
   /// or is added if there is none.
   ///
