@@ -26,10 +26,6 @@ Changes that still compile but behave differently. Check each one by hand.
   instead of sending both.
 - **`Authorization` in options wins.** An `Authorization` header in `FunctionInvokeOptions.headers`
   now reaches the server. See the overview for the shared `Authorization` rule.
-- **A third-party token is sent as given.** With `SupabaseClient.Configuration.Auth.accessToken`
-  set, a token equal to a new-format key (`sb_publishable_…`, `sb_secret_…`) now goes out as
-  `Authorization: Bearer <key>`. v2 dropped it. Return `nil` from the closure for no
-  `Authorization` header.
 
 ## Renames and type changes
 

@@ -94,7 +94,7 @@ struct SupabaseClientFunctionsAuthTests {
   }
 
   @Test
-  func functionsInvokeSendsAProviderTokenAsGivenEvenWhenItEqualsTheNewFormatKey() async throws {
+  func functionsInvokeSendsNoBearerWhenTheProviderReturnsTheNewFormatKey() async throws {
     let client = try makeClient(
       supabaseKey: "sb_publishable_abc123",
       auth: SupabaseClient.Configuration.Auth(
@@ -106,7 +106,7 @@ struct SupabaseClientFunctionsAuthTests {
     try await client.functions.invoke("hello-world")
 
     let request = try #require(transport.requests.last)
-    #expect(request.head.headerFields[.authorization] == "Bearer sb_publishable_abc123")
+    #expect(request.head.headerFields[.authorization] == nil)
   }
 
   @Test(arguments: ["sb_publishable_abc123", "legacy.jwt.key"])

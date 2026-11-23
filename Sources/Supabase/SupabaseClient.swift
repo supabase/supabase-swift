@@ -483,7 +483,7 @@ public final class SupabaseClient: Sendable {
     )
   }
 
-  /// The SDK middleware that sets the bearer: the session token, else the key when `keyAsBearer`.
+  /// The SDK middleware that sets the bearer: the session token, else the key.
   ///
   /// It captures only the dependencies it needs, never `self`, because each sub-client stores its
   /// middlewares for its whole lifetime: the cached ``realtime`` and ``functions`` sub-clients are
@@ -494,23 +494,22 @@ public final class SupabaseClient: Sendable {
   /// - Parameters:
   ///   - staleTokenRejection: How the sub-client's service tells that it rejected the access
   ///     token. Not used with a third-party token provider.
-  ///   - keyAsBearer: Whether the key is the bearer when there is no token. When `false`, such a
-  ///     request carries no `Authorization` header. A token is always sent as given.
+  ///   - bearerToken: Maps the token to the bearer to send, `nil` for none. It sees the key and
+  ///     a third-party provider's token, not a session token.
   /// - Returns: The middleware to add to a sub-client's chain.
   private func bearerMiddleware(
     staleTokenRejection: StaleTokenRejection,
-    keyAsBearer: Bool = true
+    bearerToken: @escaping @Sendable (String) -> String? = { $0 }
   ) -> any ClientMiddleware {
-    let fallbackToken = keyAsBearer ? supabaseKey : nil
     guard configuration.auth.accessToken == nil else {
       return AccessTokenMiddleware(getAccessToken: {
-        [provider = accessTokenProvider] in
-        try await provider() ?? fallbackToken
+        [provider = accessTokenProvider, supabaseKey] in
+        bearerToken(try await provider() ?? supabaseKey)
       })
     }
     return AuthMiddleware(
       auth: _auth,
-      fallbackToken: fallbackToken,
+      fallbackToken: bearerToken(supabaseKey),
       staleTokenRejection: staleTokenRejection,
       autoRefresh: configuration.auth.autoRefresh
     )
@@ -602,10 +601,9 @@ public final class SupabaseClient: Sendable {
           global: configuration.global.http,
           override: configuration.functions.http,
           sdkMiddlewares: [
-            bearerMiddleware(
-              staleTokenRejection: .functions,
-              keyAsBearer: !APIKeyFormat.isNew(supabaseKey)
-            )
+            bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
+              APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
+            }
           ]
         ),
         logger: configuration.functions.logger ?? configuration.global.logger,
