@@ -46,11 +46,55 @@ enum FunctionsAPI {
 
     let request = HTTPRequest(
       method: options.method,
-      url: configuration.url.appendingPathComponent(name),
+      url: functionURL(
+        name: name, base: configuration.url, replacing: Set(query.map(\.name))),
       query: query,
       headerFields: headers
     )
     return (request, body?.httpBody)
+  }
+
+  /// Reads `name` as a URL parser does: a `#` starts a fragment, which is dropped, and the first
+  /// `?` starts a query, which is sent as the URL query rather than as `%3F` in the path.
+  ///
+  /// The name's query items keep the caller's percent-encoding, minus the items named in
+  /// `replacing`, which the SDK sends itself.
+  static func functionURL(name: String, base: URL, replacing: Set<String>) -> URL {
+    let parts = name.prefix { $0 != "#" }
+      .split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+    let url = base.appendingPathComponent(String(parts[0]))
+    guard
+      let rawQuery = parts.dropFirst().first,
+      let encoded = encodedQuery(rawQuery),
+      let items = URLComponents(string: "?" + encoded)?.percentEncodedQueryItems,
+      var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else { return url }
+
+    let kept = items.filter { !replacing.contains(decodedQueryName($0.name)) }
+    components.percentEncodedQueryItems = kept.isEmpty ? nil : kept
+    return components.url ?? url
+  }
+
+  /// Percent-encodes what a query cannot hold as is. A valid `%XX` escape stays; a `%` without
+  /// two hex digits after it becomes `%25`.
+  private static func encodedQuery(_ query: Substring) -> String? {
+    var escaped = ""
+    var rest = query[...]
+    while let percent = rest.firstIndex(of: "%") {
+      escaped += rest[..<percent]
+      let digits = rest[rest.index(after: percent)...].prefix(2)
+      escaped +=
+        digits.count == 2 && digits.allSatisfy { $0.isASCII && $0.isHexDigit } ? "%" : "%25"
+      rest = rest[rest.index(after: percent)...]
+    }
+    escaped += rest
+    return escaped.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.union(["%"]))
+  }
+
+  /// A raw query name as a form decoder reads it: `+` is a space, then `%XX` escapes decode.
+  private static func decodedQueryName(_ name: String) -> String {
+    let spaced = name.replacingOccurrences(of: "+", with: " ")
+    return spaced.removingPercentEncoding ?? spaced
   }
 
   /// Builds and sends one invocation, returning the head and the unread body once the head

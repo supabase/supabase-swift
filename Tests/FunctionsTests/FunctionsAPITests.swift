@@ -178,6 +178,42 @@ struct FunctionsAPITests {
     }
   }
 
+  @Test(arguments: [
+    ("search?q=x&q=y", "search?q=x&q=y"),
+    ("search/sub?q=a+b&path=%2Fx&s=a b#top?x=1", "search/sub?q=a+b&path=%2Fx&s=a%20b"),
+    ("search?q=%zz", "search?q=%25zz"),
+    ("search?a=%20&b=%zz&c=%", "search?a=%20&b=%25zz&c=%25"),
+    ("search#frag?x=1", "search"),
+    ("search?", "search"),
+  ])
+  func queryInNameIsSentAsQuery(name: String, expected: String) {
+    let (request, _) = FunctionsAPI.makeRequest(
+      name: name, body: nil, options: .init(), configuration: configuration)
+    #expect(request.url?.absoluteString == "http://localhost:5432/functions/v1/\(expected)")
+  }
+
+  @Test
+  func queryOptionReplacesAFormEncodedNameInName() {
+    let (request, _) = FunctionsAPI.makeRequest(
+      name: "search?my+key=1&my%20key=2&page=2", body: nil,
+      options: .init(query: [URLQueryItem(name: "my key", value: "3")]),
+      configuration: configuration)
+    #expect(
+      request.url?.absoluteString
+        == "http://localhost:5432/functions/v1/search?page=2&my%20key=3")
+  }
+
+  @Test
+  func queryOptionAndRegionReplaceSameNamedItemsInName() {
+    let (request, _) = FunctionsAPI.makeRequest(
+      name: "search?q=x&forceFunctionRegion=us-east-1&page=2", body: nil,
+      options: .init(query: [URLQueryItem(name: "q", value: "y")], region: .euCentral2),
+      configuration: configuration)
+    #expect(
+      request.url?.absoluteString
+        == "http://localhost:5432/functions/v1/search?page=2&q=y&forceFunctionRegion=eu-central-2")
+  }
+
   @Test
   func clientRegion() async throws {
     var configuration = configuration
