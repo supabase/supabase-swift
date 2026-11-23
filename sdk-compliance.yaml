@@ -139,10 +139,11 @@ supporting_symbols:
   - PostgrestTransformablePhase
 
   # The typed query API is experimental. Every type it declares is `_`-prefixed (`_PostgrestRelation`,
-  # `_PostgrestQuery`, …), and its entry points (`from<R>(_:)`, `schema<S>(_:)`) are
-  # `@_spi(Experimental)`. The public symbol graph the compliance scanner reads holds neither, so
-  # those symbols are not listed here or under the database.* features: the features keep their
-  # status through the string builder's symbols. What remains visible is the AND junction: `||`
+  # `_PostgrestQuery`, …), and the symbol graph omits `_`-prefixed types, so they are not listed.
+  # Its entry points (`from<R>(_:)`, `rpc<F>(_:)`, `schema<S>(_:)`) are `@_spi(Experimental)` and
+  # share their names with the untyped methods. database.generated_types registers `from` and
+  # `rpc`; the other database.* features keep their status through the string builder's symbols.
+  # What remains visible is the AND junction: `||`
   # and `!` map onto database.using_filters.or and .not; `&&` has no capability of its own —
   # PostgREST ANDs top-level query parameters already, so conjunction is the default rather than a
   # feature — and sits here instead of being attributed to a capability it does not implement.
