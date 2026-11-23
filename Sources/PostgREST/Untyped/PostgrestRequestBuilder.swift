@@ -304,8 +304,8 @@ extension PostgrestRequestBuilder: PostgrestExecutableBuilder
 where Phase: PostgrestExecutablePhase {}
 
 extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
-  /// Returns a new builder with an HTTP header added to the request, or replaced if the request
-  /// already has it.
+  /// Returns a new builder with an HTTP header added to the request, replaced if the request
+  /// already has it, or merged into it for `Prefer`.
   ///
   /// Use this method to attach arbitrary headers — for example, to pass custom PostgREST
   /// `Prefer` values or to forward user-supplied metadata. Because the builder is a value type,
@@ -319,19 +319,23 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
   ///   .execute()
   /// ```
   ///
+  /// A `Prefer` header is merged with the one the builder already carries instead of replacing
+  /// it, so the preferences the SDK built, such as `resolution=merge-duplicates` from
+  /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``,
+  /// are kept. Each comma-separated preference in `value` replaces the one with the same name,
+  /// or is added if there is none.
+  ///
   /// - Parameters:
   ///   - name: The header field. Names match case-insensitively.
   ///   - value: The value of the header field.
   /// - Returns: A new builder with the header set.
   public func settingHeader(name: HTTPField.Name, value: String) -> Self {
     var copy = self
-    copy.request.headerFields[name] = value
-    return copy
-  }
-
-  func mergingPreferHeader(_ value: String) -> Self {
-    var copy = self
-    copy.request.setPreference(value)
+    if name == .prefer {
+      copy.request.setPreference(value)
+    } else {
+      copy.request.headerFields[name] = value
+    }
     return copy
   }
 

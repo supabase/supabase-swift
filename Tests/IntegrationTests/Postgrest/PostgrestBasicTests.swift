@@ -129,6 +129,19 @@ struct PostgrestBasicTests {
   }
 
   @Test
+  func upsertWithCallerPreferHeaderStillUpserts() async throws {
+    let row = ["username": "prefer-merge", "email": "prefer-merge@example.com"]
+    try await client.from("users").insert(row).execute()
+
+    let response = try await client.from("users")
+      .upsert(row, onConflict: "username", returning: .minimal)
+      .settingHeader(name: .init("Prefer")!, value: "count=exact")
+      .execute()
+
+    #expect(response.count == 1)
+  }
+
+  @Test
   func basicInsertUpdateAndDelete() async throws {
     var response =
       try await client.from("messages")

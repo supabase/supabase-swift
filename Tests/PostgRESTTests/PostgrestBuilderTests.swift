@@ -40,6 +40,37 @@ struct PostgrestBuilderTests {
   }
 
   @Test
+  func settingPreferHeaderKeepsUpsertPreferences() throws {
+    let builder = try sut.from("users")
+      .upsert(["username": "dragarcia"], onConflict: "username", returning: .minimal)
+      .settingHeader(name: .prefer, value: "count=exact")
+
+    #expect(
+      builder.request.headerFields[.prefer]
+        == "resolution=merge-duplicates,return=minimal,count=exact")
+  }
+
+  @Test
+  func settingPreferHeaderMergesEachEntryAndCallerWinsOnSameKey() throws {
+    let builder = try sut.from("users")
+      .upsert(["username": "dragarcia"], returning: .minimal)
+      .settingHeader(name: .prefer, value: " return=representation , ,tx=rollback")
+
+    #expect(
+      builder.request.headerFields[.prefer]
+        == "resolution=merge-duplicates,return=representation,tx=rollback")
+  }
+
+  @Test
+  func settingNonPreferHeaderReplacesExistingValue() throws {
+    let builder = sut.from("users").select()
+      .settingHeader(name: .init("X-Custom")!, value: "a")
+      .settingHeader(name: .init("X-Custom")!, value: "b")
+
+    #expect(builder.request.headerFields[.init("X-Custom")!] == "b")
+  }
+
+  @Test
   func executeWithNonSuccessStatusCode() async throws {
     transport.stub(
       .get, url.appendingPathComponent("users"), status: 400,

@@ -51,7 +51,7 @@ Changes that still compile but behave differently. Check each one by hand.
 
 | v2 | v3 |
 | --- | --- |
-| `setHeader(name: String, value:)` on a builder | `settingHeader(name: HTTPField.Name, value:)`; returns a new builder |
+| `setHeader(name: String, value:)` on a builder | `settingHeader(name: HTTPField.Name, value:)`; returns a new builder. A `Prefer` value is merged entry by entry into the SDK-built `Prefer` instead of replacing it, so it can no longer drop `resolution=` or `return=` |
 | `PostgrestClient.setAuth(_:)` | `AccessTokenMiddleware` in `Configuration.http`; see [Access token](#access-token) |
 | `PostgrestClient(url:schema:headers:logger:...)` | `PostgrestClient(configuration: .init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:))`; the flat init is gone, and `http` now comes before `logger` |
 | `Configuration.headers: [String: String]` | `Configuration.headers: HTTPFields`, for example `[.apikey: key]` |
