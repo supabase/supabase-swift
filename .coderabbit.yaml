@@ -1,0 +1,247 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit configuration for supabase-swift.
+# Docs: https://docs.coderabbit.ai/reference/configuration
+#
+# The review rules live in REVIEW.md, AGENTS.md, CODE_STYLE.md, ARCHITECTURE.md, and
+# CONTRIBUTING.md. Keep this file short: point at those docs instead of copying them here.
+
+language: en-US
+
+tone_instructions: >-
+  Be direct and brief. Use plain words and short sentences. Cite the rule from REVIEW.md,
+  CODE_STYLE.md, or ARCHITECTURE.md that a finding breaks. No praise, no filler.
+
+early_access: false
+
+reviews:
+  # chill = balanced feedback. Formatting and lint belong to swift-format and swiftlint in CI.
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  high_level_summary_instructions: >-
+    Summarize the change in two to four bullets. Call out any change to public API, any
+    breaking change, and any change to retry, cancellation, or concurrency behavior.
+  auto_title_placeholder: "@coderabbitai title"
+  auto_title_instructions: >-
+    Use Conventional Commits: type(scope): summary. Types are feat, fix, docs, test, refactor,
+    perf, chore. Scopes are auth, functions, postgrest, realtime, storage, helpers, supabase,
+    typegen, macros, ci. Add ! after the scope for a breaking change.
+  review_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: false
+  suggested_reviewers: false
+  poem: false
+  in_progress_fortune: false
+  enable_prompt_for_ai_agents: true
+  abort_on_close: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - main
+      - release/v2
+    ignore_title_keywords:
+      - WIP
+      - "[skip review]"
+    ignore_usernames:
+      - dependabot[bot]
+      - github-actions[bot]
+
+  path_filters:
+    - "!**/.build/**"
+    - "!**/Package.resolved"
+    - "!CHANGELOG.md"
+    - "!**/__Snapshots__/**"
+    # supabase-typegen goldens. Review the generator and fixtures instead.
+    - "!**/Generated.swift"
+    - "!Examples/**/*.xcodeproj/**"
+    - "!**/*.xcworkspace/**"
+    - "!scripts/compliance-baseline.txt"
+
+  path_instructions:
+    - path: "Sources/**/*.swift"
+      instructions: |
+        Follow REVIEW.md "Priorities" in order: correctness and safety, SDK principles,
+        public API, tests, documentation.
+        - Flag trapping (try!, force unwrap, precondition, fatalError) on any value that varies
+          at runtime or comes from the server (CODE_STYLE.md "When trapping is allowed").
+        - Flag a closed enum for a value the backend sends or receives. It must be an open
+          RawRepresentable struct (CODE_STYLE.md "Enum-like Values").
+        - Flag client-side validation or defaults that the service owns (SDK principles).
+        - Flag NSLock, Mutex, Combine, and @unchecked Sendable without a reason.
+        - Flag async code that does not end on cancellation or that wraps CancellationError.
+        - Flag logs that can carry tokens, keys, passwords, signed URLs, or query strings.
+        - New public symbols need a /// summary, and public throwing functions need a
+          "- Throws:" line.
+        - A public API change needs an sdk-compliance.yaml update in the same PR.
+    - path: "Sources/Auth/**"
+      instructions: |
+        Check session storage and token refresh for races. Tokens and secrets must never be
+        logged. PKCE, OAuth, and MFA flows should match supabase-js behavior.
+    - path: "Sources/Realtime/**"
+      instructions: |
+        Check channel state transitions, reconnect and heartbeat timing, and that every task
+        ends on disconnect() or when the owner is released. Long-lived tasks are named
+        supabase.realtime.<role>.
+    - path: "Sources/Storage/**"
+      instructions: |
+        Check upload bodies, resumable upload retries, and that a single-pass body is never
+        retried. Signed URLs must never be logged.
+    - path: "Sources/PostgREST/**"
+      instructions: |
+        Check query string encoding and filter value escaping. Builder modifiers keep their
+        inline SQL-like parameters (CODE_STYLE.md "Method Parameters").
+    - path: "Sources/PostgrestMacros*/**"
+      instructions: |
+        Check macro diagnostics and that each new expansion case has an expansion test.
+    - path: "Sources/Helpers/**"
+      instructions: |
+        Helpers' public surface holds only types that two or more modules use in public
+        signatures. A change here affects every module: check the HTTP chain order, retry
+        policy, and header precedence in ARCHITECTURE.md "HTTP Layer".
+    - path: "Sources/Supabase/**"
+      instructions: |
+        The facade never drops or overwrites a value the user set. A per-module value wins over
+        a global value. Keep EnumsAndOpenSets.md in sync when an open-set type changes shape.
+    - path: "Tests/**/*.swift"
+      instructions: |
+        Tests use Swift Testing only (@Suite, @Test, #expect, #require); flag XCTest.
+        Test names have no "test" prefix, and a suite name matches its file name.
+        Stub HTTP with ClosureTransport or RecordingTransport from TestHelpers, not URLProtocol
+        (except the URLSession adapter tests). Flag real-time sleeps: use the injected clock.
+        A bug fix needs a test that fails without the fix. Assert behavior, not internals.
+    - path: "Tests/IntegrationTests/**"
+      instructions: |
+        Integration tests run against the local Supabase stack. Check that migrations and
+        tests change together and that tests clean up the data they create.
+    - path: "Package*.swift"
+      instructions: |
+        Package.swift and Package@swift-6.2.swift must stay in sync. A new dependency needs a
+        reason in the PR description and a version range, not an exact pin.
+    - path: "sdk-compliance.yaml"
+      instructions: |
+        Each declared symbol must exist in Sources/. A member is declared with its owning type.
+        Every public macro is declared. See CONTRIBUTING.md "Capability Compliance".
+    - path: "tools/supabase-typegen/**"
+      instructions: |
+        Goldens and fixtures change together with the generator. See
+        tools/supabase-typegen/README.md.
+    - path: "{V*_MIGRATION.md,docs/migrations/**}"
+      instructions: |
+        Each breaking change has a before and after code sample and names the replacement API.
+        Every type the guide names must exist.
+    - path: "**/*.docc/**"
+      instructions: |
+        Symbol links must resolve, and public docs name only public types. Landing pages follow
+        the template in CODE_STYLE.md "Documentation".
+    - path: ".github/workflows/**"
+      instructions: |
+        Pin third-party actions to a full commit SHA. Set least-privilege permissions. Never
+        print secrets. Keep "CI Success" as the single required check.
+    - path: "**/*.md"
+      instructions: |
+        Docs use short sentences and plain words. Commands and paths must be correct for this
+        repo. Do not copy the SDK principles into this repo; link to them.
+
+  tools:
+    swiftlint:
+      enabled: true
+      config_file: .swiftlint.yml
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    github-checks:
+      enabled: true
+    # cspell already runs in CI with dictionary.txt.
+    languagetool:
+      enabled: false
+
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: >-
+        Use Conventional Commits: type(scope): summary, where type is feat, fix, docs, test,
+        refactor, perf, or chore. A breaking change has ! after the type or scope.
+    description:
+      mode: warning
+    docstrings:
+      mode: "off"
+    issue_assessment:
+      mode: warning
+    custom_checks:
+      - name: SDK compliance manifest
+        mode: warning
+        instructions: >-
+          If the PR adds, removes, renames, or moves a public or open symbol under Sources/,
+          sdk-compliance.yaml must change in the same PR. Pass if no public API changed, or if
+          sdk-compliance.yaml changed to match. Fail otherwise and list the symbols.
+      - name: Breaking change migration guide
+        mode: warning
+        instructions: >-
+          If the PR title has ! or the body has "BREAKING CHANGE:", or the PR removes or
+          changes the signature of a public symbol, the PR must update V<N>_MIGRATION.md and
+          docs/migrations/v<N>/<Module>.md. Adding a case to a public enum is a breaking
+          change. Pass if no breaking change, or if both guides changed.
+      - name: Spec link for behavior changes
+        mode: warning
+        instructions: >-
+          If the PR changes SDK behavior that a capability spec in supabase/sdk
+          packages/capability-matrix/specs/ could describe, the PR description must link the
+          spec change or state that no spec covers the behavior. Pass for docs, tests, CI, and
+          refactors with no behavior change.
+      - name: Tests for behavior changes
+        mode: warning
+        instructions: >-
+          If the PR is a feat or fix that changes code under Sources/, it must add or change a
+          test under Tests/. Pass for docs, chore, and refactor PRs with no behavior change.
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - REVIEW.md
+      - AGENTS.md
+      - CODE_STYLE.md
+      - ARCHITECTURE.md
+      - CONTRIBUTING.md
+      - DEVELOPMENT.md
+      - tools/supabase-typegen/README.md
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
+  linear:
+    usage: auto
