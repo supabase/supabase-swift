@@ -1,0 +1,147 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit configuration for supabase-swift.
+# Docs: https://docs.coderabbit.ai/reference/configuration
+#
+# This file holds CodeRabbit settings only. Review rules live in REVIEW.md and the docs it
+# links to, which CodeRabbit reads through knowledge_base.code_guidelines. Do not copy rules here.
+
+language: en-US
+
+tone_instructions: >-
+  Be direct and brief. Use plain words and short sentences. Follow REVIEW.md. No praise, no
+  filler.
+
+early_access: false
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  auto_title_placeholder: "@coderabbitai title"
+  auto_title_instructions: Follow CONTRIBUTING.md "Commit Conventions".
+  review_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: false
+  suggested_reviewers: false
+  poem: false
+  in_progress_fortune: false
+  enable_prompt_for_ai_agents: true
+  abort_on_close: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - main
+      - release/v2
+    ignore_title_keywords:
+      - WIP
+      - "[skip review]"
+    ignore_usernames:
+      - dependabot[bot]
+      - github-actions[bot]
+
+  path_filters:
+    - "!**/.build/**"
+    - "!**/Package.resolved"
+    - "!CHANGELOG.md"
+    - "!**/__Snapshots__/**"
+    - "!**/Generated.swift"
+    - "!Examples/**/*.xcodeproj/**"
+    - "!**/*.xcworkspace/**"
+    - "!scripts/compliance-baseline.txt"
+
+  tools:
+    swiftlint:
+      enabled: true
+      config_file: .swiftlint.yml
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    github-checks:
+      enabled: true
+    # cspell runs in CI.
+    languagetool:
+      enabled: false
+
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: Follow CONTRIBUTING.md "Commit Conventions".
+    description:
+      mode: warning
+    docstrings:
+      mode: "off"
+    issue_assessment:
+      mode: warning
+    custom_checks:
+      - name: SDK compliance manifest
+        mode: warning
+        instructions: >-
+          Apply CONTRIBUTING.md "Capability Compliance". Fail if the PR changes public API under
+          Sources/ and does not update sdk-compliance.yaml. List the symbols.
+      - name: Breaking change migration guide
+        mode: warning
+        instructions: >-
+          Apply CONTRIBUTING.md "Commit Conventions". Fail if the PR has a breaking change and
+          does not update the major-version migration guide.
+      - name: Spec link for behavior changes
+        mode: warning
+        instructions: >-
+          Apply CONTRIBUTING.md "Principles and Specs". Fail if the PR changes behavior and the
+          description neither links a spec change nor says that no spec covers it.
+      - name: Tests for behavior changes
+        mode: warning
+        instructions: >-
+          Fail if a feat or fix PR changes code under Sources/ and adds or changes no test under
+          Tests/.
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - REVIEW.md
+      - AGENTS.md
+      - CODE_STYLE.md
+      - ARCHITECTURE.md
+      - CONTRIBUTING.md
+      - DEVELOPMENT.md
+      - tools/supabase-typegen/README.md
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
+  linear:
+    usage: auto
