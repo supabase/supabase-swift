@@ -184,6 +184,9 @@ struct FunctionsAPITests {
     ("search?q=%zz", "search?q=%25zz"),
     ("search?a=%20&b=%zz&c=%", "search?a=%20&b=%25zz&c=%25"),
     ("search#frag?x=1", "search"),
+    ("search?\u{0301}q=x", "search?%CC%81q=x"),
+    ("search?q=%41\u{0301}", "search?q=%41%CC%81"),
+    ("search#\u{0301}?x=1", "search"),
     ("search?", "search"),
   ])
   func queryInNameIsSentAsQuery(name: String, expected: String) {

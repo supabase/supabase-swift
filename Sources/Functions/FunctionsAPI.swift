@@ -60,35 +60,40 @@ enum FunctionsAPI {
   /// The name's query items keep the caller's percent-encoding, minus the items named in
   /// `replacing`, which the SDK sends itself.
   static func functionURL(name: String, base: URL, replacing: Set<String>) -> URL {
-    let parts = name.prefix { $0 != "#" }
+    // Scalars, not Characters: a combining mark after `?`, `#` or `%XX` joins it into one
+    // Character, which would hide the delimiter.
+    let parts = name.unicodeScalars.prefix { $0 != "#" }
       .split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
-    let url = base.appendingPathComponent(String(parts[0]))
+    let url = base.appendingPathComponent(String(Substring(parts[0])))
     guard
       let rawQuery = parts.dropFirst().first,
-      let encoded = encodedQuery(rawQuery),
-      let items = URLComponents(string: "?" + encoded)?.percentEncodedQueryItems,
       var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     else { return url }
 
-    let kept = items.filter { !replacing.contains(decodedQueryName($0.name)) }
+    components.percentEncodedQuery = encodedQuery(Array(rawQuery))
+    let kept = (components.percentEncodedQueryItems ?? []).filter {
+      !replacing.contains(decodedQueryName($0.name))
+    }
     components.percentEncodedQueryItems = kept.isEmpty ? nil : kept
     return components.url ?? url
   }
 
   /// Percent-encodes what a query cannot hold as is. A valid `%XX` escape stays; a `%` without
   /// two hex digits after it becomes `%25`.
-  private static func encodedQuery(_ query: Substring) -> String? {
-    var escaped = ""
-    var rest = query[...]
-    while let percent = rest.firstIndex(of: "%") {
-      escaped += rest[..<percent]
-      let digits = rest[rest.index(after: percent)...].prefix(2)
-      escaped +=
-        digits.count == 2 && digits.allSatisfy { $0.isASCII && $0.isHexDigit } ? "%" : "%25"
-      rest = rest[rest.index(after: percent)...]
+  private static func encodedQuery(_ scalars: [Unicode.Scalar]) -> String {
+    var encoded = ""
+    for (index, scalar) in scalars.enumerated() {
+      if scalar == "%" {
+        let digits = scalars.dropFirst(index + 1).prefix(2)
+        encoded +=
+          digits.count == 2 && digits.allSatisfy(\.properties.isASCIIHexDigit) ? "%" : "%25"
+      } else if CharacterSet.urlQueryAllowed.contains(scalar) {
+        encoded.unicodeScalars.append(scalar)
+      } else {
+        encoded += String(scalar).utf8.map { String(format: "%%%02X", $0) }.joined()
+      }
     }
-    escaped += rest
-    return escaped.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.union(["%"]))
+    return encoded
   }
 
   /// A raw query name as a form decoder reads it: `+` is a space, then `%XX` escapes decode.
