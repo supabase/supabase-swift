@@ -1014,6 +1014,17 @@ features:
       - MFAFactors.verified
       - MFAFactors.unverified
       - MFAFactors.all
+      - Factor
+      - Factor.init
+      - Factor.id
+      - Factor.friendlyName
+      - Factor.factorType
+      - Factor.status
+      - Factor.createdAt
+      - Factor.updatedAt
+      - Factor.lastChallengedAt
+      - Factor.phone
+      - Factor.webAuthnAAGUID
       - FactorType
       - FactorType.init
       - FactorType.rawValue

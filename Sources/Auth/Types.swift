@@ -1654,6 +1654,16 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
   /// Timestamp when the factor was last updated.
   public var updatedAt: Date
 
+  /// Timestamp of the last challenge created for the factor, or `nil` if it was never challenged.
+  public var lastChallengedAt: Date?
+
+  /// Phone number that receives the codes of a ``FactorType/phone`` factor. `nil` for other types.
+  public var phone: String?
+
+  /// AAGUID of the authenticator model that holds a ``FactorType/webAuthn`` credential, or `nil`
+  /// when the factor has none.
+  public var webAuthnAAGUID: UUID?
+
   /// Creates a ``Factor``.
   public init(
     id: UUID,
@@ -1661,7 +1671,10 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
     factorType: FactorType,
     status: FactorStatus,
     createdAt: Date,
-    updatedAt: Date
+    updatedAt: Date,
+    lastChallengedAt: Date? = nil,
+    phone: String? = nil,
+    webAuthnAAGUID: UUID? = nil
   ) {
     self.id = id
     self.friendlyName = friendlyName
@@ -1669,6 +1682,26 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
     self.status = status
     self.createdAt = createdAt
     self.updatedAt = updatedAt
+    self.lastChallengedAt = lastChallengedAt
+    self.phone = phone
+    self.webAuthnAAGUID = webAuthnAAGUID
+  }
+
+  /// Decodes a factor. An empty `phone` string becomes `nil`.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(UUID.self, forKey: .id)
+    friendlyName = try container.decodeIfPresent(String.self, forKey: .friendlyName)
+    factorType = try container.decode(FactorType.self, forKey: .factorType)
+    status = try container.decode(FactorStatus.self, forKey: .status)
+    createdAt = try container.decode(Date.self, forKey: .createdAt)
+    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    lastChallengedAt = try container.decodeIfPresent(Date.self, forKey: .lastChallengedAt)
+    // The server sends `""`, never `null`, for a factor without a phone.
+    phone = try container.decodeIfPresent(String.self, forKey: .phone).flatMap {
+      $0.isEmpty ? nil : $0
+    }
+    webAuthnAAGUID = try container.decodeIfPresent(UUID.self, forKey: .webAuthnAAGUID)
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -1678,6 +1711,9 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
     case status
     case createdAt = "created_at"
     case updatedAt = "updated_at"
+    case lastChallengedAt = "last_challenged_at"
+    case phone
+    case webAuthnAAGUID = "web_authn_aaguid"
   }
 }
 

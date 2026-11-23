@@ -62,7 +62,10 @@ struct PersistedSessionCodecTests {
         factorType: "totp",
         status: .verified,
         createdAt: Date(),
-        updatedAt: Date()
+        updatedAt: Date(),
+        lastChallengedAt: Date(),
+        phone: "15555550100",
+        webAuthnAAGUID: UUID()
       )
     ]
     session.user.identities?[0].identityData = [:]

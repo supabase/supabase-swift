@@ -93,14 +93,6 @@ Auth	AuthError.Code.validationFailed
 Auth	AuthError.Code.weakPassword
 Auth	AuthMFA
 Auth	AuthMFAUnenrollResponse.init
-Auth	Factor
-Auth	Factor.createdAt
-Auth	Factor.factorType
-Auth	Factor.friendlyName
-Auth	Factor.id
-Auth	Factor.init
-Auth	Factor.status
-Auth	Factor.updatedAt
 Auth	JWK
 Auth	JWK.alg
 Auth	JWK.crv
