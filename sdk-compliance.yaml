@@ -153,9 +153,8 @@ supporting_symbols:
   # same for a function the typed `rpc(_:)` calls, and the markers are inputs to
   # those expansions rather than capabilities of their own. Attribute names are
   # unprefixed on purpose — nothing re-exports `PostgrestMacros`, so a user opts
-  # in with an explicit import.
-  - Table
-  - Function
+  # in with an explicit import. `Table` and `Function` are declared under
+  # database.generated_types.
   - Column
   - SelectionOf
   - PrimaryKey
@@ -564,7 +563,6 @@ supporting_symbols:
   - SupabaseClient.Configuration.Auth.retryEnabled
   - SupabaseClient.Configuration.Auth.init
   - SupabaseClient.Configuration.Global
-  - SupabaseClient.Configuration.Global.logger
   - SupabaseClient.Configuration.Global.init
   - SupabaseClient.Configuration.Functions
   - SupabaseClient.Configuration.Functions.region
@@ -1274,6 +1272,14 @@ features:
       - AuthAdminCustomProviders.list
   auth.admin.update_mfa_factor: not_implemented
 
+  # ── Auth — Admin SSO Providers ─────────────────────────────────────────────
+
+  auth.sso_admin.create_provider: not_implemented
+  auth.sso_admin.delete_provider: not_implemented
+  auth.sso_admin.get_provider: not_implemented
+  auth.sso_admin.list_providers: not_implemented
+  auth.sso_admin.update_provider: not_implemented
+
   # AuthPasskeys and AuthAdminPasskeys are @_spi(Experimental). The compliance
   # scanner reads SPI symbols too, so these lists are checked like public API.
   auth.passkey.register_passkey:
@@ -1546,8 +1552,15 @@ features:
     status: implemented
     no_public_symbols: true
     note: "W3C traceparent header injection from the active OpenTelemetry span, gated behind the OpenTelemetry SPM trait (opt-in dependency on opentelemetry-swift-core). No public API — enable the trait and it's automatic."
-  client.observability.client_info: not_implemented
-  client.observability.diagnostic_logging: not_implemented
+  client.observability.client_info:
+    status: implemented
+    no_public_symbols: true
+    note: "Every module sends X-Client-Info as name/version; platform; platform-version; runtime=swift; runtime-version, built by Helpers.clientInfo. PostgREST adds a features parameter for the typed API. No public API."
+  client.observability.diagnostic_logging:
+    status: partially_implemented
+    note: "Each client takes a swift-log Logger at construction. The default logger is not silent: it emits warning and above in debug builds, and is silent only in release builds."
+    symbols:
+      - SupabaseClient.Configuration.Global.logger
 
   # ── Database ───────────────────────────────────────────────────────────────
 
@@ -1584,6 +1597,17 @@ features:
       - SupabaseClient.rpc
   database.query.openapi_spec: not_implemented
 
+  database.generated_types.typed_queries:
+    status: implemented
+    note: "@_spi(Experimental). `supabase gen types --lang swift` writes @Table structs; from(_:) takes the type and checks columns, filters and selected relations at compile time."
+    symbols:
+      - Table
+  database.generated_types.typed_rpc:
+    status: implemented
+    note: "@_spi(Experimental). `supabase gen types --lang swift` writes @Function types; the typed rpc(_:) checks arguments and the result type at compile time."
+    symbols:
+      - Function
+
   database.mutate.insert:
     status: implemented
     symbols:
@@ -1613,9 +1637,26 @@ features:
       - PostgrestReturning.rawValue
       - PostgrestReturning.minimal
       - PostgrestReturning.representation
-  database.mutate.bulk_rows_with_differing_fields: not_implemented
-  database.mutate.count: not_implemented
-  database.mutate.missing_defaults: not_implemented
+  database.mutate.bulk_rows_with_differing_fields:
+    status: implemented
+    note: "insert and upsert of an array send a columns query parameter with the union of every row's keys."
+    symbols:
+      - PostgrestRequestBuilder.insert
+      - PostgrestRequestBuilder.upsert
+  database.mutate.count:
+    status: implemented
+    note: "The count: parameter of insert, update, upsert and delete."
+    symbols:
+      - PostgrestRequestBuilder.insert
+      - PostgrestRequestBuilder.update
+      - PostgrestRequestBuilder.upsert
+      - PostgrestRequestBuilder.delete
+  database.mutate.missing_defaults:
+    status: implemented
+    note: "defaultToNull: false on insert and upsert sends Prefer: missing=default."
+    symbols:
+      - PostgrestRequestBuilder.insert
+      - PostgrestRequestBuilder.upsert
 
   database.using_filters.eq:
     status: implemented
@@ -2893,8 +2934,20 @@ features:
     status: implemented
     no_public_symbols: true
     note: "Cancel the Task that awaits the storage call. There is no cancel()-style method; cancellation is plain Swift structured concurrency."
-  storage.file_buckets.purge_project_cache: not_implemented
-  storage.file_buckets.transfer_progress: not_implemented
+  storage.file_buckets.purge_project_cache:
+    status: implemented
+    note: "StorageClient.purgeCache(bucket: nil) purges the CDN cache of every bucket in the project."
+    symbols:
+      - StorageClient.purgeCache
+  storage.file_buckets.transfer_progress:
+    status: implemented
+    note: "The progress: closure every upload and download takes."
+    symbols:
+      - TransferProgress
+      - TransferProgress.init
+      - TransferProgress.completedBytes
+      - TransferProgress.totalBytes
+      - TransferProgress.fractionCompleted
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
@@ -3191,11 +3244,3 @@ features:
     symbols:
       - StorageClient.Configuration.retryEnabled
       - SupabaseClient.Configuration.Storage.retryEnabled
-  # Newly synced from the canonical spec; no local group yet, place manually.
-  auth.sso_admin.create_provider: not_implemented
-  auth.sso_admin.delete_provider: not_implemented
-  auth.sso_admin.get_provider: not_implemented
-  auth.sso_admin.list_providers: not_implemented
-  auth.sso_admin.update_provider: not_implemented
-  database.generated_types.typed_queries: not_implemented
-  database.generated_types.typed_rpc: not_implemented
