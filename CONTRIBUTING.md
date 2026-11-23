@@ -25,11 +25,10 @@ major-version migration guide (`V<N>_MIGRATION.md` and `docs/migrations/v<N>/`) 
 
 ## Principles and Specs
 
-The [SDK principles](https://github.com/supabase/sdk/pull/308) guide every
-change in every Supabase SDK. Read them before you change behavior. Do not
-copy them into this repo. The document lands at `docs/principles.md` in
-`supabase/sdk` with that pull request. When a principle shapes a change, cite
-it by a link to its heading in your PR description.
+The [SDK engineering principles](https://github.com/supabase/sdk/blob/main/docs/principles.md)
+guide every change in every Supabase SDK. Read them before you change
+behavior. Do not copy them into this repo. When a principle shapes a change,
+cite it by a link to its heading in your PR description.
 
 Capability specs live in
 [`packages/capability-matrix/specs/`](https://github.com/supabase/sdk/tree/main/packages/capability-matrix/specs)

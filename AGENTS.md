@@ -25,10 +25,6 @@ Read the matching file before you act:
 - [RELEASE.md](RELEASE.md) — release-please, release branches, and the typegen binary release.
   Read it before you touch versions, `CHANGELOG.md`, or release workflows.
 
-- [SDK principles](https://github.com/supabase/sdk/pull/308) — the cross-SDK rules that guide every
-  change. Read them before you change behavior. The document lands at `docs/principles.md` in
-  `supabase/sdk` with that pull request.
-
 ## Notes for AI coding agents
 
 - A change to behavior that a capability spec describes starts with a spec change in
