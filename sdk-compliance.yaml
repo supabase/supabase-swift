@@ -153,8 +153,10 @@ supporting_symbols:
   # same for a function the typed `rpc(_:)` calls, and the markers are inputs to
   # those expansions rather than capabilities of their own. Attribute names are
   # unprefixed on purpose — nothing re-exports `PostgrestMacros`, so a user opts
-  # in with an explicit import. `Table` and `Function` are declared under
-  # database.generated_types.
+  # in with an explicit import. The drift check cannot see swift.macro symbols
+  # (SDK-1647), so database.generated_types registers the typed entry points.
+  - Table
+  - Function
   - Column
   - SelectionOf
   - PrimaryKey
@@ -1599,14 +1601,16 @@ features:
 
   database.generated_types.typed_queries:
     status: implemented
-    note: "@_spi(Experimental). `supabase gen types --lang swift` writes @Table structs; from(_:) takes the type and checks columns, filters and selected relations at compile time."
+    note: "@_spi(Experimental). `supabase gen types --lang swift` writes @Table structs; the typed from(_:) takes the type and checks columns, filters and selected relations at compile time. The symbol names are shared with the untyped from(_:)."
     symbols:
-      - Table
+      - PostgrestClient.from
+      - SupabaseClient.from
   database.generated_types.typed_rpc:
     status: implemented
-    note: "@_spi(Experimental). `supabase gen types --lang swift` writes @Function types; the typed rpc(_:) checks arguments and the result type at compile time."
+    note: "@_spi(Experimental). `supabase gen types --lang swift` writes @Function types; the typed rpc(_:) checks arguments and the result type at compile time. The symbol names are shared with the untyped rpc(_:params:)."
     symbols:
-      - Function
+      - PostgrestClient.rpc
+      - SupabaseClient.rpc
 
   database.mutate.insert:
     status: implemented
