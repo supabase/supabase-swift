@@ -1,5 +1,59 @@
 # Changelog
 
+## [3.0.0-alpha.2](https://github.com/supabase/supabase-swift/compare/v3.0.0-alpha.1...v3.0.0-alpha.2) (2026-11-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **realtime:** in a standalone RealtimeClient, an accessToken callback that returns nil now clears the stored token instead of keeping it, and httpSend drops an Authorization header from `headers` in that case.
+* **supabase:** SupabaseClient.Configuration.Database, .Auth, .Functions, .Storage and .Realtime no longer have http or logger, and Database, Auth, Storage and Realtime no longer have clock. Configuration.Global.clock, and clock and now on the standalone module configurations, are @_spi(Testing) and are no longer init parameters.
+* **auth:** a redirect URL with implicit tokens throws unless acceptsImplicitTokens is true. Apps that use email links without PKCE, invites, or generateLink links must opt in. An HTTPS redirect URL throws on systems older than iOS 17.4 and the matching releases.
+* **storage:** UploadOptions.upsert is Bool? instead of Bool.
+* **storage:** ObjectListingOptions.delimited is now Bool?, and objects(prefix:) without options lists every depth with no folders. Pass ObjectListingOptions(delimited: true) to list one level with folders.
+* **storage:** report each upload's error from resumeAll ([#1850](https://github.com/supabase/supabase-swift/issues/1850))
+* **postgrest:** maybeSingle() no longer sends `Accept: application/vnd.pgrst.object+json`, so PostgREST no longer rolls back a write that matches more than one row. The rows are written, then the call throws PGRST116. Use single() where the rollback matters. The typed maybeSingle() throws a .server error instead of .decoding.
+* **auth:** shouldCreateUser is Bool?, channel is MessagingChannel?, and deleteUser(id:softDelete:) takes Bool?. Code that reads these properties must handle nil.
+
+### Features
+
+* **auth:** expose lastChallengedAt, phone, and webAuthnAAGUID on Factor ([#1876](https://github.com/supabase/supabase-swift/issues/1876)) ([7ec2429](https://github.com/supabase/supabase-swift/commit/7ec2429a57b49d064c356a92cdc384d64eb7005a))
+* **helpers:** add an equal-jitter BackoffPolicy ([#1868](https://github.com/supabase/supabase-swift/issues/1868)) ([7605701](https://github.com/supabase/supabase-swift/commit/76057011bda871eedac45bd582de8214a3f35422))
+* **postgrest:** add defaultToNull to typed bulk insert and upsert ([#1856](https://github.com/supabase/supabase-swift/issues/1856)) ([630823d](https://github.com/supabase/supabase-swift/commit/630823d0ff4f29b72f453c59fcc95472d24cb7e8))
+* **realtime:** add buffering policies to presence state and broadcast streams ([#1840](https://github.com/supabase/supabase-swift/issues/1840)) ([3a5863a](https://github.com/supabase/supabase-swift/commit/3a5863a23626a78274f9908d3a6fa63dbd3a8ed9))
+* **realtime:** add typed broadcast events ([#1845](https://github.com/supabase/supabase-swift/issues/1845)) ([029cedb](https://github.com/supabase/supabase-swift/commit/029cedb03176e916ea5cc119560fc8fe9f798e3a))
+
+
+### Bug Fixes
+
+* **auth:** let the server apply its own OTP, channel, delete, and invite defaults ([#1838](https://github.com/supabase/supabase-swift/issues/1838)) ([4e62850](https://github.com/supabase/supabase-swift/commit/4e62850d1a9ef234167fc3dffa552cc99a4d66ca))
+* **auth:** refuse implicit-token redirects by default and check the OAuth callback URL ([#1864](https://github.com/supabase/supabase-swift/issues/1864)) ([ac3717a](https://github.com/supabase/supabase-swift/commit/ac3717a6f302c6ebb4ee8994ac4945c78861b3bf))
+* **auth:** store the server's user after unlinkIdentity ([#1851](https://github.com/supabase/supabase-swift/issues/1851)) ([88ea33f](https://github.com/supabase/supabase-swift/commit/88ea33f490f20bf785c5242db1c93b4c84c401b5))
+* **functions:** send a third-party provider token as given ([#1853](https://github.com/supabase/supabase-swift/issues/1853)) ([254d98d](https://github.com/supabase/supabase-swift/commit/254d98dc6cbf96f2ff9a1668d2432bbcce1762c4))
+* **helpers:** use full jitter for the retry backoff ([#1860](https://github.com/supabase/supabase-swift/issues/1860)) ([2201765](https://github.com/supabase/supabase-swift/commit/22017653fc60540f862343b375c8f31b78f2af49))
+* **postgrest:** apply the configured coders on the typed path ([#1861](https://github.com/supabase/supabase-swift/issues/1861)) ([5e06f5b](https://github.com/supabase/supabase-swift/commit/5e06f5b0c4cd4a9654be9462f2ed9163091dcb0b))
+* **postgrest:** escape the database function name in @Function ([#1857](https://github.com/supabase/supabase-swift/issues/1857)) ([3c49050](https://github.com/supabase/supabase-swift/commit/3c4905066bbc81e30c5200f32e02a93b935313ee))
+* **postgrest:** let PostgREST apply its own write defaults in the typed API ([#1835](https://github.com/supabase/supabase-swift/issues/1835)) ([1e5a020](https://github.com/supabase/supabase-swift/commit/1e5a0203bcfabb8dcbd736b33ab1d7cd31ad883f))
+* **postgrest:** make maybeSingle behave the same on the typed and untyped paths ([#1841](https://github.com/supabase/supabase-swift/issues/1841)) ([c6ef67c](https://github.com/supabase/supabase-swift/commit/c6ef67cdf9738b9b06c2082812b8e1c701151d0f))
+* **postgrest:** throw from typed readOnly() when arguments are not an object ([#1852](https://github.com/supabase/supabase-swift/issues/1852)) ([2c5b4f2](https://github.com/supabase/supabase-swift/commit/2c5b4f2f5f8015ff23e32679d5a20153181c558a))
+* **realtime:** accept unknown event values in the join reply ([#1832](https://github.com/supabase/supabase-swift/issues/1832)) ([4d125a2](https://github.com/supabase/supabase-swift/commit/4d125a24ad4f6b0319f2b04674d56596fff8d978))
+* **realtime:** confirm subscribe on the join reply unless waitsForSubscription is set ([#1869](https://github.com/supabase/supabase-swift/issues/1869)) ([da4f9b0](https://github.com/supabase/supabase-swift/commit/da4f9b099ee0ec0eb4c240c6063efbf9a3770dff))
+* **realtime:** let the server judge typed Postgres changes filters ([#1836](https://github.com/supabase/supabase-swift/issues/1836)) ([e2eec74](https://github.com/supabase/supabase-swift/commit/e2eec74b60fcfe8ef188e49da373bc6a1951a3f7))
+* **realtime:** read the httpSend error message from any JSON body ([#1846](https://github.com/supabase/supabase-swift/issues/1846)) ([5d736f7](https://github.com/supabase/supabase-swift/commit/5d736f7c048bd0475b96cd1c79451e0b32765e70))
+* **realtime:** treat a nil access token after a real one as "no user" ([#1865](https://github.com/supabase/supabase-swift/issues/1865)) ([554ed9f](https://github.com/supabase/supabase-swift/commit/554ed9f8f94c724b6113596b0eeee98eae52f1f8))
+* **storage:** keep a minimum wait between resumable upload retries ([#1866](https://github.com/supabase/supabase-swift/issues/1866)) ([908d3a5](https://github.com/supabase/supabase-swift/commit/908d3a5b234343a644fc8b90bffffd9b6335cffc))
+* **storage:** keep resumable upload requests on the storage origin and inside the container ([#1863](https://github.com/supabase/supabase-swift/issues/1863)) ([fd7dcd4](https://github.com/supabase/supabase-swift/commit/fd7dcd414d2f6887d5b3ffffb526cf3466259ad2))
+* **storage:** leave Storage's own upsert and list defaults to the service ([#1847](https://github.com/supabase/supabase-swift/issues/1847)) ([cd2c893](https://github.com/supabase/supabase-swift/commit/cd2c8938be588844b50688358cab5fb938cfb278))
+* **storage:** report each upload's error from resumeAll ([#1850](https://github.com/supabase/supabase-swift/issues/1850)) ([53509e0](https://github.com/supabase/supabase-swift/commit/53509e07106481b37771883281b391b853a88033))
+* **storage:** send values to the service instead of checking them first ([#1839](https://github.com/supabase/supabase-swift/issues/1839)) ([531793d](https://github.com/supabase/supabase-swift/commit/531793db66c903c700ff82a1bda2fff69e8e41be))
+* **storage:** send with_delimiter on list-v2 only when the caller sets it ([#1855](https://github.com/supabase/supabase-swift/issues/1855)) ([b8a58cc](https://github.com/supabase/supabase-swift/commit/b8a58cc3e84319df34c54a38823424e408104481))
+* **storage:** send x-upsert on every tus request and stop looping on duplicates ([#1854](https://github.com/supabase/supabase-swift/issues/1854)) ([24bb048](https://github.com/supabase/supabase-swift/commit/24bb0484246cb69a502919ea5d82244e29582af1))
+* **supabase:** apply the URLSession delegate to the Realtime WebSocket ([#1862](https://github.com/supabase/supabase-swift/issues/1862)) ([accd70a](https://github.com/supabase/supabase-swift/commit/accd70ad06259a40c603bf0ddd55273ab4afbdd7))
+
+
+### Code Refactoring
+
+* **supabase:** one http, logger and clock for every sub-client ([#1858](https://github.com/supabase/supabase-swift/issues/1858)) ([1a2d26b](https://github.com/supabase/supabase-swift/commit/1a2d26b585ee4d92ac9daf879f5337b594ef52f6))
+
 ## [3.0.0-alpha.1](https://github.com/supabase/supabase-swift/compare/v2.55.7...v3.0.0-alpha.1) (2026-11-17)
 
 
