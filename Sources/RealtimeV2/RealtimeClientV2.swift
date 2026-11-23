@@ -94,6 +94,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// Cached connection to avoid actor hops when sending messages
     var connection: (any WebSocket)?
 
+    /// Bumped by every `disconnect()`, which stops the connection manager only in a later task.
+    /// A connect compares it before and after it waits, and drops a socket a disconnect made stale.
+    var disconnectGeneration = 0
+
+    /// The `disconnectGeneration` that `connection` was set up under.
+    var connectionGeneration = 0
+
     var channels: [String: RealtimeChannelV2] = [:]
     var sendBuffer: [@Sendable (RealtimeClientV2) -> Void] = []
 
@@ -219,7 +226,8 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     )
 
     let stateObserverTask = Task { [weak self, connectionManager] in
-      var sawReconnecting = false
+      // The disconnect generation when an automatic reconnect started; `nil` when none is pending.
+      var reconnectGeneration: Int?
       for await state in connectionManager.stateChanges {
         guard let self else { return }
         switch state {
@@ -227,10 +235,11 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           // Only drive the restart from here when this .connected came from
           // an automatic reconnect (.reconnecting → .connected). Connects
           // triggered by `connect()` set things up synchronously there.
-          if sawReconnecting {
-            self.handleConnected(conn: conn, isReconnect: true)
-            sawReconnecting = false
-            self.yieldStatusIfChanged(.connected)
+          if let generation = reconnectGeneration {
+            reconnectGeneration = nil
+            if self.handleConnected(conn: conn, isReconnect: true, generation: generation) {
+              self.yieldStatusIfChanged(.connected)
+            }
           }
         case .disconnected:
           // A failed auto-reconnect lands here (.reconnecting → .connecting →
@@ -238,15 +247,22 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           // (e.g. from `connectOnSubscribe`) isn't misclassified as a
           // reconnect completion — `rejoinChannels()` would reset every
           // channel and cancel the very join that connect was performing.
-          sawReconnecting = false
+          reconnectGeneration = nil
           self.yieldStatusIfChanged(.disconnected)
         case .connecting:
           // Skip — `connect()` yields .connecting/.connected synchronously
           // before returning, so the observer would otherwise double-emit.
           break
         case .reconnecting:
-          sawReconnecting = true
-          self.yieldStatusIfChanged(.connecting)
+          // Compare with the generation of the lost connection, not the current one: a
+          // `disconnect()` may already have run while this event waited in the stream.
+          let (lost, current) = self.mutableState.withValue {
+            ($0.connectionGeneration, $0.disconnectGeneration)
+          }
+          reconnectGeneration = lost
+          if lost == current {
+            self.yieldStatusIfChanged(.connecting)
+          }
         }
       }
     }
@@ -263,16 +279,20 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     #endif
   }
 
-  private func handleConnected(conn: any WebSocket, isReconnect: Bool) {
+  /// Sets up `conn`, unless a `disconnect()` ran since `generation` was read. Returns whether it
+  /// set up `conn`.
+  private func handleConnected(conn: any WebSocket, isReconnect: Bool, generation: Int) -> Bool {
     // Set up the per-connection machinery exactly once. `handleConnected` can
     // run multiple times for the same physical connection (concurrent subscribes,
     // subscribe retries racing an auto-reconnect). Guarding on connection identity
     // prevents launching duplicate `listenForMessages` / `startHeartbeating` tasks,
     // which would cancel-and-restart the stream consumer (potentially losing
     // in-flight frames) and create a second heartbeat timer.
-    let isNewConnection = mutableState.withValue { state -> Bool in
+    let setUp = mutableState.withValue { state -> Bool? in
+      guard state.disconnectGeneration == generation else { return nil }
       if state.connection === conn { return false }
       state.connection = conn
+      state.connectionGeneration = generation
       // A heartbeat awaiting an ack on the previous connection can never be
       // acknowledged on this one. Clearing the pending ref prevents the new
       // connection's first heartbeat from misreading it as a timeout and
@@ -280,6 +300,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       state.pendingHeartbeatRef = nil
       return true
     }
+    guard let isNewConnection = setUp else { return false }
 
     if isNewConnection {
       listenForMessages(conn: conn)
@@ -290,6 +311,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     if isReconnect {
       Task { await rejoinChannels() }
     }
+    return true
   }
 
   deinit {
@@ -340,15 +362,19 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   public func connect() async {
     options.logger?.debug("Connecting...")
     self.yieldStatusIfChanged(.connecting)
+    let generation = mutableState.withValue { $0.disconnectGeneration }
 
     do {
       let conn = try await connectionManager.connect()
-      options.logger?.debug("Connected to realtime WebSocket")
 
       // Set up message listening, heartbeating, and connection caching
       // synchronously so callers can rely on state being ready after connect()
       // returns, even if the state observer task hasn't caught up yet.
-      handleConnected(conn: conn, isReconnect: false)
+      guard handleConnected(conn: conn, isReconnect: false, generation: generation) else {
+        options.logger?.debug("Disconnected while connecting; dropping the new connection")
+        return
+      }
+      options.logger?.debug("Connected to realtime WebSocket")
       self.yieldStatusIfChanged(.connected)
     } catch {
       options.logger?.error("Connection failed: \(error)")
@@ -649,6 +675,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     options.logger?.debug("Closing WebSocket connection")
 
     mutableState.withValue {
+      $0.disconnectGeneration += 1
       $0.ref = 0
       $0.messageTask?.cancel()
       $0.messageTask = nil

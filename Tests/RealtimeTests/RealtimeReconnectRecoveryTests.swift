@@ -28,6 +28,76 @@ struct RealtimeReconnectRecoveryTests {
     )
   }
 
+  /// A client whose transport calls `disconnect()` on transport call `disconnectingCall`, then
+  /// returns the socket: the socket opens after the app asked to disconnect.
+  private func makeClientDisconnecting(
+    onTransportCall disconnectingCall: Int
+  ) -> (sut: RealtimeClientV2, sockets: LockIsolated<[FakeWebSocket]>) {
+    struct WeakClient { weak var value: RealtimeClientV2? }
+    let client = LockIsolated(WeakClient())
+    let sockets = LockIsolated<[FakeWebSocket]>([])
+    // The client socket holds its server half only weakly, so keep the servers alive here.
+    let servers = LockIsolated<[FakeWebSocket]>([])
+    let sut = RealtimeClientV2(
+      url: url,
+      options: makeOptions(),
+      wsTransport: { _, _ in
+        let (socket, server) = FakeWebSocket.fakes()
+        servers.withValue { $0.append(server) }
+        let call = sockets.withValue { sockets -> Int in
+          sockets.append(socket)
+          return sockets.count
+        }
+        if call == disconnectingCall {
+          client.value.value?.disconnect()
+        }
+        return socket
+      },
+      http: HTTPClientMock(),
+      clock: ContinuousClock()
+    )
+    client.withValue { $0.value = sut }
+    return (sut, sockets)
+  }
+
+  /// Issue #1870: `disconnect()` stops the connection manager in a later task. A `connect()`
+  /// whose socket opened in that window must not set up the socket again, start the heartbeat,
+  /// or report `.connected`.
+  @Test
+  func disconnectWhileConnectingLeavesTheClientDisconnected() async throws {
+    let (sut, sockets) = makeClientDisconnecting(onTransportCall: 1)
+
+    await sut.connect()
+
+    #expect(await waitUntil(timeout: 2) { sockets.value[0].closeReason != nil })
+    #expect(sut.status == .disconnected)
+    #expect(sut.mutableState.value.connection == nil)
+    #expect(sut.mutableState.value.heartbeatTask == nil)
+    #expect(sut.mutableState.value.messageTask == nil)
+  }
+
+  /// Issue #1870: an automatic reconnect whose socket opens after `disconnect()` must not set up
+  /// the socket again, start the heartbeat, or rejoin channels.
+  @Test
+  func disconnectWhileReconnectingLeavesTheClientDisconnected() async throws {
+    let (sut, sockets) = makeClientDisconnecting(onTransportCall: 2)
+
+    await sut.connect()
+    #expect(sut.status == .connected)
+
+    await sut.connectionManager.handleError(URLError(.networkConnectionLost))
+
+    #expect(
+      await waitUntil(timeout: 2) {
+        sockets.value.count == 2 && sockets.value[1].closeReason != nil
+      })
+    let reconnectedAfterDisconnect = await waitUntil(timeout: 0.5) {
+      let state = sut.mutableState.value
+      return state.status == .connected || state.connection != nil || state.heartbeatTask != nil
+    }
+    #expect(!reconnectedAfterDisconnect)
+  }
+
   /// Defect 1 in #1145: `sawReconnecting` was cleared only on `.connected`.
   /// When the single auto-reconnect attempt failed (network still down), the
   /// latch stayed armed, and the next successful `connect()` — e.g. from a

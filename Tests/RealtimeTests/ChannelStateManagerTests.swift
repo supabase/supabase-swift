@@ -104,25 +104,6 @@ struct ChannelStateManagerTests {
     }
   }
 
-  /// Parks one caller in `park()` until `open()`. Tests wait for `isParked`
-  /// before acting.
-  private final class Gate: Sendable {
-    private let continuation = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
-
-    var isParked: Bool { continuation.value != nil }
-
-    func park() async {
-      await withCheckedContinuation { continuation.setValue($0) }
-    }
-
-    func open() {
-      continuation.withValue {
-        $0?.resume()
-        $0 = nil
-      }
-    }
-  }
-
   // MARK: - Initial state
 
   @Test
@@ -497,14 +478,14 @@ struct ChannelStateManagerTests {
     let h = makeHarness(
       timeoutInterval: 2.0,
       onLeave: { call in
-        if call == 1 { await gate.park() }
+        if call == 1 { await gate.wait() }
       })
     var confirmer = confirmSubscribeOnJoin(h)
     try await h.sut.subscribe()
     _ = await confirmer.value
 
     let older = Task { await h.sut.unsubscribe() }
-    #expect(await waitUntil { gate.isParked })
+    #expect(await waitUntil { gate.waiterCount == 1 })
     await h.sut.resetForReconnect()
     h.joinCallCount.setValue(0)
     confirmer = confirmSubscribeOnJoin(h)

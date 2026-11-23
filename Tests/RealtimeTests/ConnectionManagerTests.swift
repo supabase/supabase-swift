@@ -397,4 +397,103 @@ struct ConnectionManagerTests {
     let isConnected = await sut.connection != nil
     #expect(!isConnected, "Connection should be disconnected after application close")
   }
+
+  @Test
+  func disconnectDuringConnectClosesSocketThatOpensLate() async throws {
+    let gate = Gate()
+    let ws = self.ws
+    let sut = makeSUT(
+      transport: { _, _ in
+        await gate.wait()
+        return ws
+      }
+    )
+
+    let connect = Task { try await sut.connect() }
+    #expect(await waitUntil(timeout: 2) { gate.waiterCount == 1 })
+
+    await sut.disconnect(reason: "test")
+    gate.open()
+    _ = await connect.result
+
+    #expect(ws.closeReason != nil, "A socket that opens after disconnect() must be closed")
+    #expect(await sut.connection == nil)
+  }
+
+  @Test
+  func disconnectDuringReconnectClosesSocketThatOpensLate() async throws {
+    let gate = Gate()
+    let (lateSocket, _) = FakeWebSocket.fakes()
+    let transportCallCount = self.transportCallCount
+    let ws = self.ws
+    let sut = makeSUT(
+      reconnectDelay: 0.01,
+      transport: { _, _ in
+        let call = transportCallCount.withValue { count -> Int in
+          count += 1
+          return count
+        }
+        guard call > 1 else { return ws }
+        await gate.wait()
+        return lateSocket
+      }
+    )
+
+    try await sut.connect()
+    await sut.handleError(TestError.sample)
+    #expect(await waitUntil(timeout: 2) { gate.waiterCount == 1 })
+
+    await sut.disconnect(reason: "test")
+    gate.open()
+
+    #expect(
+      await waitUntil(timeout: 2) { lateSocket.closeReason != nil },
+      "A socket that opens after disconnect() must be closed"
+    )
+    #expect(await sut.connection == nil)
+  }
+
+  @Test
+  func cancelledConnectDoesNotClobberANewerConnect() async throws {
+    let firstGate = Gate()
+    let secondGate = Gate()
+    let (secondSocket, _) = FakeWebSocket.fakes()
+    let transportCallCount = self.transportCallCount
+    let ws = self.ws
+    let sut = makeSUT(
+      transport: { _, _ in
+        let call = transportCallCount.withValue { count -> Int in
+          count += 1
+          return count
+        }
+        if call == 1 {
+          await firstGate.wait()
+          return ws
+        }
+        await secondGate.wait()
+        return secondSocket
+      }
+    )
+
+    let first = Task { try await sut.connect() }
+    #expect(await waitUntil(timeout: 2) { firstGate.waiterCount == 1 })
+    await sut.disconnect(reason: "test")
+
+    let second = Task { try await sut.connect() }
+    #expect(await waitUntil(timeout: 2) { secondGate.waiterCount == 1 })
+
+    // The cancelled first attempt ends while the second one is in flight.
+    firstGate.open()
+    _ = await first.result
+
+    await sut.disconnect(reason: "test")
+    secondGate.open()
+    _ = await second.result
+
+    #expect(
+      secondSocket.closeReason != nil,
+      "disconnect() must stop the newer attempt, not see a state the older one overwrote"
+    )
+    #expect(await sut.connection == nil)
+  }
 }
