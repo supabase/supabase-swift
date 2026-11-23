@@ -27,6 +27,11 @@ Read the matching file before you act:
 
 ## Notes for AI coding agents
 
+- A change to behavior that a capability spec describes starts with a spec change in
+  `supabase/sdk` (`packages/capability-matrix/specs/`). Land the spec first. See "Principles and
+  Specs" in [CONTRIBUTING.md](CONTRIBUTING.md)
+- Run `./scripts/check-compliance.sh` with Xcode 26.x (Swift 6.3), not Xcode 27; see "Capability
+  Compliance" in [CONTRIBUTING.md](CONTRIBUTING.md)
 - On macOS, run `swift test` and `swift build --build-tests` with the flags from
   "macOS test flags" in [DEVELOPMENT.md](DEVELOPMENT.md); without them, swift-snapshot-testing
   fails to compile
