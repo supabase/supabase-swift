@@ -421,6 +421,18 @@ struct ConnectionManagerTests {
   }
 
   @Test
+  func failedConnectReturnsToDisconnected() async throws {
+    let sut = makeSUT(transport: { _, _ in throw TestError.sample })
+
+    await #expect(throws: TestError.self) { try await sut.connect() }
+
+    guard case .disconnected = await sut.state else {
+      Issue.record("A failed connect must leave the manager disconnected")
+      return
+    }
+  }
+
+  @Test
   func disconnectDuringReconnectClosesSocketThatOpensLate() async throws {
     let gate = Gate()
     let (lateSocket, _) = FakeWebSocket.fakes()
