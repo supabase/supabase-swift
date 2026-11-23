@@ -1272,6 +1272,7 @@ features:
     status: implemented
     symbols:
       - AuthAdminCustomProviders.list
+  auth.admin.update_mfa_factor: not_implemented
 
   # AuthPasskeys and AuthAdminPasskeys are @_spi(Experimental). The compliance
   # scanner reads SPI symbols too, so these lists are checked like public API.
@@ -1545,6 +1546,8 @@ features:
     status: implemented
     no_public_symbols: true
     note: "W3C traceparent header injection from the active OpenTelemetry span, gated behind the OpenTelemetry SPM trait (opt-in dependency on opentelemetry-swift-core). No public API — enable the trait and it's automatic."
+  client.observability.client_info: not_implemented
+  client.observability.diagnostic_logging: not_implemented
 
   # ── Database ───────────────────────────────────────────────────────────────
 
@@ -1579,6 +1582,7 @@ features:
     symbols:
       - PostgrestClient.rpc
       - SupabaseClient.rpc
+  database.query.openapi_spec: not_implemented
 
   database.mutate.insert:
     status: implemented
@@ -1609,6 +1613,9 @@ features:
       - PostgrestReturning.rawValue
       - PostgrestReturning.minimal
       - PostgrestReturning.representation
+  database.mutate.bulk_rows_with_differing_fields: not_implemented
+  database.mutate.count: not_implemented
+  database.mutate.missing_defaults: not_implemented
 
   database.using_filters.eq:
     status: implemented
@@ -2113,6 +2120,7 @@ features:
     status: implemented
     symbols:
       - RealtimeChannel.httpSend
+  realtime.channel.broadcast_persist: not_implemented
 
   realtime.subscriptions.broadcast:
     status: implemented
@@ -2885,6 +2893,8 @@ features:
     status: implemented
     no_public_symbols: true
     note: "Cancel the Task that awaits the storage call. There is no cancel()-style method; cancellation is plain Swift structured concurrency."
+  storage.file_buckets.purge_project_cache: not_implemented
+  storage.file_buckets.transfer_progress: not_implemented
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
@@ -3181,3 +3191,11 @@ features:
     symbols:
       - StorageClient.Configuration.retryEnabled
       - SupabaseClient.Configuration.Storage.retryEnabled
+  # Newly synced from the canonical spec; no local group yet, place manually.
+  auth.sso_admin.create_provider: not_implemented
+  auth.sso_admin.delete_provider: not_implemented
+  auth.sso_admin.get_provider: not_implemented
+  auth.sso_admin.list_providers: not_implemented
+  auth.sso_admin.update_provider: not_implemented
+  database.generated_types.typed_queries: not_implemented
+  database.generated_types.typed_rpc: not_implemented
