@@ -88,6 +88,7 @@ struct AuthPhoneIntegrationTests {
     expectNoDifference(factors.verified, [])
     expectNoDifference(factors.unverified.map(\.id), [enrollment.id])
     expectNoDifference(factors.unverified.map(\.factorType), [.phone])
+    expectNoDifference(factors.unverified.map(\.phone), ["15550000004"])
 
     try await auth.mfa.unenroll(factorID: enrollment.id)
     #expect(try await auth.mfa.factors().all.isEmpty)

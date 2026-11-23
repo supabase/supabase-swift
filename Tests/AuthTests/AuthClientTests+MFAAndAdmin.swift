@@ -174,6 +174,90 @@ extension AuthClientTests {
   }
 
   @Test
+  func mfaFactorsDecodesServerFactorsAndKeepsUnknownValues() async throws {
+    transport.stub(
+      .get, "user",
+      data: Data(
+        """
+        {
+          "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+          "aud": "authenticated",
+          "created_at": "2022-04-09T11:23:45.874827Z",
+          "updated_at": "2022-04-09T11:57:01.720803Z",
+          "factors": [
+            {
+              "id": "00000000-0000-0000-0000-000000000001",
+              "friendly_name": "Authenticator",
+              "factor_type": "totp",
+              "status": "verified",
+              "phone": "",
+              "created_at": "2024-01-01T00:00:00Z",
+              "updated_at": "2024-01-01T00:00:00Z",
+              "last_challenged_at": "2024-01-02T03:04:05Z"
+            },
+            {
+              "id": "00000000-0000-0000-0000-000000000002",
+              "factor_type": "phone",
+              "status": "unverified",
+              "phone": "15555550100",
+              "created_at": "2024-01-01T00:00:00Z",
+              "updated_at": "2024-01-01T00:00:00Z",
+              "last_challenged_at": null
+            },
+            {
+              "id": "00000000-0000-0000-0000-000000000003",
+              "factor_type": "webauthn",
+              "status": "verified",
+              "web_authn_aaguid": "00000000-0000-0000-0000-000000000009",
+              "created_at": "2024-01-01T00:00:00Z",
+              "updated_at": "2024-01-01T00:00:00Z"
+            },
+            {
+              "id": "00000000-0000-0000-0000-000000000004",
+              "factor_type": "future_type",
+              "status": "verified",
+              "created_at": "2024-01-01T00:00:00Z",
+              "updated_at": "2024-01-01T00:00:00Z"
+            },
+            {
+              "id": "00000000-0000-0000-0000-000000000005",
+              "factor_type": "totp",
+              "status": "future_status",
+              "created_at": "2024-01-01T00:00:00Z",
+              "updated_at": "2024-01-01T00:00:00Z"
+            }
+          ]
+        }
+        """.utf8
+      )
+    )
+
+    let sut = makeSUT()
+
+    try await sut.seedSession(.valid)
+
+    let factors = try await sut.mfa.factors()
+
+    func id(_ n: Int) -> UUID { UUID(uuidString: "00000000-0000-0000-0000-00000000000\(n)")! }
+    #expect(factors.verified.map(\.id) == [id(1), id(3), id(4)])
+    #expect(factors.unverified.map(\.id) == [id(2), id(5)])
+    #expect(factors.all.count == 5)
+    #expect(factors.verified.map(\.factorType) == [.totp, .webAuthn, "future_type"])
+    #expect(factors.unverified.map(\.status) == [.unverified, "future_status"])
+    #expect(factors.verified[0].friendlyName == "Authenticator")
+    #expect(
+      factors.verified[0].lastChallengedAt
+        == ISO8601DateFormatter().date(from: "2024-01-02T03:04:05Z")
+    )
+    #expect(factors.unverified[0].lastChallengedAt == nil)
+    #expect(factors.verified[1].lastChallengedAt == nil)
+    #expect(factors.unverified[0].phone == "15555550100")
+    #expect(factors.verified[0].phone == nil)
+    #expect(factors.verified[1].webAuthnAAGUID == id(9))
+    #expect(factors.verified[0].webAuthnAAGUID == nil)
+  }
+
+  @Test
   func passkeyRegistrationOptionsDecodeTheChallengeID() async throws {
     transport.stub(
       .post, "passkeys/registration/options",

@@ -44,6 +44,8 @@ struct AuthMFAIntegrationTests {
     expectNoDifference(enrolled.verified, [])
     expectNoDifference(enrolled.unverified.map(\.id), [enrollment.id])
     expectNoDifference(enrolled.unverified.map(\.factorType), [.totp])
+    #expect(enrolled.unverified.first?.lastChallengedAt == nil)
+    #expect(enrolled.unverified.first?.phone == nil)
 
     let before = try await auth.mfa.assuranceLevel()
     expectNoDifference(before.currentLevel, .aal1)
@@ -70,6 +72,7 @@ struct AuthMFAIntegrationTests {
 
     let verified = try await auth.mfa.factors()
     expectNoDifference(verified.verified.map(\.id), [enrollment.id])
+    #expect(verified.verified.first?.lastChallengedAt != nil)
     expectNoDifference(verified.unverified, [])
 
     let removed = try await auth.mfa.unenroll(factorID: enrollment.id)

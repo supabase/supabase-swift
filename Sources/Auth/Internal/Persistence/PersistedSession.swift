@@ -119,6 +119,9 @@ struct PersistedFactor: Codable, Sendable {
   var status: String
   var createdAt: Date
   var updatedAt: Date
+  var lastChallengedAt: Date?
+  var phone: String?
+  var webAuthnAAGUID: UUID?
 
   enum CodingKeys: String, CodingKey {
     case id
@@ -127,6 +130,9 @@ struct PersistedFactor: Codable, Sendable {
     case status
     case createdAt = "created_at"
     case updatedAt = "updated_at"
+    case lastChallengedAt = "last_challenged_at"
+    case phone
+    case webAuthnAAGUID = "web_authn_aaguid"
   }
 }
 
@@ -262,7 +268,10 @@ extension PersistedFactor {
       factorType: factor.factorType.rawValue,
       status: factor.status.rawValue,
       createdAt: factor.createdAt,
-      updatedAt: factor.updatedAt
+      updatedAt: factor.updatedAt,
+      lastChallengedAt: factor.lastChallengedAt,
+      phone: factor.phone,
+      webAuthnAAGUID: factor.webAuthnAAGUID
     )
   }
 
@@ -273,7 +282,10 @@ extension PersistedFactor {
       factorType: FactorType(rawValue: factorType),
       status: FactorStatus(rawValue: status),
       createdAt: createdAt,
-      updatedAt: updatedAt
+      updatedAt: updatedAt,
+      lastChallengedAt: lastChallengedAt,
+      phone: phone,
+      webAuthnAAGUID: webAuthnAAGUID
     )
   }
 }
