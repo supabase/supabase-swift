@@ -13,7 +13,7 @@ that apply to every module and to `SupabaseClient`; each module has its own file
 
    <!-- x-release-please-start-version -->
    ```swift
-   .package(url: "https://github.com/supabase/supabase-swift", from: "3.0.0-alpha.1")
+   .package(url: "https://github.com/supabase/supabase-swift", from: "3.0.0-alpha.2")
    ```
    <!-- x-release-please-end -->
 
