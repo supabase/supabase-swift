@@ -55,4 +55,27 @@ struct FunctionsSupabaseClientIntegrationTests {
 
     #expect(echo.headers["authorization"] == nil)
   }
+
+  /// With a new-format publishable key, a signed-in client still sends the user's access token.
+  @Test
+  func aSignedInClientWithANewFormatKeyInvokesWithTheUserJWT() async throws {
+    let client = try makeClient(key: DotEnv.supabaseNewFormatPublishableKey)
+    let email = "functions-\(UUID().uuidString.lowercased())@supabase.com"
+    _ = try await client.auth.signUp(email: email, password: "The.Pa55word!")
+    let session = try await client.auth.session()
+
+    let caller: WhoAmI = try await client.functions.invoke("whoami")
+
+    #expect(caller == WhoAmI(role: "authenticated", sub: session.user.id.uuidString.lowercased()))
+  }
+
+  /// With a legacy JWT key and no session, the client sends the key as the bearer token.
+  @Test
+  func aClientWithALegacyKeyAndNoSessionInvokesWithTheKeyAsBearer() async throws {
+    let client = try makeClient(key: DotEnv.supabasePublishableKey)
+
+    let caller: WhoAmI = try await client.functions.invoke("whoami")
+
+    #expect(caller == WhoAmI(role: "anon", sub: nil))
+  }
 }

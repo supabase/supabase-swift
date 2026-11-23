@@ -52,16 +52,6 @@ package enum APIKeyFormat {
     return warnedSubtypes.withValue { $0.insert(subtype).inserted }
   }
 
-  /// The `Authorization` Bearer token an Edge Functions request should use, given the raw
-  /// `accessToken` fallback logic and the client's `supabaseKey`. New-format keys must never
-  /// appear as a Bearer token: when there is no real session and `accessToken` is just the
-  /// raw key fallback, this returns `nil` so the caller omits the header entirely instead of
-  /// sending the new-format key as a Bearer token. A genuine session token (which will never
-  /// equal `supabaseKey`) and legacy JWT key fallbacks are returned unchanged.
-  package static func functionsBearerToken(accessToken: String, supabaseKey: String) -> String? {
-    accessToken == supabaseKey && isNew(supabaseKey) ? nil : accessToken
-  }
-
   private static func subtypeToken(for key: String) -> String {
     let remainder = key.dropFirst("sb_".count)
     guard let underscoreIndex = remainder.firstIndex(of: "_") else { return "unknown" }
