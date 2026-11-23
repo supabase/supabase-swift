@@ -13,7 +13,7 @@ Every failure from ``FunctionsClient`` is a ``FunctionsError`` or a `Cancellatio
 | ``FunctionsError/Kind-swift.struct/server`` | A non-2xx status with no relay header. | set | `nil` |
 | ``FunctionsError/Kind-swift.struct/transport`` | No response arrived. Whether the function ran is unknown. | `nil` | the `URLError` |
 | ``FunctionsError/Kind-swift.struct/decoding`` | A 2xx body did not decode as the requested type. | `nil` | the `DecodingError` |
-| ``FunctionsError/Kind-swift.struct/invalidRequest`` | The body could not be encoded. Nothing was sent. | `nil` | the `EncodingError` |
+| ``FunctionsError/Kind-swift.struct/invalidRequest`` | The body could not be encoded, or Foundation could not parse the query in the function name. Nothing was sent. | `nil` | the `EncodingError` for a body, else `nil` |
 | ``FunctionsError/Kind-swift.struct/accessToken`` | The access token provider threw. Nothing was sent. | `nil` | the provider's error |
 
 The relay check runs before the status check, because a relay failure is a non-2xx status too.

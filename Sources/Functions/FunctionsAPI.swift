@@ -28,12 +28,15 @@ enum FunctionsAPI {
   /// headers so a client-wide `Content-Type` cannot relabel a JSON body; a per-call one still
   /// wins. A region, per call or client-wide, goes out as both the `x-region` header and the
   /// `forceFunctionRegion` query item, which is what the gateway reads.
+  ///
+  /// - Throws: ``FunctionsError`` with kind `.invalidRequest` when Foundation cannot parse the
+  ///   query in `name`.
   static func makeRequest(
     name: String,
     body: FunctionBody?,
     options: FunctionInvokeOptions,
     configuration: FunctionsClient.Configuration
-  ) -> (HTTPRequest, HTTPBody?) {
+  ) throws -> (HTTPRequest, HTTPBody?) {
     var headers = defaultHeaders.merging(with: configuration.headers)
     if let body { headers[.contentType] = body.contentType }
     headers.merge(with: options.headers)
@@ -46,7 +49,7 @@ enum FunctionsAPI {
 
     let request = HTTPRequest(
       method: options.method,
-      url: functionURL(
+      url: try functionURL(
         name: name, base: configuration.url, replacing: query.map(\.name)),
       query: query,
       headerFields: headers
@@ -57,45 +60,36 @@ enum FunctionsAPI {
   /// Reads `name` as a URL parser does: a `#` starts a fragment, which is dropped, and the first
   /// `?` starts a query, which is sent as the URL query rather than as `%3F` in the path.
   ///
-  /// The name's query items keep the caller's percent-encoding, minus the items named in
-  /// `replacing`, which the SDK sends itself. Names match byte for byte, as a server compares
-  /// them: `é` and `e` plus a combining accent are different names.
-  static func functionURL(name: String, base: URL, replacing: [String]) -> URL {
-    // Scalars, not Characters: a combining mark after `?`, `#` or `%XX` joins it into one
-    // Character, which would hide the delimiter.
+  /// Foundation parses the query as written. A query that is already percent-encoded is sent
+  /// unchanged; for raw characters the result is Foundation's, so values that need encoding
+  /// belong in `FunctionInvokeOptions.query`. The items named in `replacing`, which the SDK sends
+  /// itself, are removed. Names match byte for byte, as a server compares them: `é` and `e` plus
+  /// a combining accent are different names.
+  ///
+  /// - Throws: ``FunctionsError`` with kind `.invalidRequest` when Foundation cannot parse the
+  ///   query, which iOS 16 and macOS 13 do for a raw space or non-ASCII character.
+  static func functionURL(name: String, base: URL, replacing: [String]) throws -> URL {
+    // Scalars, not Characters: a combining mark after `?` or `#` joins it into one Character,
+    // which would hide the delimiter.
     let parts = name.unicodeScalars.prefix { $0 != "#" }
       .split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
     let url = base.appendingPathComponent(String(Substring(parts[0])))
-    guard
-      let rawQuery = parts.dropFirst().first,
-      var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    else { return url }
+    guard let rawQuery = parts.dropFirst().first else { return url }
+    guard var components = URLComponents(string: "\(url.absoluteString)?\(Substring(rawQuery))")
+    else {
+      throw FunctionsError(
+        kind: .invalidRequest,
+        message:
+          "The query in the function name is not a valid URL query. Pass it in `options.query`."
+      )
+    }
 
-    components.percentEncodedQuery = encodedQuery(Array(rawQuery))
     let replaced = Set(replacing.map { Array($0.utf8) })
     let kept = (components.percentEncodedQueryItems ?? []).filter {
       !replaced.contains(Array(decodedQueryName($0.name).utf8))
     }
     components.percentEncodedQueryItems = kept.isEmpty ? nil : kept
     return components.url ?? url
-  }
-
-  /// Percent-encodes what a query cannot hold as is. A valid `%XX` escape stays; a `%` without
-  /// two hex digits after it becomes `%25`.
-  private static func encodedQuery(_ scalars: [Unicode.Scalar]) -> String {
-    var encoded = ""
-    for (index, scalar) in scalars.enumerated() {
-      if scalar == "%" {
-        let digits = scalars.dropFirst(index + 1).prefix(2)
-        encoded +=
-          digits.count == 2 && digits.allSatisfy(\.properties.isASCIIHexDigit) ? "%" : "%25"
-      } else if CharacterSet.urlQueryAllowed.contains(scalar) {
-        encoded.unicodeScalars.append(scalar)
-      } else {
-        encoded += String(scalar).utf8.map { String(format: "%%%02X", $0) }.joined()
-      }
-    }
-    return encoded
   }
 
   /// A raw query name as a form decoder reads it: `+` is a space, then `%XX` escapes decode.
@@ -113,7 +107,7 @@ enum FunctionsAPI {
     configuration: FunctionsClient.Configuration,
     http: HTTPClient
   ) async throws -> (HTTPResponse, HTTPBody?) {
-    let (request, requestBody) = makeRequest(
+    let (request, requestBody) = try makeRequest(
       name: name, body: body, options: options, configuration: configuration)
     do {
       let (head, responseBody) = try await http.stream(

@@ -36,7 +36,10 @@ try await supabase.functions.invoke("audit-log", body: .json(event))
 ### GET with a query
 
 ``FunctionInvokeOptions/method`` is an `HTTPRequest.Method` and
-``FunctionInvokeOptions/query`` is appended to the URL. A sub-path goes in the name.
+``FunctionInvokeOptions/query`` is appended to the URL, and the SDK percent-encodes its names
+and values. A sub-path goes in the name. The name can also hold a query, like
+`"report?month=2026-09"`. Foundation parses it as written, so write it percent-encoded, or put
+values that need encoding in `query`.
 
 ```swift
 let response = try await supabase.functions.invoke(
