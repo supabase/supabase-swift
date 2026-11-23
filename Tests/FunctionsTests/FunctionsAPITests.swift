@@ -207,6 +207,17 @@ struct FunctionsAPITests {
   }
 
   @Test
+  func queryOptionDoesNotReplaceACanonicallyEquivalentName() {
+    let (request, _) = FunctionsAPI.makeRequest(
+      name: "search?e%CC%81=keep&%C3%A9=drop", body: nil,
+      options: .init(query: [URLQueryItem(name: "\u{00E9}", value: "new")]),
+      configuration: configuration)
+    #expect(
+      request.url?.absoluteString
+        == "http://localhost:5432/functions/v1/search?e%CC%81=keep&%C3%A9=new")
+  }
+
+  @Test
   func queryOptionAndRegionReplaceSameNamedItemsInName() {
     let (request, _) = FunctionsAPI.makeRequest(
       name: "search?q=x&forceFunctionRegion=us-east-1&page=2", body: nil,

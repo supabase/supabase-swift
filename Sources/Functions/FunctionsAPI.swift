@@ -47,7 +47,7 @@ enum FunctionsAPI {
     let request = HTTPRequest(
       method: options.method,
       url: functionURL(
-        name: name, base: configuration.url, replacing: Set(query.map(\.name))),
+        name: name, base: configuration.url, replacing: query.map(\.name)),
       query: query,
       headerFields: headers
     )
@@ -58,8 +58,9 @@ enum FunctionsAPI {
   /// `?` starts a query, which is sent as the URL query rather than as `%3F` in the path.
   ///
   /// The name's query items keep the caller's percent-encoding, minus the items named in
-  /// `replacing`, which the SDK sends itself.
-  static func functionURL(name: String, base: URL, replacing: Set<String>) -> URL {
+  /// `replacing`, which the SDK sends itself. Names match byte for byte, as a server compares
+  /// them: `é` and `e` plus a combining accent are different names.
+  static func functionURL(name: String, base: URL, replacing: [String]) -> URL {
     // Scalars, not Characters: a combining mark after `?`, `#` or `%XX` joins it into one
     // Character, which would hide the delimiter.
     let parts = name.unicodeScalars.prefix { $0 != "#" }
@@ -71,8 +72,9 @@ enum FunctionsAPI {
     else { return url }
 
     components.percentEncodedQuery = encodedQuery(Array(rawQuery))
+    let replaced = Set(replacing.map { Array($0.utf8) })
     let kept = (components.percentEncodedQueryItems ?? []).filter {
-      !replacing.contains(decodedQueryName($0.name))
+      !replaced.contains(Array(decodedQueryName($0.name).utf8))
     }
     components.percentEncodedQueryItems = kept.isEmpty ? nil : kept
     return components.url ?? url
