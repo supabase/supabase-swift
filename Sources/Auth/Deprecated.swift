@@ -452,6 +452,6 @@ extension AuthAdmin {
       fatalError("id should be a valid UUID")
     }
 
-    try await self.deleteUser(id: id, shouldSoftDelete: shouldSoftDelete)
+    try await self.deleteUser(id: id, softDelete: shouldSoftDelete)
   }
 }

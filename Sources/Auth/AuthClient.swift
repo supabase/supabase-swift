@@ -78,14 +78,16 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// let session = try await auth.signIn(email: "user@example.com", password: "secret")
 ///
 /// // Listen for state changes
-/// for await (event, session) in auth.authStateChanges {
-///   print(event, session?.user.email ?? "signed out")
+/// for await change in auth.events() {
+///   print(change.event, change.session?.user.email ?? "signed out")
 /// }
 /// ```
 ///
 /// ## Topics
 ///
 /// ### Observing state
+/// - ``events()``
+/// - ``status``
 /// - ``onAuthStateChange(_:)``
 /// - ``authStateChanges``
 /// - ``currentSession``
@@ -189,10 +191,19 @@ public actor AuthClient {
   /// Returns the session, refreshing it if necessary.
   ///
   /// If no session can be found, a ``AuthError/sessionMissing`` error is thrown.
+  @available(*, deprecated, message: "Use session() instead.")
   public var session: Session {
     get async throws {
       try await sessionManager.session()
     }
+  }
+
+  /// Returns the session, refreshing it first when it is expired or about to expire.
+  ///
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh.
+  public func session() async throws -> Session {
+    try await sessionManager.session()
   }
 
   /// Returns the current session, if any.
@@ -326,6 +337,7 @@ public actor AuthClient {
   ///
   /// - Note: The session emitted in the  ``AuthChangeEvent/initialSession`` event may have been expired
   /// since last launch, consider checking for ``Session/isExpired``. If this is the case, then expect a ``AuthChangeEvent/tokenRefreshed`` after.
+  @available(*, deprecated, message: "Use events() instead.")
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
@@ -335,9 +347,59 @@ public actor AuthClient {
     return token
   }
 
+  /// Whether a user is signed in, read from the session that the client holds in storage.
+  ///
+  /// The session may be expired; check ``Session/isExpired(at:leeway:)``. This version of the
+  /// client never reports ``AuthStatus/loading``, and it does not record a ``SignOutReason``.
+  nonisolated public var status: AuthStatus {
+    currentSession.map(AuthStatus.signedIn) ?? .signedOut(nil)
+  }
+
+  /// The changes of the auth status, starting with ``AuthChangeEvent/initialSession``.
+  ///
+  /// ```swift
+  /// for await change in supabase.auth.events() {
+  ///   switch change.status {
+  ///   case .signedIn(let session): show(session.user)
+  ///   case .signedOut, .loading: showSignIn()
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// Each call returns a new stream. The stream does not finish on its own; cancel the task that
+  /// consumes it.
+  ///
+  /// The status of each change agrees with ``status``: a session that is still stored is reported
+  /// as ``AuthStatus/signedIn(_:)``, also when it is expired. Check
+  /// ``Session/isExpired(at:leeway:)``. With ``Configuration/emitLocalSessionAsInitialSession``
+  /// set to `false` (the default), the client tries to refresh an expired session before the
+  /// first change. When that refresh fails and the session stays in storage, for example with no
+  /// network, the first change carries the expired session. With the value `true`, the first
+  /// change carries the stored session at once and ``AuthChangeEvent/tokenRefreshed`` follows a
+  /// successful refresh.
+  ///
+  /// This version of the client does not record why a session ended, so
+  /// ``AuthChange/signOutReason`` is always `nil`.
+  nonisolated public func events() -> AsyncStream<AuthChange> {
+    let (stream, continuation) = AsyncStream<AuthChange>.makeStream()
+
+    let token = eventEmitter.attach { [weak self] event, session in
+      // The v2 emitter sends no session when the refresh at start fails, for example offline.
+      // The session is still stored then, so the change must not report a sign-out.
+      let session = session ?? (event == .signedOut ? nil : self?.currentSession)
+      continuation.yield(
+        AuthChange(event: event, status: session.map(AuthStatus.signedIn) ?? .signedOut(nil)))
+    }
+    continuation.onTermination = { _ in token.cancel() }
+    Task { await emitInitialSession(forToken: token) }
+
+    return stream
+  }
+
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
+  @available(*, deprecated, message: "Use events() instead.")
   nonisolated public var authStateChanges:
     AsyncStream<
       (
@@ -371,15 +433,53 @@ public actor AuthClient {
   ///   - email: User's email address.
   ///   - password: Password for the user.
   ///   - data: Custom data object to store additional user metadata.
-  ///   - redirectTo: The redirect URL embedded in the email link, defaults to ``Configuration/redirectToURL`` if not provided.
+  ///   - redirectTo: The redirect URL embedded in the email link, defaults to ``Configuration/redirectTo`` if not provided.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
+  @available(*, deprecated, message: "Use signUp(email:password:options:) instead.")
   public func signUp(
     email: String,
     password: String,
     data: [String: AnyJSON]? = nil,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
+  ) async throws -> AuthResponse {
+    try await _signUp(
+      email: email, password: password, data: data, redirectTo: redirectTo,
+      captchaToken: captchaToken)
+  }
+
+  /// Creates a new user with an email and a password.
+  ///
+  /// When the project needs no email confirmation, the user is signed in and the client stores
+  /// the session. Otherwise the server sends a confirmation email.
+  ///
+  /// A call with no `options` argument and no result type selects the deprecated overload that
+  /// returns ``AuthResponse``. Pass `options`, or give the result the type ``SignUpResult``.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - password: The user's password.
+  ///   - options: The user metadata, the redirect URL, and the captcha token.
+  /// - Returns: The session, or the user who must confirm first.
+  @_disfavoredOverload
+  public func signUp(
+    email: String,
+    password: String,
+    options: SignUpOptions = .init()
+  ) async throws -> SignUpResult {
+    SignUpResult(
+      try await _signUp(
+        email: email, password: password, data: options.userMetadata,
+        redirectTo: options.redirectTo, captchaToken: options.captchaToken))
+  }
+
+  private func _signUp(
+    email: String,
+    password: String,
+    data: [String: AnyJSON]?,
+    redirectTo: URL?,
+    captchaToken: String?
   ) async throws -> AuthResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
@@ -388,7 +488,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("signup"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -417,12 +517,49 @@ public actor AuthClient {
   ///   - data: Custom data object to store additional user metadata.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
+  @available(*, deprecated, message: "Use signUp(phone:password:options:) instead.")
   public func signUp(
     phone: String,
     password: String,
     channel: MessagingChannel = .sms,
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
+  ) async throws -> AuthResponse {
+    try await _signUp(
+      phone: phone, password: password, channel: channel, data: data, captchaToken: captchaToken)
+  }
+
+  /// Creates a new user with a phone number and a password.
+  ///
+  /// When the project needs no phone confirmation, the user is signed in and the client stores
+  /// the session. Otherwise the server sends a confirmation code.
+  ///
+  /// A call with no `options` argument and no result type selects the deprecated overload that
+  /// returns ``AuthResponse``. Pass `options`, or give the result the type ``SignUpResult``.
+  ///
+  /// - Parameters:
+  ///   - phone: The user's phone number, with the country code.
+  ///   - password: The user's password.
+  ///   - options: The user metadata, the channel, and the captcha token.
+  /// - Returns: The session, or the user who must confirm first.
+  @_disfavoredOverload
+  public func signUp(
+    phone: String,
+    password: String,
+    options: SignUpOptions = .init()
+  ) async throws -> SignUpResult {
+    SignUpResult(
+      try await _signUp(
+        phone: phone, password: password, channel: options.channel, data: options.userMetadata,
+        captchaToken: options.captchaToken))
+  }
+
+  private func _signUp(
+    phone: String,
+    password: String,
+    channel: MessagingChannel,
+    data: [String: AnyJSON]?,
+    captchaToken: String?
   ) async throws -> AuthResponse {
     try await _signUp(
       request: .init(
@@ -511,6 +648,7 @@ public actor AuthClient {
 
   /// Allows signing in with an ID token issued by certain supported providers.
   /// The ID token is verified for validity and a new session is established.
+  @available(*, deprecated, message: "Use signInWithIDToken(_:) instead.")
   @discardableResult
   public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
     try await _signIn(
@@ -523,6 +661,31 @@ public actor AuthClient {
     )
   }
 
+  /// Signs in with an ID token that a third-party identity provider issued, such as Sign in with
+  /// Apple or Google Sign-In.
+  ///
+  /// The server checks the token and creates the user if needed.
+  ///
+  /// ```swift
+  /// try await client.auth.signInWithIDToken(
+  ///   IDTokenCredentials(provider: .apple, idToken: idToken, nonce: rawNonce)
+  /// )
+  /// ```
+  ///
+  /// - Parameter credentials: The ID token and the values the server needs to check it.
+  /// - Returns: The new session.
+  @discardableResult
+  public func signInWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
+    try await _signIn(
+      request: .init(
+        url: configuration.url.appendingPathComponent("token"),
+        method: .post,
+        query: [URLQueryItem(name: "grant_type", value: "id_token")],
+        body: configuration.resolvedEncoder.encode(IDTokenGrantBody(credentials))
+      )
+    )
+  }
+
   /// Signs in a user via a signed Sign in with Ethereum (EIP-4361) or Sign in with Solana message.
   ///
   /// The app is responsible for building the message and obtaining the signature from the user's
@@ -530,15 +693,18 @@ public actor AuthClient {
   ///
   /// ```swift
   /// let session = try await client.auth.signInWithWeb3(
-  ///   credentials: Web3Credentials(
+  ///   Web3Credentials(
   ///     chain: .ethereum,
   ///     message: siweMessage,
   ///     signature: signatureHex
   ///   )
   /// )
   /// ```
+  ///
+  /// - Parameter credentials: The chain, the signed message, and its signature.
+  /// - Returns: The new session.
   @discardableResult
-  public func signInWithWeb3(credentials: Web3Credentials) async throws -> Session {
+  public func signInWithWeb3(_ credentials: Web3Credentials) async throws -> Session {
     try await _signIn(
       request: .init(
         url: configuration.url.appendingPathComponent("token"),
@@ -547,6 +713,13 @@ public actor AuthClient {
         body: configuration.resolvedEncoder.encode(credentials)
       )
     )
+  }
+
+  /// Signs in a user via a signed Sign in with Ethereum (EIP-4361) or Sign in with Solana message.
+  @available(*, deprecated, message: "Use signInWithWeb3(_:) instead.")
+  @discardableResult
+  public func signInWithWeb3(credentials: Web3Credentials) async throws -> Session {
+    try await signInWithWeb3(credentials)
   }
 
   /// Creates a new anonymous user.
@@ -597,12 +770,42 @@ public actor AuthClient {
   ///   - shouldCreateUser: Creates a new user, defaults to `true`.
   ///   - data: User's metadata.
   ///   - captchaToken: Captcha verification token.
+  @available(*, deprecated, message: "Use signInWithOTP(email:options:) instead.")
   public func signInWithOTP(
     email: String,
     redirectTo: URL? = nil,
     shouldCreateUser: Bool = true,
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
+  ) async throws {
+    try await _signInWithOTP(
+      email: email, redirectTo: redirectTo, shouldCreateUser: shouldCreateUser, data: data,
+      captchaToken: captchaToken)
+  }
+
+  /// Sends a one-time code or a magic link to an email address.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - options: Whether to create the user, the user metadata, the redirect URL, and the
+  ///     captcha token. Pass it to select this method: a call with only `email:` selects the
+  ///     deprecated method and keeps its request.
+  @_disfavoredOverload
+  public func signInWithOTP(
+    email: String,
+    options: EmailOTPOptions = .init()
+  ) async throws {
+    try await _signInWithOTP(
+      email: email, redirectTo: options.redirectTo, shouldCreateUser: options.shouldCreateUser,
+      data: options.userMetadata, captchaToken: options.captchaToken)
+  }
+
+  private func _signInWithOTP(
+    email: String,
+    redirectTo: URL?,
+    shouldCreateUser: Bool,
+    data: [String: AnyJSON]?,
+    captchaToken: String?
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
@@ -611,7 +814,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -642,6 +845,7 @@ public actor AuthClient {
   ///   - captchaToken: Captcha verification token.
   ///
   /// - Note: You need to configure a WhatsApp sender on Twilio if you are using phone sign in with the `whatsapp` channel.
+  @available(*, deprecated, message: "Use signInWithOTP(phone:options:) instead.")
   public func signInWithOTP(
     phone: String,
     channel: MessagingChannel = .sms,
@@ -649,7 +853,40 @@ public actor AuthClient {
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    _ = try await api.execute(
+    _ = try await _signInWithOTP(
+      phone: phone, channel: channel, shouldCreateUser: shouldCreateUser, data: data,
+      captchaToken: captchaToken)
+  }
+
+  /// Sends a one-time code to a phone number.
+  ///
+  /// A call with no `options` argument and no result type selects the deprecated overload that
+  /// returns nothing. Pass `options`, or give the result the type `MessageID?`.
+  ///
+  /// - Parameters:
+  ///   - phone: The user's phone number, with the country code.
+  ///   - options: Whether to create the user, the user metadata, the channel, and the captcha
+  ///     token.
+  /// - Returns: The ID that the SMS provider gave the message, when the server sends one.
+  @_disfavoredOverload
+  @discardableResult
+  public func signInWithOTP(
+    phone: String,
+    options: PhoneOTPOptions = .init()
+  ) async throws -> MessageID? {
+    try await _signInWithOTP(
+      phone: phone, channel: options.channel, shouldCreateUser: options.shouldCreateUser,
+      data: options.userMetadata, captchaToken: options.captchaToken)
+  }
+
+  private func _signInWithOTP(
+    phone: String,
+    channel: MessagingChannel,
+    shouldCreateUser: Bool,
+    data: [String: AnyJSON]?,
+    captchaToken: String?
+  ) async throws -> MessageID? {
+    let response = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
@@ -664,6 +901,9 @@ public actor AuthClient {
         )
       )
     )
+    // The v2 method ignored this body, so a body that does not decode must not fail the call.
+    return (try? response.decoded(as: MessageIDBody.self, decoder: configuration.resolvedDecoder))?
+      .messageId
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -687,7 +927,7 @@ public actor AuthClient {
           SignInWithSSORequest(
             providerId: nil,
             domain: domain,
-            redirectTo: redirectTo ?? configuration.redirectToURL,
+            redirectTo: redirectTo ?? configuration.redirectTo,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod,
@@ -721,7 +961,7 @@ public actor AuthClient {
           SignInWithSSORequest(
             providerId: providerId,
             domain: nil,
-            redirectTo: redirectTo ?? configuration.redirectToURL,
+            redirectTo: redirectTo ?? configuration.redirectTo,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod,
@@ -813,7 +1053,7 @@ public actor AuthClient {
     let url = try getOAuthSignInURL(
       provider: provider,
       scopes: scopes,
-      redirectTo: redirectTo ?? configuration.redirectToURL,
+      redirectTo: redirectTo ?? configuration.redirectTo,
       queryParams: queryParams
     )
 
@@ -851,7 +1091,7 @@ public actor AuthClient {
         queryParams: queryParams
       ) { @MainActor url in
         try await withCheckedThrowingContinuation { [configuration] continuation in
-          guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
+          guard let callbackScheme = (configuration.redirectTo ?? redirectTo)?.scheme else {
             preconditionFailure(
               "Please, provide a valid redirect URL, either through `redirectTo` param, or globally through `AuthClient.Configuration.redirectToURL`."
             )
@@ -1056,8 +1296,25 @@ public actor AuthClient {
   ///   - accessToken: The current access token.
   ///   - refreshToken: The current refresh token.
   /// - Returns: A new valid session.
+  @available(*, deprecated, message: "Use importSession(accessToken:refreshToken:) instead.")
   @discardableResult
   public func setSession(accessToken: String, refreshToken: String) async throws -> Session {
+    try await importSession(accessToken: accessToken, refreshToken: refreshToken)
+  }
+
+  /// Signs in with tokens from another place, such as a web page, another device, or a server.
+  ///
+  /// When the access token is expired, or its `exp` claim cannot be read, the client refreshes
+  /// the session with `refreshToken`, which emits ``AuthChangeEvent/tokenRefreshed``. Otherwise
+  /// it fetches the user of `accessToken`. In both cases it then emits
+  /// ``AuthChangeEvent/signedIn``.
+  ///
+  /// - Parameters:
+  ///   - accessToken: The access token of the session.
+  ///   - refreshToken: The refresh token of the session.
+  /// - Returns: The stored session.
+  @discardableResult
+  public func importSession(accessToken: String, refreshToken: String) async throws -> Session {
     let now = date()
     var expiresAt = now
     var hasExpired = true
@@ -1070,7 +1327,7 @@ public actor AuthClient {
     }
 
     if hasExpired {
-      session = try await refreshSession(refreshToken: refreshToken)
+      session = try await sessionManager.refreshSession(refreshToken)
     } else {
       let user = try await user(jwt: accessToken)
       session = Session(
@@ -1122,6 +1379,10 @@ public actor AuthClient {
 
   /// Log in an user given a User supplied OTP received via email.
   @discardableResult
+  @available(
+    *, deprecated,
+    message: "Use verifyOTP(email:token:type:) with a VerifyOTPResult result instead."
+  )
   public func verifyOTP(
     email: String,
     token: String,
@@ -1134,7 +1395,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("verify"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -1157,6 +1418,9 @@ public actor AuthClient {
 
   /// Log in an user given a User supplied OTP received via mobile.
   @discardableResult
+  @available(
+    *, deprecated, message: "Use verifyOTP(phone:token:type:) with a Session result instead."
+  )
   public func verifyOTP(
     phone: String,
     token: String,
@@ -1200,6 +1464,94 @@ public actor AuthClient {
     )
   }
 
+  /// Signs in with a one-time code that the user received by email.
+  ///
+  /// The deprecated overload that returns ``AuthResponse`` has the same labels. Give the result
+  /// the type ``VerifyOTPResult`` to select this one:
+  ///
+  /// ```swift
+  /// let result: VerifyOTPResult = try await client.auth.verifyOTP(
+  ///   email: email, token: code, type: .email)
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - token: The code from the email.
+  ///   - type: The kind of code.
+  /// - Returns: The session, or the message of the first confirmation of a secure email change.
+  @_disfavoredOverload
+  @discardableResult
+  public func verifyOTP(
+    email: String,
+    token: String,
+    type: EmailOTPType
+  ) async throws -> VerifyOTPResult {
+    let result = try await api.execute(
+      .init(
+        url: configuration.url.appendingPathComponent("verify"),
+        method: .post,
+        query: [
+          configuration.redirectTo.map {
+            URLQueryItem(name: "redirect_to", value: $0.absoluteString)
+          }
+        ].compactMap { $0 },
+        body: configuration.resolvedEncoder.encode(
+          VerifyOTPParams.email(
+            VerifyEmailOTPParams(email: email, token: token, type: type, gotrueMetaSecurity: nil)
+          )
+        )
+      )
+    )
+    .decoded(as: VerifyOTPBody.self, decoder: configuration.resolvedDecoder)
+    .result
+
+    if case .signedIn(let session) = result {
+      await sessionManager.update(session)
+      eventEmitter.emit(.signedIn, session: session)
+    }
+    return result
+  }
+
+  /// Signs in with a one-time code that the user received by SMS or WhatsApp.
+  ///
+  /// The deprecated overload that returns ``AuthResponse`` has the same labels. Give the result
+  /// the type ``Session`` to select this one:
+  ///
+  /// ```swift
+  /// let session: Session = try await client.auth.verifyOTP(
+  ///   phone: phone, token: code, type: .sms)
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - phone: The user's phone number, with the country code.
+  ///   - token: The code from the message.
+  ///   - type: The kind of code.
+  /// - Returns: The new session.
+  @_disfavoredOverload
+  @discardableResult
+  public func verifyOTP(
+    phone: String,
+    token: String,
+    type: PhoneOTPType
+  ) async throws -> Session {
+    let session = try await api.execute(
+      .init(
+        url: configuration.url.appendingPathComponent("verify"),
+        method: .post,
+        body: configuration.resolvedEncoder.encode(
+          VerifyOTPParams.mobile(
+            VerifyMobileOTPParams(phone: phone, token: token, type: type, gotrueMetaSecurity: nil)
+          )
+        )
+      )
+    )
+    .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
+
+    await sessionManager.update(session)
+    eventEmitter.emit(.signedIn, session: session)
+    return session
+  }
+
   private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
@@ -1218,11 +1570,39 @@ public actor AuthClient {
   ///
   /// To obfuscate whether such the email already exists in the system this method succeeds in both
   /// cases.
+  @available(*, deprecated, message: "Use resend(email:type:options:) instead.")
+  @_disfavoredOverload
   public func resend(
     email: String,
     type: ResendEmailType,
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
+  ) async throws {
+    try await _resend(
+      email: email, type: type, emailRedirectTo: emailRedirectTo, captchaToken: captchaToken)
+  }
+
+  /// Sends a sign-up confirmation or an email change email again.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - type: The kind of email to send again.
+  ///   - options: The redirect URL and the captcha token.
+  public func resend(
+    email: String,
+    type: ResendEmailType,
+    options: ResendEmailOptions = .init()
+  ) async throws {
+    try await _resend(
+      email: email, type: type, emailRedirectTo: options.redirectTo,
+      captchaToken: options.captchaToken)
+  }
+
+  private func _resend(
+    email: String,
+    type: ResendEmailType,
+    emailRedirectTo: URL?,
+    captchaToken: String?
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
@@ -1231,7 +1611,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
         query: [
-          (emailRedirectTo ?? configuration.redirectToURL).map {
+          (emailRedirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -1258,11 +1638,41 @@ public actor AuthClient {
   /// To obfuscate whether such the phone number already exists in the system this method succeeds
   /// in both cases.
   @discardableResult
+  @available(*, deprecated, message: "Use resend(phone:type:options:) instead.")
   public func resend(
     phone: String,
     type: ResendMobileType,
     captchaToken: String? = nil
   ) async throws -> ResendMobileResponse {
+    ResendMobileResponse(
+      messageId: try await _resend(phone: phone, type: type, captchaToken: captchaToken)?.rawValue)
+  }
+
+  /// Sends a phone confirmation code again.
+  ///
+  /// A call with no `options` argument and no result type selects the deprecated overload that
+  /// returns ``ResendMobileResponse``. Pass `options`, or give the result the type `MessageID?`.
+  ///
+  /// - Parameters:
+  ///   - phone: The user's phone number, with the country code.
+  ///   - type: The kind of code to send again.
+  ///   - options: The captcha token.
+  /// - Returns: The ID that the SMS provider gave the message, when the server sends one.
+  @_disfavoredOverload
+  @discardableResult
+  public func resend(
+    phone: String,
+    type: ResendPhoneType,
+    options: ResendPhoneOptions = .init()
+  ) async throws -> MessageID? {
+    try await _resend(phone: phone, type: type, captchaToken: options.captchaToken)
+  }
+
+  private func _resend(
+    phone: String,
+    type: ResendMobileType,
+    captchaToken: String?
+  ) async throws -> MessageID? {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
@@ -1276,7 +1686,8 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(as: MessageIDBody.self, decoder: configuration.resolvedDecoder)
+    .messageId
   }
 
   /// Sends a re-authentication OTP to the user's email or phone number.
@@ -1294,18 +1705,40 @@ public actor AuthClient {
   /// attempt to get the jwt from the current session.
   ///
   /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
+  @available(*, deprecated, message: "Use user() or user(jwt:) instead.")
   public func user(jwt: String? = nil) async throws -> User {
-    var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
-
     if let jwt {
-      request.headers[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
+      return try await user(jwt: jwt)
     }
+    return try await user()
+  }
 
+  /// Fetches the user of the current session from the Auth server.
+  ///
+  /// The session is refreshed first when it is expired. For the user stored with the session,
+  /// with no request, read ``currentUser``.
+  ///
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh or of the request.
+  public func user() async throws -> User {
+    let request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
     return try await api.authorizedExecute(request).decoded(decoder: configuration.resolvedDecoder)
   }
 
+  /// Fetches the user that an access token belongs to from the Auth server.
+  ///
+  /// The stored session is not read and not changed.
+  ///
+  /// - Parameter jwt: The access token to send.
+  /// - Throws: The error of the request, for example when the Auth server rejects `jwt`.
+  public func user(jwt: String) async throws -> User {
+    var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
+    request.headers[.authorization] = "Bearer \(jwt)"
+    return try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
+  }
+
   /// Updates user data, if there is a logged in user.
+  @available(*, deprecated, message: "Use updateUser(_:redirectTo:) instead.")
   @discardableResult
   public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
     var user = user
@@ -1316,20 +1749,49 @@ public actor AuthClient {
       user.codeChallengeMethod = codeChallengeMethod
     }
 
+    return try await _updateUser(body: user, redirectTo: redirectTo)
+  }
+
+  /// Updates the current user.
+  ///
+  /// The stored session gets the updated user, and the client emits
+  /// ``AuthChangeEvent/userUpdated``.
+  ///
+  /// - Parameters:
+  ///   - changes: The changes to make.
+  ///   - redirectTo: The URL the confirmation link of an email change redirects to. When `nil`,
+  ///     the client uses ``Configuration/redirectTo``.
+  /// - Returns: The updated user.
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh or of the request.
+  @discardableResult
+  public func updateUser(_ changes: UpdateUser, redirectTo: URL? = nil) async throws -> User {
+    var changes = changes
+
+    if changes.email != nil {
+      let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+      changes.codeChallenge = codeChallenge
+      changes.codeChallengeMethod = codeChallengeMethod
+    }
+
+    return try await _updateUser(body: changes, redirectTo: redirectTo)
+  }
+
+  private func _updateUser(body: some Encodable, redirectTo: URL?) async throws -> User {
     var session = try await sessionManager.session()
     let updatedUser = try await api.authorizedExecute(
       .init(
         url: configuration.url.appendingPathComponent("user"),
         method: .put,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
             )
           }
         ].compactMap { $0 },
-        body: configuration.resolvedEncoder.encode(user)
+        body: configuration.resolvedEncoder.encode(body)
       )
     ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
     session.user = updatedUser
@@ -1339,25 +1801,51 @@ public actor AuthClient {
   }
 
   /// Gets all the identities linked to a user.
+  @available(*, deprecated, message: "Use identities() instead.")
   public func userIdentities() async throws -> [UserIdentity] {
+    try await identities()
+  }
+
+  /// Fetches the identities linked to the current user from the Auth server.
+  ///
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh or of the request.
+  public func identities() async throws -> [UserIdentity] {
     try await user().identities ?? []
   }
 
   /// Link an identity to the current user using an ID token.
+  @available(*, deprecated, message: "Use linkIdentity(idToken:) instead.")
   @discardableResult
   public func linkIdentityWithIdToken(
     credentials: OpenIDConnectCredentials
   ) async throws -> Session {
     var credentials = credentials
     credentials.linkIdentity = true
+    return try await _linkIdentity(idTokenBody: credentials)
+  }
 
+  /// Links an identity to the current user with an ID token that a third-party identity provider
+  /// issued.
+  ///
+  /// The stored session is replaced, and the client emits ``AuthChangeEvent/userUpdated``.
+  ///
+  /// - Parameter credentials: The ID token and the values the server needs to check it.
+  /// - Returns: The new session.
+  @discardableResult
+  public func linkIdentity(idToken credentials: IDTokenCredentials) async throws -> Session {
+    try await _linkIdentity(idTokenBody: IDTokenGrantBody(credentials, linkIdentity: true))
+  }
+
+  private func _linkIdentity(idTokenBody: some Encodable) async throws -> Session {
+    let accessToken = try await sessionManager.session().accessToken
     let session = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        headers: [.authorization: "Bearer \(session.accessToken)"],
-        body: configuration.resolvedEncoder.encode(credentials)
+        headers: [.authorization: "Bearer \(accessToken)"],
+        body: configuration.resolvedEncoder.encode(idTokenBody)
       )
     ).decoded(as: Session.self, decoder: configuration.resolvedDecoder)
 
@@ -1471,11 +1959,29 @@ public actor AuthClient {
   }
 
   /// Sends a reset request to an email address.
+  @available(*, deprecated, message: "Use resetPassword(email:options:) instead.")
   public func resetPasswordForEmail(
     _ email: String,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
+    try await resetPassword(
+      email: email,
+      options: ResetPasswordOptions(redirectTo: redirectTo, captchaToken: captchaToken)
+    )
+  }
+
+  /// Sends a password reset email.
+  ///
+  /// - Parameters:
+  ///   - email: The email address of the user.
+  ///   - options: The redirect URL and the captcha token.
+  public func resetPassword(
+    email: String,
+    options: ResetPasswordOptions = .init()
+  ) async throws {
+    let redirectTo = options.redirectTo
+    let captchaToken = options.captchaToken
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     _ = try await api.execute(
@@ -1483,7 +1989,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("recover"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -1506,9 +2012,28 @@ public actor AuthClient {
   /// - Parameter refreshToken: The optional refresh token to use for refreshing the session. If
   /// none is provided then this method tries to load the refresh token from the current session.
   /// - Returns: A new session.
+  @available(
+    *, deprecated,
+    message:
+      "Use refreshSession() to refresh the stored session. A refresh token from another place has no exact replacement: importSession(accessToken:refreshToken:) also needs an access token and emits signedIn."
+  )
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
     guard let refreshToken = refreshToken ?? currentSession?.refreshToken else {
+      throw AuthError.sessionMissing
+    }
+
+    return try await sessionManager.refreshSession(refreshToken)
+  }
+
+  /// Refreshes the stored session and returns the new one, whether or not it is expired.
+  ///
+  /// - Returns: The new session.
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh.
+  @discardableResult
+  public func refreshSession() async throws -> Session {
+    guard let refreshToken = currentSession?.refreshToken else {
       throw AuthError.sessionMissing
     }
 
@@ -1537,13 +2062,13 @@ public actor AuthClient {
       eventEmitter.emit(.initialSession, session: currentSession, token: token)
 
       Task {
-        if currentSession.isExpired {
+        if currentSession.isExpired() {
           _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
           // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
         }
       }
     } else {
-      let session = try? await session
+      let session = try? await sessionManager.session()
       eventEmitter.emit(.initialSession, session: session, token: token)
 
       // Properly expecting issues during tests isn't working as expected, I think because the reportIssue is usually triggered inside an unstructured Task
@@ -1615,7 +2140,7 @@ public actor AuthClient {
       queryItems.append(URLQueryItem(name: "scopes", value: scopes))
     }
 
-    if let redirectTo = redirectTo ?? configuration.redirectToURL {
+    if let redirectTo = redirectTo ?? configuration.redirectTo {
       queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
     }
 
@@ -1708,15 +2233,74 @@ public actor AuthClient {
   /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
   ///
   /// - Throws: `AuthError.jwtVerificationFailed` if verification fails, or `AuthError.sessionMissing` if no session exists.
+  @available(
+    *, deprecated, message: "Use claims(options:) or claims(jwt:options:) instead."
+  )
   public func getClaims(
     jwt: String? = nil,
     options: GetClaimsOptions = GetClaimsOptions()
   ) async throws -> JWTClaimsResponse {
+    let decodedJWT = try await verifiedJWT(
+      jwt, allowsExpired: options.allowExpired, jwks: options.jwks)
+
+    let claims = try configuration.resolvedDecoder.decode(
+      JWTClaims.self,
+      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
+    )
+    let header = try configuration.resolvedDecoder.decode(
+      JWTHeader.self,
+      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
+    )
+
+    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+  }
+
+  /// Verifies the access token of the current session and returns its claims.
+  ///
+  /// The client verifies a token signed with an asymmetric key (ECC or RSA) on the device, with
+  /// the key set of the Auth server, which it caches. For any other token it asks the Auth server,
+  /// as ``user(jwt:)`` does.
+  ///
+  /// - Parameter options: Options for the verification.
+  /// - Returns: The verified claims, with the header and the signature of the token.
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or
+  ///   ``AuthError/jwtVerificationFailed(message:)`` when the token is malformed, expired, has a
+  ///   bad signature, or has no `sub` or `exp` claim.
+  public func claims(options: ClaimsOptions = ClaimsOptions()) async throws -> VerifiedClaims {
+    try VerifiedClaims(
+      await verifiedJWT(nil, allowsExpired: options.allowsExpired, jwks: options.jwks))
+  }
+
+  /// Verifies a JSON Web Token and returns its claims.
+  ///
+  /// The client verifies a token signed with an asymmetric key (ECC or RSA) on the device, with
+  /// the key set of the Auth server, which it caches. For any other token it asks the Auth server,
+  /// as ``user(jwt:)`` does.
+  ///
+  /// - Parameters:
+  ///   - jwt: The token to verify.
+  ///   - options: Options for the verification.
+  /// - Returns: The verified claims, with the header and the signature of the token.
+  /// - Throws: ``AuthError/jwtVerificationFailed(message:)`` when the token is malformed, expired,
+  ///   has a bad signature, or has no `sub` or `exp` claim.
+  public func claims(
+    jwt: String,
+    options: ClaimsOptions = ClaimsOptions()
+  ) async throws -> VerifiedClaims {
+    try VerifiedClaims(
+      await verifiedJWT(jwt, allowsExpired: options.allowsExpired, jwks: options.jwks))
+  }
+
+  private func verifiedJWT(
+    _ jwt: String?,
+    allowsExpired: Bool,
+    jwks: JWKS?
+  ) async throws -> DecodedJWT {
     let token: String
     if let jwt {
       token = jwt
     } else {
-      guard let session = try? await session else {
+      guard let session = try? await sessionManager.session() else {
         throw AuthError.sessionMissing
       }
       token = session.accessToken
@@ -1726,8 +2310,7 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed(message: "Invalid JWT structure")
     }
 
-    // Validate expiration unless allowExpired is true
-    if !options.allowExpired {
+    if !allowsExpired {
       if let exp = decodedJWT.payload["exp"] as? TimeInterval {
         let now = date().timeIntervalSince1970
         if exp <= now {
@@ -1744,7 +2327,7 @@ public actor AuthClient {
     let signingKey: JWK?
     if let alg, !alg.hasPrefix("HS"), let kid {
       // Only attempt to fetch JWK for asymmetric algorithms with a kid
-      signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
+      signingKey = try await fetchJWK(kid: kid, jwks: jwks)
     } else {
       signingKey = nil
     }
@@ -1758,50 +2341,37 @@ public actor AuthClient {
     else {
       _ = try await user(jwt: token)
       // getUser succeeds, so claims can be trusted
-      let claims = try configuration.resolvedDecoder.decode(
-        JWTClaims.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-      )
-      let header = try configuration.resolvedDecoder.decode(
-        JWTHeader.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-      )
-      return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+      return decodedJWT
     }
 
-    let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
-
-    guard isValid else {
+    guard algorithm.verify(jwt: decodedJWT, jwk: signingKey) else {
       throw AuthError.jwtVerificationFailed(message: "Invalid JWT signature")
     }
 
-    // Decode claims and header
-    let claims = try configuration.resolvedDecoder.decode(
-      JWTClaims.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-    )
-    let header = try configuration.resolvedDecoder.decode(
-      JWTHeader.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-    )
-
-    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+    return decodedJWT
   }
 }
 
 extension AuthClient {
   /// Notification posted when an auth state event is triggered.
-  public static let didChangeAuthStateNotification = Notification.Name(
-    "AuthClient.didChangeAuthStateNotification"
-  )
+  @available(*, deprecated, message: "Use events() instead.")
+  public static let didChangeAuthStateNotification = _didChangeAuthStateNotification
 
   /// A user info key to retrieve the ``AuthChangeEvent`` value for a
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
-  public static let authChangeEventInfoKey = "AuthClient.authChangeEvent"
+  @available(*, deprecated, message: "Use events() instead.")
+  public static let authChangeEventInfoKey = _authChangeEventInfoKey
 
   /// A user info key to retrieve the ``Session`` value for a
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
-  public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
+  @available(*, deprecated, message: "Use events() instead.")
+  public static let authChangeSessionInfoKey = _authChangeSessionInfoKey
+
+  static let _didChangeAuthStateNotification = Notification.Name(
+    "AuthClient.didChangeAuthStateNotification"
+  )
+  static let _authChangeEventInfoKey = "AuthClient.authChangeEvent"
+  static let _authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
 
 #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)

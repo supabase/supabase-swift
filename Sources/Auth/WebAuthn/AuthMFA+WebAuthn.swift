@@ -31,7 +31,7 @@ import Foundation
     public func enrollWebAuthnFactor(
       friendlyName: String,
       presentationAnchor: ASPresentationAnchor
-    ) async throws -> AuthMFAVerifyResponse {
+    ) async throws -> Session {
       try await _enrollWebAuthnFactor(
         friendlyName: friendlyName,
         presentationAnchor: presentationAnchor,
@@ -44,9 +44,9 @@ import Foundation
       friendlyName: String,
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
-    ) async throws -> AuthMFAVerifyResponse {
-      let enrolled = try await enroll(params: .webAuthn(friendlyName: friendlyName))
-      let challengeResponse = try await challenge(
+    ) async throws -> Session {
+      let enrolled = try await _enroll(params: .webAuthn(friendlyName: friendlyName))
+      let challengeResponse = try await _challenge(
         params: MFAChallengeParams(factorId: enrolled.id)
       )
       guard let webauthn = challengeResponse.webauthn else {
@@ -56,7 +56,7 @@ import Foundation
       let credentialResponse = try await authenticator.register(
         webauthn.credentialOptions, rpId, presentationAnchor
       )
-      return try await verify(
+      return try await _verify(
         params: MFAVerifyParams(
           factorId: enrolled.id,
           challengeId: challengeResponse.id,
@@ -81,7 +81,7 @@ import Foundation
     public func verifyWebAuthnFactor(
       factorId: String,
       presentationAnchor: ASPresentationAnchor
-    ) async throws -> AuthMFAVerifyResponse {
+    ) async throws -> Session {
       try await _verifyWebAuthnFactor(
         factorId: factorId,
         presentationAnchor: presentationAnchor,
@@ -94,8 +94,8 @@ import Foundation
       factorId: String,
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
-    ) async throws -> AuthMFAVerifyResponse {
-      let challengeResponse = try await challenge(
+    ) async throws -> Session {
+      let challengeResponse = try await _challenge(
         params: MFAChallengeParams(factorId: factorId)
       )
       guard let webauthn = challengeResponse.webauthn else {
@@ -105,7 +105,7 @@ import Foundation
       let credentialResponse = try await authenticator.authenticate(
         webauthn.credentialOptions, rpId, presentationAnchor
       )
-      return try await verify(
+      return try await _verify(
         params: MFAVerifyParams(
           factorId: factorId,
           challengeId: challengeResponse.id,

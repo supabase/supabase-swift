@@ -6,7 +6,9 @@ struct AuthStateChangeEventEmitter {
     initialEvent: nil, emitsLastEventWhenAttaching: false)
   var logger: (any SupabaseLogger)?
 
-  func attach(_ listener: @escaping AuthStateChangeListener) -> ObservationToken {
+  func attach(_ listener: @escaping @Sendable (AuthChangeEvent, Session?) -> Void)
+    -> ObservationToken
+  {
     emitter.attach { event in
       guard let event else { return }
       listener(event.0, event.1)
@@ -17,11 +19,11 @@ struct AuthStateChangeEventEmitter {
 
   func emit(_ event: AuthChangeEvent, session: Session?, token: ObservationToken? = nil) {
     NotificationCenter.default.post(
-      name: AuthClient.didChangeAuthStateNotification,
+      name: AuthClient._didChangeAuthStateNotification,
       object: nil,
       userInfo: [
-        AuthClient.authChangeEventInfoKey: event,
-        AuthClient.authChangeSessionInfoKey: session as Any,
+        AuthClient._authChangeEventInfoKey: event,
+        AuthClient._authChangeSessionInfoKey: session as Any,
       ]
     )
 
