@@ -8,6 +8,7 @@ apikey
 Apikey
 AQAB
 Ascii
+attoseconds
 autocapitalization
 Autocapitalization
 autocorrection
@@ -161,6 +162,7 @@ sourcery
 Sourcery
 spotify
 Spotify
+SQLSTATE
 subclassing
 subheadline
 Subview
