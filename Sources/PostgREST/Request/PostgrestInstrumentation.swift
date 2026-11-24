@@ -14,31 +14,6 @@ import Helpers
   import OpenTelemetrySdk
 #endif
 
-extension _PostgrestRequest {
-  /// Runs `send` and, with the `OpenTelemetry` package trait, records it as one client span and one
-  /// `http.client.request.duration` measurement. Without the trait it only runs `send`.
-  ///
-  /// - Parameters:
-  ///   - request: The request `send` sends, before the middlewares run.
-  ///   - clock: Times the duration measurement.
-  ///   - send: Sends the request, retries included.
-  /// - Returns: The response and body `send` returns.
-  /// - Throws: The error `send` throws.
-  func instrument(
-    _ request: HTTPTypes.HTTPRequest,
-    clock: any Swift.Clock<Duration>,
-    send: () async throws -> (HTTPTypes.HTTPResponse, Data)
-  ) async throws -> (HTTPTypes.HTTPResponse, Data) {
-    #if OpenTelemetry
-      guard let url = request.url else { return try await send() }
-      return try await PostgrestInstrumentation.instrument(
-        call, method: request.method, url: url, clock: clock, send: send)
-    #else
-      try await send()
-    #endif
-  }
-}
-
 #if OpenTelemetry
   /// The client span and duration metric of a PostgREST call, per the OpenTelemetry HTTP client
   /// conventions plus the `supabase.postgrest.*` attributes.
@@ -68,7 +43,7 @@ extension _PostgrestRequest {
       _ call: PostgrestCall,
       method: HTTPTypes.HTTPRequest.Method,
       url: URL,
-      clock: any Swift.Clock<Duration>,
+      stopwatch: () -> () -> Double,
       send: () async throws -> (HTTPTypes.HTTPResponse, Data)
     ) async throws -> (HTTPTypes.HTTPResponse, Data) {
       let providers =
@@ -93,7 +68,7 @@ extension _PostgrestRequest {
         span.setAttribute(key: "url.full", value: .string(PostgrestTelemetry.redactedURL(url)))
       }
 
-      let elapsed = stopwatch(on: clock)
+      let elapsed = stopwatch()
       let result: Result<(HTTPTypes.HTTPResponse, Data), any Error>
       do {
         // A span that does not record, such as the one the default no-op tracer returns, has
@@ -133,15 +108,6 @@ extension _PostgrestRequest {
       var histogram = requestDuration(providers.meterProvider)
       histogram.record(value: seconds, attributes: metricAttributes)
       return try result.get()
-    }
-
-    /// Starts timing on `clock`. The returned closure gives the seconds since.
-    private static func stopwatch<C: Swift.Clock<Duration>>(on clock: C) -> () -> Double {
-      let start = clock.now
-      return {
-        let elapsed = start.duration(to: clock.now).components
-        return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
-      }
     }
 
     /// `http.client.request.duration`, in seconds.

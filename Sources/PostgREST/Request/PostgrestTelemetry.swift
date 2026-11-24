@@ -6,12 +6,40 @@
 //
 
 import Foundation
+import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
-/// The parts of a PostgREST call's telemetry that hold no OpenTelemetry type.
+extension _PostgrestRequest {
+  /// Runs `send` and, with the `OpenTelemetry` package trait, records it as one client span and one
+  /// `http.client.request.duration` measurement. Without the trait it only runs `send`.
+  ///
+  /// - Parameters:
+  ///   - request: The request `send` sends, before the middlewares run.
+  ///   - clock: Times the duration measurement.
+  ///   - send: Sends the request, retries included.
+  /// - Returns: The response and body `send` returns.
+  /// - Throws: The error `send` throws.
+  func instrument(
+    _ request: HTTPTypes.HTTPRequest,
+    clock: any Clock<Duration>,
+    send: () async throws -> (HTTPTypes.HTTPResponse, Data)
+  ) async throws -> (HTTPTypes.HTTPResponse, Data) {
+    #if OpenTelemetry
+      guard let url = request.url else { return try await send() }
+      return try await PostgrestInstrumentation.instrument(
+        call, method: request.method, url: url,
+        stopwatch: { PostgrestTelemetry.stopwatch(on: clock) }, send: send)
+    #else
+      try await send()
+    #endif
+  }
+}
+
+/// The parts of a PostgREST call's telemetry that hold no OpenTelemetry type. This file does not
+/// import OpenTelemetrySdk, whose `Clock` would hide the standard library's.
 enum PostgrestTelemetry {
   /// The query keys whose values only shape the result, so `url.full` keeps them.
   private static let shapingKeys: Set<String> = ["select", "order", "limit", "offset"]
@@ -43,5 +71,14 @@ enum PostgrestTelemetry {
     }
     if components.percentEncodedQuery?.isEmpty == true { components.percentEncodedQuery = nil }
     return components.string ?? ""
+  }
+
+  /// Starts timing on `clock`. The returned closure gives the seconds since.
+  static func stopwatch(on clock: some Clock<Duration>) -> () -> Double {
+    let start = clock.now
+    return {
+      let elapsed = start.duration(to: clock.now).components
+      return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+    }
   }
 }
