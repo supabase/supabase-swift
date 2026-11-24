@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.55.8](https://github.com/supabase/supabase-swift/compare/v2.55.7...v2.55.8) (2026-11-24)
+
+
+### Bug Fixes
+
+* **realtime:** close sockets that open after a cancelled connect ([#1881](https://github.com/supabase/supabase-swift/issues/1881)) ([869e8e0](https://github.com/supabase/supabase-swift/commit/869e8e0dab57500eaccde460d4542e93b706cd70))
+
 ## [2.55.7](https://github.com/supabase/supabase-swift/compare/v2.55.6...v2.55.7) (2026-11-16)
 
 
