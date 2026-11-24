@@ -44,10 +44,12 @@ Changes that still compile but behave differently. Check each one by hand.
   While the client is connecting or reconnecting after a drop, `subscribe()` still waits for it.
 - **`disconnect()` stops a `subscribe()` in flight.** The call throws `RealtimeError` with
   `kind == .notConnected` instead of connecting again. Call `connect()`, then subscribe again.
-- **`disconnect()` unsubscribes subscribed channels.** v2 left them `.subscribed`, so a later
-  `subscribe()` did nothing and the channel got no events. Now they become `.unsubscribed` and
-  stay registered. The next `connect()` does not rejoin them: call `subscribe()` on each channel
-  after `connect()`. The join emits `.resubscribed` on `events()`. Search for `connect()` calls
+- **The next `connect()` rejoins the channels that `disconnect()` stopped.** v2 left them
+  `.subscribed`, so a later `subscribe()` did nothing and the channel got no events. Now they
+  report `.subscribing` and stay registered, and the next `connect()` joins them again, as
+  supabase-js and Flutter do. The join emits `.resubscribed` on `events()`. A `subscribe()` call
+  after `connect()` is not needed, but it still works: it waits for that join. To keep a channel
+  from joining again, call `unsubscribe()` or `removeChannel(_:)`. Search for `connect()` calls
   that follow a `disconnect()`.
 - **A socket drop does not stop `subscribe()`.** A subscribed channel reports `.subscribing`
   until it joins again, with no `.unsubscribed` step, and a `subscribe()` in flight waits for the
@@ -109,8 +111,8 @@ Changes that still compile but behave differently. Check each one by hand.
   `.connecting` for the whole reconnect. Code that waits for `.connecting` after a drop must
   also accept `.reconnecting`.
 - **A `subscribe()` that gives up leaves the channel `.failed`.** v2 moved it back to
-  `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
-  `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
+  `.unsubscribed`. A server close during the join also ends in `.failed`. A first join that its
+  caller cancels, or that `disconnect()` stops, still ends in `.unsubscribed`.
 - **`SupabaseClient` uses the global logger and HTTP settings for Realtime.**
   `SupabaseClient.Configuration.Realtime` has no `logger` or `http`. Realtime uses
   `Configuration.Global.logger` and `Configuration.Global.http`. See

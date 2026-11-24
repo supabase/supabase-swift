@@ -514,14 +514,103 @@ struct RealtimeCoreLeaveTests {
     #expect(harness.core.channels[.room]?.phase == .unsubscribed)
   }
 
+  /// The server drops the join with the socket, so a subscribed channel waits for the next
+  /// `connect()` and joins again on its own, as supabase-js and Flutter do.
   @Test
-  func userDisconnectUnsubscribesSubscribedChannels() {
+  func userDisconnectKeepsASubscribedChannelForTheNextConnect() throws {
     var harness = Self.subscribed()
+    let socket = try #require(harness.socket)
+
+    #expect(
+      harness.send(.disconnectRequested(code: nil, reason: nil)) == [
+        .publishClientStatus(.disconnected(nil)),
+        .cancelAllTasks,
+        .closeSocket(socket, code: nil, reason: "Client disconnect"),
+        .cancel(.heartbeat),
+        .publishChannelStatus(.room, .subscribing(attempt: 1)),
+      ])
+    #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
+
+    _ = harness.send(.connect(waiter: nil))
+    let opened = harness.send(.socketOpened(FakeWebSocket.fakes().0))
+    #expect(opened.contains(.send(try Self.join(ref: "1"))))
+    #expect(
+      harness.send(.frame(Self.reply(ref: "1"))) == [
+        .publishChannelStatus(.room, .subscribed),
+        .deliver(.room, .event(.resubscribed)),
+        .cancel(.joinTimeout(channel: .room, ref: "1")),
+      ])
+  }
+
+  /// A channel the SDK rejoins after a drop also waits for the next `connect()`. Only the
+  /// `subscribe()` caller that waited for the rejoin fails.
+  @Test
+  func userDisconnectKeepsARejoiningChannelForTheNextConnect() {
+    var harness = Self.subscribed()
+    _ = harness.send(.socketClosed(code: 1001, reason: nil))
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w))
 
     let effects = harness.send(.disconnectRequested(code: nil, reason: nil))
 
-    #expect(effects.last == .publishChannelStatus(.room, .unsubscribed))
-    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
+    #expect(effects.contains(.resume(w, .failure(.disconnectedWhileSubscribing))))
+    #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
+    #expect(harness.core.channels[.room]?.subscribeWaiters.isEmpty == true)
+  }
+
+  /// `subscribe()` on a channel that waits for the next `connect()` connects, as it does for an
+  /// unsubscribed channel.
+  @Test
+  func subscribeAfterUserDisconnectConnects() throws {
+    var harness = Self.subscribed()
+    _ = harness.send(.disconnectRequested(code: nil, reason: nil))
+    let w = harness.waiter()
+
+    #expect(
+      harness.send(Self.subscribe(w)) == [
+        .publishClientStatus(.connecting(attempt: 1)), .openSocket,
+      ])
+
+    let opened = harness.send(.socketOpened(FakeWebSocket.fakes().0))
+    #expect(opened.contains(.send(try Self.join(ref: "1"))))
+    let joined = harness.send(.frame(Self.reply(ref: "1")))
+    #expect(joined.contains(.resume(w, .success)))
+  }
+
+  /// Without `connectsOnSubscribe`, `subscribe()` throws at once, and the channel still joins
+  /// on the next `connect()`.
+  @Test
+  func subscribeAfterUserDisconnectWithoutConnectsOnSubscribeFailsTheCallerOnly() {
+    var options = RealtimeCore.Options.test
+    options.connectsOnSubscribe = false
+    var harness = CoreHarness.connected(options: options)
+    _ = harness.send(Self.subscribe(harness.waiter(), channel: harness.channel()))
+    _ = harness.send(.frame(Self.reply(ref: "1")))
+    _ = harness.send(.disconnectRequested(code: nil, reason: nil))
+    let w = harness.waiter()
+
+    #expect(
+      harness.send(Self.subscribe(w)) == [.resume(w, .failure(.notConnectedToSubscribe))])
+    #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
+  }
+
+  /// `unsubscribe()` after `disconnect()` stops the rejoin: no `phx_leave` goes out, because
+  /// the server holds no join.
+  @Test
+  func unsubscribeAfterUserDisconnectStopsTheRejoin() {
+    var harness = Self.subscribed()
+    _ = harness.send(.disconnectRequested(code: nil, reason: nil))
+    let w = harness.waiter()
+
+    #expect(
+      harness.send(.unsubscribe(channel: .room, waiter: w)) == [
+        .publishChannelStatus(.room, .unsubscribed),
+        .resume(w, .success),
+      ])
+
+    _ = harness.send(.connect(waiter: nil))
+    let opened = harness.send(.socketOpened(FakeWebSocket.fakes().0))
+    #expect(!opened.contains { if case .send = $0 { true } else { false } })
   }
 
   @Test

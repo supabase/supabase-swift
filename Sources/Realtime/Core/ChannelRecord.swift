@@ -85,6 +85,24 @@ struct ChannelRecord {
     }
   }
 
+  /// The attempt with which the channel waits for the next socket after `disconnect()`, or `nil`
+  /// when its join ends there. A subscribed channel and a rejoin the SDK started go on; a first
+  /// join, a leave, and a removed channel end.
+  var nextSocketAttemptAfterDisconnect: Int? {
+    guard !isRemoving else { return nil }
+    switch phase {
+    case .subscribed:
+      return 1
+    case .waitingForSocket(let attempt), .refreshingToken(let attempt),
+      .joining(_, let attempt):
+      return isAutomaticRejoin ? attempt : nil
+    case .waitingToRetry(let attempt, _, _):
+      return isAutomaticRejoin ? attempt + 1 : nil
+    case .unsubscribed, .leaving, .failed:
+      return nil
+    }
+  }
+
   /// The join ref the server's frames for this record carry: the join a leave ends, or else
   /// the current join's.
   var inboundJoinRef: Ref? {

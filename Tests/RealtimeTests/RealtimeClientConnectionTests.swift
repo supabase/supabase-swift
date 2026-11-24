@@ -86,10 +86,10 @@ struct RealtimeClientConnectionTests {
     )
   }
 
-  /// The server drops a channel's join with the socket, so a channel that was subscribed must
-  /// join again after the next `connect()`, and report that it missed events.
+  /// The server drops a channel's join with the socket, so a channel that was subscribed joins
+  /// again on its own after the next `connect()`, and reports that it missed events.
   @Test(.timeLimit(.minutes(1)))
-  func aSubscribedChannelCanSubscribeAgainAfterDisconnectAndConnect() async throws {
+  func aSubscribedChannelRejoinsOnTheNextConnectAfterDisconnect() async throws {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")
     var events = await channel.events().makeAsyncIterator()
@@ -99,8 +99,31 @@ struct RealtimeClientConnectionTests {
     try await subscribed
 
     await host.client.disconnect()
-    #expect(await channel.status == .unsubscribed)
+    #expect(await channel.status.isSame(as: .subscribing(attempt: 1)))
 
+    try await host.client.connect()
+    await host.waitUntil { host.frames.filter { $0.event == "phx_join" }.count == 2 }
+    let rejoin = try #require(host.frames.filter { $0.event == "phx_join" }.dropFirst().first)
+    host.confirmJoin(rejoin)
+
+    #expect(await events.next() == .resubscribed)
+    #expect(await channel.status == .subscribed)
+    #expect(host.connectCount == 2)
+  }
+
+  /// Code that calls `subscribe()` after `connect()`, as v3 alpha documented, still works: the
+  /// call waits for the rejoin the client started.
+  @Test(.timeLimit(.minutes(1)))
+  func subscribeAfterDisconnectAndConnectWaitsForTheRejoin() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    var events = await channel.events().makeAsyncIterator()
+
+    async let subscribed: Void = channel.subscribe()
+    host.confirmJoin(try await host.receive(event: "phx_join"))
+    try await subscribed
+
+    await host.client.disconnect()
     try await host.client.connect()
     async let resubscribed: Void = channel.subscribe()
     await host.waitUntil { host.frames.filter { $0.event == "phx_join" }.count == 2 }
