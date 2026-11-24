@@ -122,6 +122,14 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+        .product(
+          name: "OpenTelemetryApi", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
+        .product(
+          name: "OpenTelemetrySdk", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
         .product(name: "P256K", package: "swift-secp256k1"),
         "Helpers",
         "PostgrestMacros",
@@ -142,6 +150,14 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "Logging", package: "swift-log"),
+        .product(
+          name: "OpenTelemetryApi", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
+        .product(
+          name: "OpenTelemetrySdk", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
         "Helpers",
       ],
       exclude: [
@@ -152,6 +168,14 @@ let package = Package(
       name: "PostgRESTTests",
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        .product(
+          name: "OpenTelemetryApi", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
+        .product(
+          name: "OpenTelemetrySdk", package: "opentelemetry-swift-core",
+          condition: .when(traits: ["OpenTelemetry"])
+        ),
         "Helpers",
         "PostgREST",
         "TestHelpers",

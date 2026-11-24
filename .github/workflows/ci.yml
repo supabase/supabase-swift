@@ -300,7 +300,7 @@ jobs:
       - name: "Test Swift Package (OpenTelemetry trait)"
         if: matrix.suite == 'opentelemetry'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
-        run: swift test --traits OpenTelemetry --filter SupabaseTests
+        run: swift test --traits OpenTelemetry --filter 'SupabaseTests|PostgRESTTests'
       - name: "Test supabase-typegen"
         if: matrix.suite == 'typegen'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 3 || 30 }}
@@ -385,6 +385,15 @@ jobs:
         run: >-
           swift test ${{ matrix.swift-flags }}
           --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
+      # The client span suites compile only with the OpenTelemetry trait, so they need a second
+      # build. macOS only. The trait unit suites run here too: on Apple platforms OpenTelemetry's
+      # default context manager differs from the one the Linux trait job exercises.
+      - name: "Run PostgREST Telemetry Tests (OpenTelemetry trait)"
+        if: matrix.name == 'macOS'
+        run: >-
+          swift test ${{ matrix.swift-flags }} --traits OpenTelemetry
+          --filter 'PostgrestTelemetryIntegrationTests|PostgrestInstrumentationTests|TracingTests'
+          --no-parallel
       - name: "Stop Supabase"
         working-directory: Tests/IntegrationTests
         if: always()
