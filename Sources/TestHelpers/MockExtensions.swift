@@ -26,21 +26,29 @@ extension Mock {
       // non-Darwin curl snapshots have a different Content-Length than expected
       return self
     #endif
-    var copy = self
-    copy.onRequestHandler = OnRequestHandler {
-      assertInlineSnapshot(
-        of: $0,
-        as: ._curl,
-        record: isRecording,
+    // The comparison cannot happen in the handler below: Mocker calls it from the URL-loading
+    // queue, where Swift Testing has no current test, so a recorded issue is dropped and the
+    // assertion silently passes whatever the request was. Register the expectation here -- on the
+    // test's task -- and let `MockerSerializedTrait` compare it once the body returns.
+    let token = PendingRequestSnapshotStore.shared.register(
+      PendingRequestSnapshot(
+        expected: expected?(),
+        message: message(),
+        isRecording: isRecording,
         timeout: timeout,
         syntaxDescriptor: syntaxDescriptor,
-        matches: expected,
         fileID: fileID,
-        file: filePath,
+        filePath: filePath,
         function: function,
         line: line,
-        column: column
+        column: column,
+        request: nil
       )
+    )
+
+    var copy = self
+    copy.onRequestHandler = OnRequestHandler {
+      PendingRequestSnapshotStore.shared.attach($0, to: token)
     }
     return copy
   }
