@@ -1,0 +1,495 @@
+//
+//  RealtimeV3APITests.swift
+//  Supabase
+//
+//  Tests for the v3 public API that ships on the v2 line. This file imports `Realtime` without
+//  `@testable`, so it compiles only against public symbols.
+//
+
+import Foundation
+import Realtime
+import Testing
+
+@Suite
+struct RealtimeErrorV3APITests {
+  @Test
+  func initStoresEveryField() {
+    struct Cause: Error {}
+    let error = RealtimeError(
+      kind: .unauthorized,
+      message: "Unauthorized: no access",
+      code: .unauthorized,
+      underlyingError: Cause()
+    )
+
+    #expect(error.kind == .unauthorized)
+    #expect(error.message == "Unauthorized: no access")
+    #expect(error.code == .unauthorized)
+    #expect(error.underlyingError is Cause)
+    #expect(error.errorDescription == "Unauthorized: no access")
+    #expect((error as any Error).localizedDescription == "Unauthorized: no access")
+  }
+
+  @Test
+  func kindAndCodeAreOpenStringValues() {
+    #expect(RealtimeError.Kind.timeout.rawValue == "timeout")
+    #expect(RealtimeError.Kind(rawValue: "future") == "future")
+    #expect(RealtimeError.Code.invalidJWTToken.rawValue == "InvalidJWTToken")
+    #expect(RealtimeError.Code(rawValue: "Future") == "Future")
+  }
+
+  @Test
+  func kindMatchesInCatchClause() {
+    func run() throws { throw RealtimeError(kind: .timeout, message: "late") }
+
+    var matched = false
+    do {
+      try run()
+    } catch RealtimeError.Kind.unauthorized {
+      Issue.record("matched the wrong kind")
+    } catch RealtimeError.Kind.timeout {
+      matched = true
+    } catch {
+      Issue.record("did not match: \(error)")
+    }
+    #expect(matched)
+  }
+
+  @Test
+  func codeMatchesInCatchClause() {
+    func run() throws {
+      throw RealtimeError(kind: .server, message: "PrivateOnly: nope", code: .privateOnly)
+    }
+
+    var matched = false
+    do {
+      try run()
+    } catch RealtimeError.Code.privateOnly {
+      matched = true
+    } catch {
+      Issue.record("did not match: \(error)")
+    }
+    #expect(matched)
+  }
+
+  @Test
+  func patternsDoNotMatchOtherErrors() {
+    #expect(!(RealtimeError.Kind.timeout ~= CancellationError()))
+    #expect(!(RealtimeError.Code.unauthorized ~= CancellationError()))
+  }
+
+  @Test
+  func channelClosedByServerHasItsKind() {
+    let error = RealtimeError.channelClosedByServer
+    #expect(error.kind == .channelClosedByServer)
+    #expect(error.errorDescription == "Channel was closed by the server while subscribing.")
+  }
+
+  @Test
+  func descriptionNamesKindAndMessage() {
+    let error = RealtimeError(kind: .decoding, message: "bad frame")
+    #expect(error.description == "RealtimeError(decoding): bad frame")
+  }
+}
+
+@Suite
+struct RealtimeRenamesV3APITests {
+  @Test
+  func postgresColumnIsAMutableHashableValue() {
+    var column = PostgresColumn(name: "id", type: "int8")
+    column.type = "uuid"
+
+    #expect(column.name == "id")
+    #expect(Set([column, column]).count == 1)
+  }
+
+  @Test
+  func columnIsTheSameTypeAsPostgresColumn() {
+    let column: Column = PostgresColumn(name: "id", type: "int8")
+    #expect(column == PostgresColumn(name: "id", type: "int8"))
+  }
+
+  @Test
+  func serverLogLevelKeepsTheWireValues() {
+    #expect(RealtimeServerLogLevel.warning == .warn)
+    #expect(RealtimeServerLogLevel.warning.rawValue == "warn")
+    #expect(RealtimeServerLogLevel.info.rawValue == "info")
+    #expect(RealtimeServerLogLevel.error.rawValue == "error")
+
+    let level: LogLevel = RealtimeServerLogLevel.info
+    _ = RealtimeClientOptions(logLevel: level)
+  }
+
+  @Test
+  func observesAppLifecycleIsTheSameSettingAsHandleAppLifecycle() {
+    var options = RealtimeClientOptions(handleAppLifecycle: true)
+    #expect(options.observesAppLifecycle)
+
+    options.observesAppLifecycle = false
+    #expect(!options.handleAppLifecycle)
+
+    options.handleAppLifecycle = true
+    #expect(options.observesAppLifecycle)
+
+    #expect(
+      RealtimeClientOptions.defaultObservesAppLifecycle
+        == RealtimeClientOptions.defaultHandleAppLifecycle)
+    #expect(
+      RealtimeClientOptions().observesAppLifecycle
+        == RealtimeClientOptions.defaultObservesAppLifecycle)
+  }
+
+  @Test
+  func defaultConnectsOnSubscribeMatchesTheOldName() {
+    #expect(
+      RealtimeClientOptions.defaultConnectsOnSubscribe
+        == RealtimeClientOptions.defaultConnectOnSubscribe)
+  }
+
+  @Test
+  func statusPredicates() {
+    #expect(RealtimeClientStatus.connected.isConnected)
+    #expect(!RealtimeClientStatus.connecting.isConnected)
+    #expect(!RealtimeClientStatus.disconnected.isConnected)
+
+    #expect(RealtimeChannelStatus.subscribed.isSubscribed)
+    #expect(!RealtimeChannelStatus.subscribing.isSubscribed)
+    #expect(!RealtimeChannelStatus.unsubscribed.isSubscribed)
+    #expect(!RealtimeChannelStatus.unsubscribing.isSubscribed)
+  }
+
+  @Test
+  func realtimeFilterValueReadsRawValue() {
+    struct Slug: RealtimePostgresFilterValue {
+      var rawValue: String { "a-slug" }
+    }
+
+    #expect("text".realtimeFilterValue == "text")
+    #expect(5.realtimeFilterValue == "5")
+    #expect(true.realtimeFilterValue == "true")
+    #expect(Slug().realtimeFilterValue == "a-slug")
+  }
+}
+
+@Suite
+struct RealtimeChannelConfigurationV3APITests {
+  let client = RealtimeClientV2(
+    url: URL(string: "http://localhost:54321/realtime/v1")!,
+    options: RealtimeClientOptions(headers: ["apikey": "publishable.api.key"])
+  )
+
+  @Test
+  func defaultConfigurationIsAPublicChannelWithEveryOptionOff() {
+    let configuration = RealtimeChannelConfiguration()
+
+    #expect(!configuration.isPrivate)
+    #expect(configuration.broadcast == RealtimeChannelConfiguration.Broadcast())
+    #expect(configuration.presence == RealtimeChannelConfiguration.Presence())
+    #expect(configuration == RealtimeChannelConfiguration())
+    #expect(Set([configuration, RealtimeChannelConfiguration()]).count == 1)
+  }
+
+  @Test
+  func configIsTheSameTypeAsConfiguration() {
+    let config: RealtimeChannelConfig = RealtimeChannelConfiguration()
+    #expect(config == RealtimeChannelConfiguration())
+  }
+
+  @Test
+  func broadcastOptionNamesShareStorageWithTheOldNames() {
+    var broadcast = RealtimeChannelConfiguration.Broadcast()
+    broadcast.receivesOwnMessages = true
+    broadcast.acknowledgesMessages = true
+    broadcast.waitsForReplication = true
+
+    #expect(broadcast.receiveOwnBroadcasts)
+    #expect(broadcast.acknowledgeBroadcasts)
+    #expect(broadcast.replicationReady)
+
+    broadcast.receiveOwnBroadcasts = false
+    broadcast.acknowledgeBroadcasts = false
+    broadcast.replicationReady = false
+
+    #expect(!broadcast.receivesOwnMessages)
+    #expect(!broadcast.acknowledgesMessages)
+    #expect(!broadcast.waitsForReplication)
+  }
+
+  @Test
+  func broadcastOptionsKeepTheirWireKeys() throws {
+    var broadcast = BroadcastJoinConfig()
+    broadcast.receivesOwnMessages = true
+    broadcast.waitsForReplication = true
+
+    let data = try JSONEncoder().encode(broadcast)
+    let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+    #expect(json["self"] as? Bool == true)
+    #expect(json["ack"] as? Bool == false)
+    #expect(json["replication_ready"] as? Bool == true)
+    #expect(try JSONDecoder().decode(BroadcastJoinConfig.self, from: data) == broadcast)
+  }
+
+  @Test
+  func replayTakesADateAndSendsMilliseconds() {
+    let replay = RealtimeChannelConfiguration.Broadcast.Replay(
+      since: Date(timeIntervalSince1970: 1_700_000_000.5), limit: 10)
+
+    #expect(replay.since == 1_700_000_000_500)
+    #expect(replay.limit == 10)
+  }
+
+  @Test
+  func replayWithAnIntegerLiteralStillTakesMilliseconds() {
+    let replay = ReplayOption(since: 1_700_000_000_000)
+    let milliseconds: Int = replay.since
+    #expect(milliseconds == 1_700_000_000_000)
+  }
+
+  @Test
+  @MainActor
+  func channelConfigureAppliesTheClosure() {
+    let channel = client.channel("room") { configuration in
+      configuration.isPrivate = true
+      configuration.broadcast.receivesOwnMessages = true
+      configuration.presence.key = "user-1"
+    }
+
+    #expect(channel.configuration.isPrivate)
+    #expect(channel.configuration.broadcast.receivesOwnMessages)
+    #expect(channel.configuration.presence.key == "user-1")
+    #expect(channel.config == channel.configuration)
+  }
+
+  @Test
+  @MainActor
+  func v2ChannelCallSitesKeepTheirMeaning() {
+    let plain = client.channel("plain")
+    let labelled = client.channel("labelled", options: { $0.isPrivate = true })
+    let trailing = client.channel("trailing") { $0.isPrivate = true }
+    let sendable: @Sendable (inout RealtimeChannelConfig) -> Void = { $0.isPrivate = true }
+    let stored = client.channel("stored", options: sendable)
+
+    #expect(plain.topic == "realtime:plain")
+    #expect(!plain.configuration.isPrivate)
+    #expect(labelled.configuration.isPrivate)
+    #expect(trailing.configuration.isPrivate)
+    #expect(stored.configuration.isPrivate)
+    #expect(plain.status == .unsubscribed)
+    #expect(client.channels.count == 4)
+  }
+}
+
+@Suite
+struct HeartbeatEventV3APITests {
+  @Test
+  func eventsCompareByValue() {
+    #expect(HeartbeatEvent.sent == .sent)
+    #expect(
+      HeartbeatEvent.acknowledged(latency: .milliseconds(20)) != .acknowledged(latency: .zero))
+    #expect(Set<HeartbeatEvent>([.sent, .timedOut, .sent]).count == 2)
+  }
+}
+
+@Suite
+struct BroadcastMessageV3APITests {
+  struct Cursor: Decodable, Equatable {
+    var x: Int
+  }
+
+  @Test
+  func initStoresEveryField() {
+    let id = UUID()
+    let message = BroadcastMessage(
+      event: "cursor", payload: .json(["x": 1]), id: id, isReplayed: true)
+
+    #expect(message.event == "cursor")
+    #expect(message.payload == .json(["x": 1]))
+    #expect(message.id == id)
+    #expect(message.isReplayed)
+    #expect(BroadcastMessage(event: "cursor", payload: .binary(Data())).id == nil)
+    #expect(!BroadcastMessage(event: "cursor", payload: .binary(Data())).isReplayed)
+  }
+
+  @Test
+  func decodeReadsTheJSONPayload() throws {
+    let message = BroadcastMessage(event: "cursor", payload: .json(["x": 1]))
+    #expect(try message.decode(as: Cursor.self) == Cursor(x: 1))
+  }
+
+  @Test
+  func decodeReadsABinaryPayloadAsJSON() throws {
+    let message = BroadcastMessage(event: "cursor", payload: .binary(Data(#"{"x":2}"#.utf8)))
+    let cursor: Cursor = try message.decode()
+    #expect(cursor == Cursor(x: 2))
+  }
+
+  @Test
+  func decodeUsesTheGivenDecoder() throws {
+    struct Position: Decodable, Equatable {
+      var positionX: Int
+    }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let message = BroadcastMessage(event: "cursor", payload: .json(["position_x": 3]))
+
+    #expect(try message.decode(as: Position.self, decoder: decoder) == Position(positionX: 3))
+  }
+
+  @Test
+  func decodeThrowsADecodingRealtimeError() {
+    let message = BroadcastMessage(event: "cursor", payload: .json(["y": 1]))
+
+    do {
+      _ = try message.decode(as: Cursor.self)
+      Issue.record("expected decode to throw")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .decoding)
+      #expect(error.underlyingError is DecodingError)
+    } catch {
+      Issue.record("unexpected error: \(error)")
+    }
+  }
+}
+
+@Suite
+struct PostgresChangeV3APITests {
+  struct Message: Decodable, Equatable {
+    var id: Int
+    var body: String
+  }
+
+  @Test
+  func initStoresEveryField() {
+    let date = Date(timeIntervalSince1970: 1_700_000_000)
+    let change = PostgresChange(
+      kind: .update,
+      schema: "public",
+      table: "messages",
+      commitTimestamp: date,
+      columns: [PostgresColumn(name: "id", type: "int8")],
+      record: PostgresRow(values: ["id": 1]),
+      oldRecord: PostgresRow(values: ["id": 0]),
+      errors: ["Error 401: Unauthorized"]
+    )
+
+    #expect(change.kind == .update)
+    #expect(change.schema == "public")
+    #expect(change.table == "messages")
+    #expect(change.commitTimestamp == date)
+    #expect(change.columns == [PostgresColumn(name: "id", type: "int8")])
+    #expect(change.record?["id"] == 1)
+    #expect(change.oldRecord?["id"] == 0)
+    #expect(change.errors == ["Error 401: Unauthorized"])
+  }
+
+  @Test
+  func initDefaultsToNoRowsAndNoErrors() {
+    let change = PostgresChange(
+      kind: .delete, schema: "public", table: "messages", commitTimestamp: Date(), columns: [])
+
+    #expect(change.record == nil)
+    #expect(change.oldRecord == nil)
+    #expect(change.errors.isEmpty)
+  }
+
+  @Test
+  func kindIsAnOpenStringValue() {
+    #expect(PostgresChange.Kind.insert.rawValue == "INSERT")
+    #expect(PostgresChange.Kind.update.rawValue == "UPDATE")
+    #expect(PostgresChange.Kind.delete.rawValue == "DELETE")
+    #expect(PostgresChange.Kind(rawValue: "TRUNCATE") == "TRUNCATE")
+  }
+
+  @Test
+  func rowReadsAndDecodesItsValues() throws {
+    let row = PostgresRow(values: ["id": 1, "body": "hello"])
+
+    #expect(row["body"] == "hello")
+    #expect(row["missing"] == nil)
+    #expect(try row.decode(as: Message.self) == Message(id: 1, body: "hello"))
+  }
+
+  @Test
+  func rowDecodeThrowsADecodingRealtimeError() {
+    let row = PostgresRow(values: ["id": "not a number"])
+
+    do {
+      _ = try row.decode(as: Message.self)
+      Issue.record("expected decode to throw")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .decoding)
+      #expect(error.underlyingError is DecodingError)
+    } catch {
+      Issue.record("unexpected error: \(error)")
+    }
+  }
+}
+
+@Suite
+struct PresenceV3APITests {
+  struct User: Decodable, Equatable {
+    var name: String
+  }
+
+  @Test
+  func presenceEntryStoresItsFieldsAndDecodesThePayload() throws {
+    let entry = PresenceEntry(ref: "r2", previousRef: "r1", payload: ["name": "Ana"])
+
+    #expect(entry.ref == "r2")
+    #expect(entry.previousRef == "r1")
+    #expect(entry.payload == ["name": "Ana"])
+    #expect(try entry.decode(as: User.self) == User(name: "Ana"))
+    #expect(PresenceEntry(ref: "r1", payload: [:]).previousRef == nil)
+  }
+
+  @Test
+  func presenceEntryDecodeThrowsADecodingError() {
+    let entry = PresenceEntry(ref: "r1", payload: ["age": 3])
+
+    #expect(throws: DecodingError.self) {
+      try entry.decode(as: User.self)
+    }
+  }
+
+  @Test
+  func presenceStateDecodesTheEntriesOfEachKey() throws {
+    let state = PresenceState(entries: [
+      "ana": [
+        PresenceEntry(ref: "r1", payload: ["name": "Ana"]),
+        PresenceEntry(ref: "r2", payload: ["age": 3]),
+      ],
+      "bot": [PresenceEntry(ref: "r3", payload: [:])],
+    ])
+
+    #expect(try state.decode(as: User.self) == ["ana": [User(name: "Ana")]])
+    #expect(throws: DecodingError.self) {
+      try state.decode(as: User.self, ignoringUndecodable: false)
+    }
+    #expect(PresenceState().entries.isEmpty)
+  }
+
+  @Test
+  func presenceChangeStoresJoinsAndLeaves() {
+    let entry = PresenceEntry(ref: "r1", payload: [:])
+    let change = PresenceChange(joins: ["ana": [entry]], leaves: ["bia": [entry]])
+
+    #expect(change.joins == ["ana": [entry]])
+    #expect(change.leaves == ["bia": [entry]])
+    #expect(PresenceChange() == PresenceChange(joins: [:], leaves: [:]))
+  }
+}
+
+@Suite
+struct RealtimeChannelEventV3APITests {
+  @Test
+  func eventsCompareByCaseAndMessage() {
+    let events: Set<RealtimeChannelEvent> = [
+      .resubscribed, .postgresChangesReady, .replicationReady,
+      .postgresChangesFailed("a"), .postgresChangesFailed("b"), .replicationFailed("a"),
+    ]
+
+    #expect(events.count == 6)
+    #expect(RealtimeChannelEvent.postgresChangesFailed("a") == .postgresChangesFailed("a"))
+  }
+}

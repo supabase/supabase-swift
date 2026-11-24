@@ -69,6 +69,24 @@ final class URLSessionWebSocket: WebSocket {
     headers: [String: String]? = nil,
     session: URLSession? = nil
   ) async throws -> URLSessionWebSocket {
+    try await connect(
+      to: url,
+      protocols: protocols,
+      headers: headers,
+      configuration: session?.configuration ?? .default,
+      delegate: session?.delegate
+    )
+  }
+
+  /// Connects with a dedicated session that copies `configuration` and forwards the
+  /// auth-challenge callback of `delegate`.
+  static func connect(
+    to url: URL,
+    protocols: [String]? = nil,
+    headers: [String: String]? = nil,
+    configuration: URLSessionConfiguration,
+    delegate: (any URLSessionDelegate)?
+  ) async throws -> URLSessionWebSocket {
     guard url.scheme == "ws" || url.scheme == "wss" else {
       preconditionFailure("only ws: and wss: schemes are supported")
     }
@@ -177,11 +195,11 @@ final class URLSessionWebSocket: WebSocket {
     // `URLSession` state (e.g. an app's own globally-registered `URLProtocol`) and
     // guarantees this instance always owns (and can safely invalidate) its session.
     let dedicatedSession = URLSession.sessionWithConfiguration(
-      session?.configuration ?? .default,
+      configuration,
       onComplete: onComplete,
       onWebSocketTaskOpened: onWebSocketTaskOpened,
       onWebSocketTaskClosed: onWebSocketTaskClosed,
-      wrappedDelegate: session?.delegate
+      wrappedDelegate: delegate
     )
     let task = makeTask(on: dedicatedSession)
     // Give the delegate a reference to the task it's serving, so its challenge-forwarding
@@ -231,15 +249,15 @@ final class URLSessionWebSocket: WebSocket {
     mutableState.value.isClosed
   }
 
-  let events: AsyncStream<WebSocketEvent>
-  let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
+  let events: AsyncStream<LegacyWebSocketEvent>
+  let eventsContinuation: AsyncStream<LegacyWebSocketEvent>.Continuation
 
   /// Handles incoming WebSocket messages and converts them to events.
   /// - Parameter value: The message received from the WebSocket.
   private func _handleMessage(_ value: URLSessionWebSocketTask.Message) {
     guard !isClosed else { return }
 
-    let event: WebSocketEvent
+    let event: LegacyWebSocketEvent
     switch value {
     case .string(let text):
       event = .text(text)
@@ -347,7 +365,7 @@ final class URLSessionWebSocket: WebSocket {
 
   /// Triggers a WebSocket event and updates internal state if needed.
   /// - Parameter event: The event to trigger.
-  private func _trigger(_ event: WebSocketEvent) {
+  private func _trigger(_ event: LegacyWebSocketEvent) {
     // Update state under the lock, but yield the continuation only after
     // releasing it — see the comment on `onComplete` above for why.
     let shouldInvalidate = mutableState.withValue {
