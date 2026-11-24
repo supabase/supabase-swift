@@ -416,12 +416,59 @@ features:
 
   # ── Functions ──────────────────────────────────────────────────────────────
 
-  functions.invocation.invoke: implemented
+  functions.invocation.invoke:
+    status: implemented
+    supporting_symbols:
+      - FunctionBody
+      - FunctionBody.contentType
+      - FunctionBody.json
+      - FunctionBody.text
+      - FunctionBody.data
+      - FunctionResponse
+      - FunctionResponse.status
+      - FunctionResponse.headers
+      - FunctionResponse.body
+      - FunctionResponse.init
+      - FunctionResponse.contentType
+      - FunctionResponse.executionID
+      - FunctionResponse.requestID
+      - FunctionResponse.text
+      - FunctionResponse.decode
+      - FunctionResponse.description
+      - FunctionInvokeOptions.headers
+      - FunctionInvokeOptions.query
+      - FunctionsError.Kind
+      - FunctionsError.Kind.rawValue
+      - FunctionsError.Kind.init
+      - FunctionsError.Kind.relay
+      - FunctionsError.Kind.server
+      - FunctionsError.kind
+      - FunctionsError.message
   functions.invocation.set_auth_token: implemented
-  functions.invocation.method_override: implemented
-  functions.invocation.streaming_response: implemented
+  functions.invocation.method_override:
+    status: implemented
+    supporting_symbols:
+      - FunctionInvokeOptions.method
+  functions.invocation.streaming_response:
+    status: implemented
+    symbols:
+      - FunctionsClient.stream
+    supporting_symbols:
+      - FunctionStreamResponse
+      - FunctionStreamResponse.status
+      - FunctionStreamResponse.headers
+      - FunctionStreamResponse.body
+      - FunctionStreamResponse.init
+      - FunctionStreamResponse.contentType
+      - FunctionStreamResponse.executionID
+      - FunctionStreamResponse.requestID
+      - FunctionStreamResponse.description
   functions.invocation.region_selection:
     status: implemented
+    supporting_symbols:
+      - FunctionInvokeOptions.region
+      - FunctionResponse.region
+      - FunctionStreamResponse.region
     symbols:
       - FunctionRegion
       - FunctionRegion.init
@@ -433,6 +480,7 @@ features:
       - FunctionRegion.apSoutheast2
       - FunctionRegion.caCentral1
       - FunctionRegion.euCentral1
+      - FunctionRegion.euCentral2
       - FunctionRegion.euWest1
       - FunctionRegion.euWest2
       - FunctionRegion.euWest3
@@ -445,6 +493,8 @@ features:
     status: implemented
     symbols:
       - FunctionsClient.requestIdleTimeout
+    supporting_symbols:
+      - FunctionInvokeOptions.timeout
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
