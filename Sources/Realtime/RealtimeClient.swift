@@ -453,8 +453,11 @@ public actor RealtimeClient {
   ///
   /// Cancels pending tasks, fails every push still waiting for a reply with
   /// ``RealtimeError/Kind-swift.struct/notConnected``, and emits ``RealtimeClientStatus/disconnected(_:)``.
-  /// Subscribed channels become ``RealtimeChannelStatus/unsubscribed`` and stay registered; the
-  /// next ``connect()`` does not join them again, so call ``RealtimeChannel/subscribe()`` on each.
+  /// Subscribed channels stay registered and report ``RealtimeChannelStatus/subscribing(attempt:)``;
+  /// the next ``connect()`` joins them again, and ``RealtimeChannel/events()`` then yields
+  /// ``RealtimeChannelEvent/resubscribed``. A ``RealtimeChannel/subscribe()`` still waiting for a
+  /// first join throws, and its channel becomes ``RealtimeChannelStatus/unsubscribed``. To stop a
+  /// channel for good, call ``RealtimeChannel/unsubscribe()`` or ``removeChannel(_:)``.
   ///
   /// The frames already queued, such as broadcasts that returned before this call, are still
   /// written before the socket closes. The method returns once the socket is closed; a second call

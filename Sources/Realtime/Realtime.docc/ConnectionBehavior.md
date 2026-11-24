@@ -53,10 +53,14 @@ The client stops when the answer cannot change:
 
 A failure in ``RealtimeClient/connect()`` itself is not retried: `connect()` throws it.
 
-``RealtimeClient/disconnect(code:reason:)`` is not a drop. It makes every subscribed channel
-``RealtimeChannelStatus/unsubscribed``, and the channels stay registered. The next
-``RealtimeClient/connect()`` does not join them again. Call ``RealtimeChannel/subscribe()`` on
-each one; ``RealtimeChannel/events()`` then yields ``RealtimeChannelEvent/resubscribed``.
+``RealtimeClient/disconnect(code:reason:)`` is not a drop: the client does not reconnect on its
+own. The subscribed channels stay registered and report
+``RealtimeChannelStatus/subscribing(attempt:)``. The next ``RealtimeClient/connect()`` joins them
+again, as supabase-js and Flutter do, and ``RealtimeChannel/events()`` then yields
+``RealtimeChannelEvent/resubscribed``. A ``RealtimeChannel/subscribe()`` that waits for a first
+join throws, and its channel becomes ``RealtimeChannelStatus/unsubscribed``. To keep a channel
+from joining again, call ``RealtimeChannel/unsubscribe()`` or
+``RealtimeClient/removeChannel(_:)``.
 
 ### When the server closes a channel
 

@@ -170,10 +170,27 @@ struct RealtimeCoreCancellationTests {
       harness.core.channels[.room]?.phase == .joining(ref: "3", attempt: 1))
   }
 
+  /// `disconnect()` keeps the automatic rejoin for the next `connect()`, so a cancelled
+  /// `subscribe()` after it does not roll the rejoin back.
   @Test
-  func subscribeAfterAnAutomaticRejoinEndedRollsBack() {
+  func cancelAfterDisconnectKeepsTheAutomaticRejoin() {
     var harness = Self.subscribed()
     _ = harness.send(.socketClosed(code: 1001, reason: nil))
+    _ = harness.send(.disconnectRequested(code: nil, reason: nil))
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w))
+
+    #expect(harness.send(.waiterCancelled(w)) == [.resume(w, .cancelled)])
+    #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
+  }
+
+  /// A first join that `disconnect()` ended is not a rejoin: a cancelled `subscribe()` after it
+  /// rolls back.
+  @Test
+  func subscribeAfterAFirstJoinEndedByDisconnectRollsBack() {
+    var harness = CoreHarness.connected()
+    _ = harness.channel()
+    _ = harness.send(Self.subscribe(harness.waiter()))
     _ = harness.send(.disconnectRequested(code: nil, reason: nil))
     let w = harness.waiter()
     _ = harness.send(Self.subscribe(w))

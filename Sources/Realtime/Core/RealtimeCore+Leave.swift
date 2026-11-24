@@ -285,13 +285,25 @@ extension RealtimeCore {
       + (timer.map { [.cancel($0)] } ?? [])
   }
 
-  /// Ends every join after `disconnect()`. A subscribe in flight fails with
-  /// ``RealtimeError/disconnectedWhileSubscribing`` instead of connecting again, a leave is
-  /// over, and a push waiting for a reply fails with ``RealtimeError/notConnected``.
+  /// Ends every join after `disconnect()`. A subscribed channel, and a channel the SDK rejoins
+  /// on its own, wait for the next socket, which joins them again, as supabase-js and Flutter
+  /// do. A subscribe in flight fails with ``RealtimeError/disconnectedWhileSubscribing``
+  /// instead of connecting again, a first join ends, a leave is over, and a push waiting for a
+  /// reply fails with ``RealtimeError/notConnected``.
   mutating func disconnectChannels() -> [Effect] {
     var effects: [Effect] = []
     for channel in channels.ids.sorted() {
       guard var record = channels[channel] else { continue }
+      if let attempt = record.nextSocketAttemptAfterDisconnect {
+        channels.update(channel) {
+          $0.isAutomaticRejoin = true
+          $0.hasRefreshedExpiredToken = false
+        }
+        effects += endJoin(
+          channel, subscribers: .failure(.disconnectedWhileSubscribing), pushes: .notConnected,
+          phase: .waitingForSocket(attempt: attempt))
+        continue
+      }
       switch record.phase {
       case .waitingForSocket, .refreshingToken, .joining, .waitingToRetry, .subscribed, .leaving:
         let leavers = record.leaveWaiters
@@ -315,6 +327,11 @@ extension RealtimeCore {
 
   var isConnected: Bool {
     if case .connected = connection { true } else { false }
+  }
+
+  /// Whether the client waits for a `connect()` and will not reconnect on its own.
+  var isStopped: Bool {
+    if case .disconnected = connection { true } else { false }
   }
 
   /// Stops the channel's current join for good: resumes the subscribe callers with

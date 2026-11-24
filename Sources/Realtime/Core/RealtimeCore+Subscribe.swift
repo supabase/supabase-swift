@@ -45,6 +45,16 @@ extension RealtimeCore {
       channels.setRecord(record, for: channel)
       return effects + sendJoin(channel, attempt: 1)
 
+    case .waitingForSocket where isStopped:
+      // After `disconnect()` or a 4000–4999 close, no socket comes until a `connect()`.
+      guard options.connectsOnSubscribe else {
+        channels.setRecord(record, for: channel)
+        return effects + [.resume(waiter, .failure(.notConnectedToSubscribe))]
+      }
+      record.subscribeWaiters.append(waiter)
+      channels.setRecord(record, for: channel)
+      return effects + transitionConnection(.connect(waiter: nil))
+
     case .waitingForSocket, .refreshingToken, .joining, .waitingToRetry, .leaving:
       // The attempt in flight, or the join after the leave, answers this caller too.
       record.subscribeWaiters.append(waiter)
