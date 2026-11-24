@@ -66,8 +66,9 @@ Changes that still compile but behave differently. Check each one by hand.
   status becomes `.unsubscribed`.
 - **Cancelling `subscribe()` stops only that call.** While another `subscribe()` call waits for
   the same channel, the join goes on for it. When the last waiting call is cancelled before the
-  join is confirmed, the channel rolls back to `.unsubscribed`, and leaves the topic if a join
-  went out. v2 stopped the join for every caller when the first one was cancelled. A call from a
+  join is confirmed, a first join rolls back to `.unsubscribed`, and leaves the topic if a join
+  went out. A rejoin that the SDK started, for example after a drop or a `disconnect()`, goes on.
+  v2 stopped the join for every caller when the first one was cancelled. A call from a
   task that is already cancelled throws `CancellationError` and sends nothing. Search for
   `subscribe()` calls in tasks that you cancel.
 - **`unsubscribe()` keeps the channel.** The channel stays in `channels` with its streams open,
