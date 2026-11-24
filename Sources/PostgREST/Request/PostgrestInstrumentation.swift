@@ -22,6 +22,8 @@ extension _PostgrestRequest {
   ///   - request: The request `send` sends, before the middlewares run.
   ///   - clock: Times the duration measurement.
   ///   - send: Sends the request, retries included.
+  /// - Returns: The response and body `send` returns.
+  /// - Throws: The error `send` throws.
   func instrument(
     _ request: HTTPTypes.HTTPRequest,
     clock: any Swift.Clock<Duration>,

@@ -62,7 +62,7 @@ struct PostgrestTelemetryTests {
   }
 
   @Test
-  func leavesAURLWithoutAQueryAlone() {
+  func leavesURLsWithoutAQueryAlone() {
     #expect(
       redacted("https://example.supabase.co/rest/v1/users")
         == "https://example.supabase.co/rest/v1/users")
@@ -81,7 +81,7 @@ struct PostgrestTelemetryTests {
   struct SomeFailure: Error {}
 
   @Test
-  func namesAURLErrorByItsType() {
+  func namesURLErrorsByTheirType() {
     let urlError = URLError(.notConnectedToInternet)
     #expect(PostgrestTelemetry.errorType(of: urlError) == String(reflecting: URLError.self))
     #if canImport(Darwin)
