@@ -2,7 +2,7 @@ public import Foundation
 
 /// Options for searching and paginating files within a bucket.
 ///
-/// Pass a ``SearchOptions`` value to ``StorageFileApi/list(path:options:)`` to control which files
+/// Pass a ``SearchOptions`` value to ``StorageFileApi/list(path:options:)->[FileObject]`` to control which files
 /// are returned and how they are ordered.
 ///
 /// ```swift
@@ -27,6 +27,7 @@ public import Foundation
 /// - ``offset``
 /// - ``sortBy``
 /// - ``search``
+@available(*, deprecated, message: "Use ListOptions instead.")
 public struct SearchOptions: Encodable, Sendable {
   var prefix: String
 
@@ -63,7 +64,7 @@ public struct SearchOptions: Encodable, Sendable {
   }
 }
 
-/// A column-and-direction pair used to sort ``StorageFileApi/list(path:options:)`` results.
+/// A column-and-direction pair used to sort ``StorageFileApi/list(path:options:)->[FileObject]`` results.
 ///
 /// ```swift
 /// SortBy(column: "name", order: .ascending)
@@ -76,6 +77,7 @@ public struct SearchOptions: Encodable, Sendable {
 ///
 /// - ``column``
 /// - ``order``
+@available(*, deprecated, message: "Use ListOptions.sortBy and ListOptions.order instead.")
 public struct SortBy: Encodable, Sendable {
   /// The name of the column to sort by, e.g. `"name"` or `"created_at"`.
   public var column: String?
@@ -119,6 +121,7 @@ public struct SortBy: Encodable, Sendable {
 /// - ``duplex``
 /// - ``metadata``
 /// - ``headers``
+@available(*, deprecated, message: "Use UploadOptions instead.")
 public struct FileOptions: Sendable {
   /// The number of seconds the asset is cached in the browser and in the Supabase CDN.
   ///
@@ -182,6 +185,7 @@ public struct FileOptions: Sendable {
 /// - ``error``
 /// - ``signedURL``
 /// - ``path``
+@available(*, deprecated, message: "Use SignedURLResult instead.")
 public struct SignedURL: Decodable, Sendable {
   /// An optional error message. Non-nil when the path could not be signed.
   public var error: String?
@@ -268,9 +272,9 @@ public enum SignedURLResult: Sendable {
   }
 }
 
-/// A signed upload URL created by ``StorageFileApi/createSignedUploadURL(path:options:)``.
+/// A signed upload URL created by ``StorageFileApi/createSignedUploadURL(path:upsert:)``.
 ///
-/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(_:token:data:options:)`` to perform the
+/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(path:token:data:options:)`` to perform the
 /// authenticated upload.
 ///
 /// ## Topics
@@ -282,13 +286,24 @@ public enum SignedURLResult: Sendable {
 /// - ``token``
 public struct SignedUploadURL: Sendable {
   /// The fully constructed signed upload URL.
-  public let signedURL: URL
+  public var signedURL: URL
 
   /// The destination file path within the bucket.
-  public let path: String
+  public var path: String
 
   /// The upload authentication token extracted from ``signedURL``.
-  public let token: String
+  public var token: String
+
+  /// Creates a ``SignedUploadURL``.
+  public init(
+    signedURL: URL,
+    path: String,
+    token: String
+  ) {
+    self.signedURL = signedURL
+    self.path = path
+    self.token = token
+  }
 }
 
 /// The response returned after a successful file upload or update.
@@ -300,6 +315,7 @@ public struct SignedUploadURL: Sendable {
 /// - ``id``
 /// - ``path``
 /// - ``fullPath``
+@available(*, deprecated, message: "Use UploadedObject instead.")
 public struct FileUploadResponse: Sendable {
   /// The unique identifier assigned to the uploaded object.
   public let id: String
@@ -319,6 +335,7 @@ public struct FileUploadResponse: Sendable {
 ///
 /// - ``path``
 /// - ``fullPath``
+@available(*, deprecated, message: "Use UploadedObject instead.")
 public struct SignedURLUploadResponse: Sendable {
   /// The relative file path within the bucket, as provided to the upload call.
   public let path: String
@@ -327,9 +344,42 @@ public struct SignedURLUploadResponse: Sendable {
   public let fullPath: String
 }
 
+/// The object an upload, update, or signed-URL upload created.
+///
+/// ## Topics
+///
+/// ### Properties
+///
+/// - ``id``
+/// - ``path``
+/// - ``fullPath``
+public struct UploadedObject: Hashable, Sendable {
+  /// The unique identifier assigned to the object. `nil` after a signed-URL or resumable
+  /// upload, which Storage answers without one.
+  public var id: UUID?
+
+  /// The normalized file path within the bucket, as provided to the upload call.
+  public var path: String
+
+  /// The full storage key including the bucket name, e.g. `"avatars/user123.png"`.
+  public var fullPath: String
+
+  /// Creates an ``UploadedObject``.
+  ///
+  /// - Parameters:
+  ///   - id: The object identifier, when Storage returned one.
+  ///   - path: The file path within the bucket.
+  ///   - fullPath: The full storage key including the bucket name.
+  public init(id: UUID? = nil, path: String, fullPath: String) {
+    self.id = id
+    self.path = path
+    self.fullPath = fullPath
+  }
+}
+
 /// Options for creating a signed upload URL.
 ///
-/// Pass this to ``StorageFileApi/createSignedUploadURL(path:options:)`` to control whether an
+/// Pass this to ``StorageFileApi/createSignedUploadURL(path:upsert:)`` to control whether an
 /// existing file at the destination path should be overwritten.
 ///
 /// ## Topics
@@ -337,6 +387,10 @@ public struct SignedURLUploadResponse: Sendable {
 /// ### Properties
 ///
 /// - ``upsert``
+@available(
+  *, deprecated,
+  message: "Use the upsert parameter of createSignedUploadURL(path:upsert:) instead."
+)
 public struct CreateSignedUploadURLOptions: Sendable {
   /// When `true`, an existing file at the destination path is overwritten by the subsequent upload.
   public var upsert: Bool
@@ -359,6 +413,11 @@ public struct CreateSignedUploadURLOptions: Sendable {
 /// ### Properties
 ///
 /// - ``destinationBucket``
+@available(
+  *, deprecated,
+  message:
+    "Use the toBucket parameter of move(from:to:toBucket:sourceVersionID:) or copy(from:to:toBucket:sourceVersionID:options:) instead."
+)
 public struct DestinationOptions: Sendable {
   /// The identifier of the destination bucket. When `nil`, the operation stays within the source bucket.
   public var destinationBucket: String?
@@ -373,7 +432,7 @@ public struct DestinationOptions: Sendable {
 
 /// Metadata about a file stored in a Supabase Storage bucket.
 ///
-/// ``FileObject`` is returned by ``StorageFileApi/list(path:options:)`` and
+/// ``FileObject`` is returned by ``StorageFileApi/list(path:options:)->[FileObject]`` and
 /// ``StorageFileApi/remove(paths:)``.
 ///
 /// ## Topics
@@ -501,6 +560,7 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
 /// ### Metadata
 ///
 /// - ``metadata``
+@available(*, deprecated, message: "Use ObjectInfo instead.")
 public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
   /// The unique identifier of this object.
   public let id: String
@@ -561,7 +621,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 /// A Supabase Storage bucket.
 ///
 /// Buckets are the top-level containers for files. Retrieve bucket details with
-/// ``StorageBucketApi/getBucket(_:)`` or ``StorageBucketApi/listBuckets()``.
+/// ``StorageBucketApi/bucket(_:)`` or ``StorageBucketApi/listBuckets(options:)``.
 ///
 /// ## Topics
 ///
@@ -569,13 +629,18 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 ///
 /// - ``id``
 /// - ``name``
-/// - ``owner``
+/// - ``type``
+/// - ``ownerID``
 ///
 /// ### Access and limits
 ///
 /// - ``isPublic``
 /// - ``allowedMimeTypes``
 /// - ``fileSizeLimit``
+///
+/// ### Versioning
+///
+/// - ``versioningStatus``
 ///
 /// ### Timestamps
 ///
@@ -588,8 +653,25 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   /// The human-readable name of the bucket.
   public var name: String
 
+  /// Whether the bucket holds files or analytics tables. `nil` when Storage leaves it out, as
+  /// ``StorageBucketApi/bucket(_:)`` does.
+  public var type: BucketType?
+
+  private var storedOwner: String
+
+  /// The ID of the user who owns the bucket, if any. On this version it is the `owner` field
+  /// Storage sends, and `nil` when that field is empty.
+  public var ownerID: String? {
+    get { storedOwner.isEmpty ? nil : storedOwner }
+    set { storedOwner = newValue ?? "" }
+  }
+
   /// The user ID of the bucket owner.
-  public var owner: String
+  @available(*, deprecated, message: "Use ownerID instead.")
+  public var owner: String {
+    get { storedOwner }
+    set { storedOwner = newValue }
+  }
 
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
@@ -606,6 +688,47 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   /// Maximum file size allowed for uploads to this bucket, in bytes.
   public var fileSizeLimit: Int64?
 
+  /// Whether the bucket keeps a new version of an object on each write. `nil` when Storage leaves
+  /// it out, as Storage releases before v1.81.0 do.
+  public var versioningStatus: BucketVersioningStatus?
+
+  /// Creates a ``Bucket``.
+  ///
+  /// - Parameters:
+  ///   - id: Unique bucket identifier.
+  ///   - name: Human-readable bucket name.
+  ///   - type: Whether the bucket holds files or analytics tables.
+  ///   - ownerID: ID of the user who owns the bucket.
+  ///   - isPublic: Whether the bucket is publicly readable.
+  ///   - createdAt: Creation timestamp.
+  ///   - updatedAt: Last-updated timestamp.
+  ///   - allowedMimeTypes: Permitted MIME types for uploads. `nil` allows all types.
+  ///   - fileSizeLimit: Maximum upload size in bytes. `nil` means no limit.
+  ///   - versioningStatus: Whether the bucket keeps a new version of an object on each write.
+  public init(
+    id: String,
+    name: String,
+    type: BucketType? = nil,
+    ownerID: String? = nil,
+    isPublic: Bool,
+    createdAt: Date,
+    updatedAt: Date,
+    allowedMimeTypes: [String]? = nil,
+    fileSizeLimit: Int64? = nil,
+    versioningStatus: BucketVersioningStatus? = nil
+  ) {
+    self.id = id
+    self.name = name
+    self.type = type
+    self.storedOwner = ownerID ?? ""
+    self.isPublic = isPublic
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+    self.allowedMimeTypes = allowedMimeTypes
+    self.fileSizeLimit = fileSizeLimit
+    self.versioningStatus = versioningStatus
+  }
+
   /// Creates a ``Bucket``.
   ///
   /// - Parameters:
@@ -617,6 +740,11 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   ///   - updatedAt: Last-updated timestamp.
   ///   - allowedMimeTypes: Permitted MIME types for uploads. `nil` allows all types.
   ///   - fileSizeLimit: Maximum upload size in bytes. `nil` means no limit.
+  @available(
+    *, deprecated,
+    message:
+      "Use init(id:name:type:ownerID:isPublic:createdAt:updatedAt:allowedMimeTypes:fileSizeLimit:versioningStatus:) instead."
+  )
   public init(
     id: String,
     name: String,
@@ -627,25 +755,22 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
     allowedMimeTypes: [String]? = nil,
     fileSizeLimit: Int64? = nil
   ) {
-    self.id = id
-    self.name = name
-    self.owner = owner
-    self.isPublic = isPublic
-    self.createdAt = createdAt
-    self.updatedAt = updatedAt
-    self.allowedMimeTypes = allowedMimeTypes
-    self.fileSizeLimit = fileSizeLimit
+    self.init(
+      id: id, name: name, ownerID: owner, isPublic: isPublic, createdAt: createdAt,
+      updatedAt: updatedAt, allowedMimeTypes: allowedMimeTypes, fileSizeLimit: fileSizeLimit)
   }
 
   enum CodingKeys: String, CodingKey {
     case id
     case name
-    case owner
+    case type
+    case storedOwner = "owner"
     case isPublic = "public"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
     case allowedMimeTypes = "allowed_mime_types"
     case fileSizeLimit = "file_size_limit"
+    case versioningStatus = "versioning_status"
   }
 }
 
@@ -655,6 +780,7 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 ///
 /// ``StorageByteCount`` is accepted wherever a file-size limit is required (e.g. ``BucketOptions``).
 /// You can create instances using the static factory methods, integer literals, or string literals.
+/// A whole number of bytes encodes as a JSON number, anything else as a string.
 ///
 /// ```swift
 /// BucketOptions(fileSizeLimit: .megabytes(1.5))
@@ -666,88 +792,132 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 ///
 /// ### Creating a byte count
 ///
-/// - ``init(_:)``
-/// - ``init(stringValue:)``
+/// - ``init(bytes:)``
+/// - ``init(rawValue:)``
 /// - ``kilobytes(_:)``
 /// - ``megabytes(_:)``
 /// - ``gigabytes(_:)``
 ///
-/// ### Accessing the stored value
+/// ### Reading the value
 ///
-/// - ``intValue``
-/// - ``stringValue``
+/// - ``rawValue``
+/// - ``bytes``
 public struct StorageByteCount: Sendable, Hashable {
+  private let exactBytes: Int64?
+  private let sizeString: String?
+
   /// The exact byte count, or `nil` when a human-readable string value is used.
-  public let intValue: Int64?
+  @available(*, deprecated, message: "Use bytes instead.")
+  public var intValue: Int64? { exactBytes }
 
   /// A human-readable size string (e.g. `"1.5mb"`, `"500kb"`), or `nil` when an integer is used.
-  public let stringValue: String?
+  @available(*, deprecated, message: "Use rawValue instead.")
+  public var stringValue: String? { sizeString }
 
   /// Creates a ``StorageByteCount`` from an exact byte count.
   ///
   /// - Parameter intValue: The number of bytes.
+  @available(*, deprecated, message: "Use init(bytes:) instead.")
   public init(_ intValue: Int64) {
-    self.intValue = intValue
-    self.stringValue = nil
+    self.init(bytes: intValue)
   }
 
   /// Creates a ``StorageByteCount`` from a human-readable size string.
   ///
   /// - Parameter stringValue: A size string such as `"500kb"`, `"1.5mb"`, or `"2gb"`.
+  @available(*, deprecated, message: "Use init(rawValue:) instead.")
   public init(stringValue: String) {
-    self.intValue = nil
-    self.stringValue = stringValue
+    self.init(sizeString: stringValue)
   }
 
-  private static func formatValue(_ value: Double) -> String {
-    value.truncatingRemainder(dividingBy: 1) == 0
+  /// Creates a ``StorageByteCount`` from an exact number of bytes.
+  public init(bytes: Int64) {
+    self.exactBytes = bytes
+    self.sizeString = nil
+  }
+
+  private init(sizeString: String) {
+    self.exactBytes = nil
+    self.sizeString = sizeString
+  }
+
+  /// The exact number of bytes, or `nil` when the value is a size string Storage parses.
+  public var bytes: Int64? {
+    exactBytes ?? sizeString.flatMap { Int64($0) }
+  }
+
+  private static func unit(_ value: Double, _ suffix: String) -> Self {
+    let number =
+      value.truncatingRemainder(dividingBy: 1) == 0
       ? Int64(exactly: value).map(String.init) ?? String(value)
       : String(value)
+    return Self(sizeString: number + suffix)
   }
 
-  /// Creates a ``StorageByteCount`` from a number of kilobytes.
+  /// `value` kilobytes, sent as `"<value>kb"`.
   ///
   /// - Parameter value: Size in kilobytes.
   public static func kilobytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))kb")
+    unit(value, "kb")
   }
 
-  /// Creates a ``StorageByteCount`` from a number of megabytes.
+  /// `value` megabytes, sent as `"<value>mb"`.
   ///
   /// - Parameter value: Size in megabytes.
   public static func megabytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))mb")
+    unit(value, "mb")
   }
 
-  /// Creates a ``StorageByteCount`` from a number of gigabytes.
+  /// `value` gigabytes, sent as `"<value>gb"`.
   ///
   /// - Parameter value: Size in gigabytes.
   public static func gigabytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))gb")
+    unit(value, "gb")
   }
 }
 
-extension StorageByteCount: ExpressibleByIntegerLiteral {
-  public init(integerLiteral value: Int64) { self.init(value) }
-}
+/// A file size limit for a Storage bucket.
+///
+/// The name ``StorageByteCount`` has in the next major version.
+public typealias ByteCount = StorageByteCount
 
-extension StorageByteCount: ExpressibleByStringLiteral {
-  public init(stringLiteral value: String) {
-    if let n = Int64(value) {
-      self.init(n)
+extension StorageByteCount {
+  /// The value as Storage reads it: a byte count such as `"5242880"`, or a size string such as
+  /// `"1.5mb"`.
+  public var rawValue: String {
+    sizeString ?? String(exactBytes ?? 0)
+  }
+
+  /// Creates a ``StorageByteCount`` from a value Storage reads, such as `"1.5mb"` or `"5242880"`.
+  public init(rawValue: String) {
+    if let bytes = Int64(rawValue) {
+      self.init(bytes: bytes)
     } else {
-      self.init(stringValue: value)
+      self.init(sizeString: rawValue)
     }
   }
 }
 
+extension StorageByteCount: ExpressibleByIntegerLiteral {
+  /// Creates a ``StorageByteCount`` of an exact number of bytes.
+  public init(integerLiteral value: Int64) { self.init(bytes: value) }
+}
+
+extension StorageByteCount: ExpressibleByStringLiteral {
+  /// Creates a ``StorageByteCount`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+}
+
 extension StorageByteCount: Encodable {
+  /// Encodes an exact byte count as a JSON number and a size string as a string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
-    if let string = stringValue {
-      try container.encode(string)
+    if let sizeString {
+      try container.encode(sizeString)
     } else {
-      try container.encode(intValue ?? 0)
+      try container.encode(exactBytes ?? 0)
     }
   }
 }
@@ -855,7 +1025,7 @@ extension ImageFormat: Codable {
 
 // MARK: - SortOrder
 
-/// Sort direction for ``StorageFileApi/list(path:options:)`` results.
+/// Sort direction for ``StorageFileApi/list(path:options:)->[StorageObject]`` results.
 ///
 /// ```swift
 /// SortBy(column: "name", order: .ascending)
@@ -904,8 +1074,10 @@ extension SortOrder: Codable {
 /// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
-/// storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)
-/// storage.from("docs").getPublicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
+/// storage.from("docs").publicURL(
+///   path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
+/// storage.from("docs").publicURL(
+///   path: "report.pdf", options: PublicURLOptions(download: .named("annual-2024.pdf")))
 /// ```
 ///
 /// ## Topics
@@ -957,6 +1129,7 @@ public enum DownloadBehavior: Sendable {
 /// - ``isPublic``
 /// - ``fileSizeLimit``
 /// - ``allowedMimeTypes``
+@available(*, deprecated, message: "Use CreateBucketOptions or UpdateBucketOptions instead.")
 public struct BucketOptions: Sendable {
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
@@ -980,7 +1153,7 @@ public struct BucketOptions: Sendable {
     allowedMimeTypes: [String]? = nil
   ) {
     self.isPublic = isPublic
-    self.fileSizeLimit = fileSizeLimit?.stringValue ?? fileSizeLimit?.intValue.map(String.init)
+    self.fileSizeLimit = fileSizeLimit?.rawValue
     self.allowedMimeTypes = allowedMimeTypes
   }
 }

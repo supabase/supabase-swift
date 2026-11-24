@@ -35,7 +35,8 @@ extension StorageClientConfiguration {
 extension StorageFileApi {
   @available(
     *, deprecated,
-    message: "Use download: DownloadBehavior? instead. Pass .withOriginalName to trigger download."
+    message:
+      "Use createSignedURL(path:expiresIn:options:) with a Duration and SignedURLOptions instead. Pass .withOriginalName to trigger download."
   )
   public func createSignedURL(
     path: String,
@@ -53,7 +54,11 @@ extension StorageFileApi {
     )
   }
 
-  @available(*, deprecated, message: "Use download: DownloadBehavior? instead.")
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURLs(paths:expiresIn:options:) with a Duration and SignedURLsOptions instead."
+  )
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
@@ -68,7 +73,7 @@ extension StorageFileApi {
     )
   }
 
-  @available(*, deprecated, message: "Use download: DownloadBehavior? instead.")
+  @available(*, deprecated, message: "Use publicURL(path:options:) instead.")
   public func getPublicURL(
     path: String,
     download: Bool,
@@ -257,6 +262,7 @@ extension Data {
   }
 }
 
+@available(*, deprecated, message: "Use CreateBucketOptions or UpdateBucketOptions instead.")
 extension BucketOptions {
   @available(*, deprecated, renamed: "isPublic")
   public var `public`: Bool {
@@ -295,6 +301,7 @@ extension BucketOptions {
 
 }
 
+@available(*, deprecated)
 extension SortBy {
   @_disfavoredOverload
   @available(*, deprecated, message: "Use `init` with `SortOrder` instead.")

@@ -72,10 +72,20 @@ struct StorageVectorsClientIntegrationTests {
       assertInlineSnapshot(of: error, as: .dump) {
         """
         ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "NotFoundException"
+          ▿ code: Optional<Code>
+            ▿ some: Code
+              - rawValue: "NotFoundException"
+          ▿ kind: Kind
+            - rawValue: "server"
           - message: "resource \\"not-exist-bucket\\" not found"
-          ▿ statusCode: Optional<String>
+          ▿ serverError: Optional<ServerError>
+            ▿ some: ServerError
+              ▿ error: Optional<String>
+                - some: "NotFoundException"
+              - message: "resource \\"not-exist-bucket\\" not found"
+              ▿ statusCode: Optional<Int>
+                - some: 404
+          ▿ statusCodeText: Optional<String>
             - some: "404"
 
         """
