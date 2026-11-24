@@ -1,9 +1,17 @@
-import Foundation
+public import Foundation
+
+// The public names carry a `Realtime` prefix so they do not collide with `WebSocket` types from
+// other libraries in apps that import both. The module keeps using the short names internally.
+typealias WebSocket = RealtimeWebSocket
+typealias WebSocketEvent = RealtimeWebSocketEvent
 
 /// Represents events that can occur on a WebSocket connection.
-enum WebSocketEvent: Sendable, Hashable {
+public enum RealtimeWebSocketEvent: Sendable, Hashable {
+  /// A text message from the peer.
   case text(String)
+  /// A binary message from the peer.
   case binary(Data)
+  /// The connection closed, with the close code and reason the peer sent, if any.
   case close(code: Int?, reason: String)
 }
 
@@ -20,8 +28,14 @@ enum WebSocketError: Error, LocalizedError {
 }
 
 /// The interface for WebSocket connection.
-protocol WebSocket: Sendable, AnyObject {
+///
+/// Conform to this protocol to give ``RealtimeClientV2`` a WebSocket implementation of your own
+/// through ``RealtimeClientOptions/transport``.
+public protocol RealtimeWebSocket: Sendable, AnyObject {
+  /// The close code of the connection, or `nil` while it is open.
   var closeCode: Int? { get }
+
+  /// The close reason of the connection, or `nil` while it is open.
   var closeReason: String? { get }
 
   /// Sends text data to the connected peer.
@@ -40,8 +54,8 @@ protocol WebSocket: Sendable, AnyObject {
   ///   - reason: The reason for closing the connection.
   func close(code: Int?, reason: String?)
 
-  /// An `AsyncStream` of ``WebSocketEvent`` received from the peer.
-  var events: AsyncStream<WebSocketEvent> { get }
+  /// An `AsyncStream` of ``RealtimeWebSocketEvent`` received from the peer.
+  var events: AsyncStream<RealtimeWebSocketEvent> { get }
 
   /// The WebSocket subprotocol negotiated with the peer.
   ///

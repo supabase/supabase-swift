@@ -24,4 +24,10 @@ struct RealtimeClientOptionsTests {
     )
     #expect(options.session === customSession)
   }
+
+  @Test
+  func transportDefaultsToNil() {
+    let options = RealtimeClientOptions(headers: ["apikey": "test-key"])
+    #expect(options.transport == nil)
+  }
 }
