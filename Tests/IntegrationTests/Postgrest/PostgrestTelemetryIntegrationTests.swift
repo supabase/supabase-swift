@@ -74,6 +74,21 @@
     }
 
     @Test
+    func aGetRPCCallRedactsEveryQueryValue() async throws {
+      try await recorder.run {
+        _ = try await client.rpc("get_status", params: ["name_param": "supabot"], get: true)
+          .execute()
+      }
+
+      let span = try #require(recorder.spans.only)
+      #expect(span.name == "GET /rest/v1/rpc/get_status")
+      #expect(span.attributes["http.response.status_code"] == .int(200))
+      #expect(
+        span.attributes["url.full"]
+          == .string("\(DotEnv.supabaseURL)/rest/v1/rpc/get_status?name_param=REDACTED"))
+    }
+
+    @Test
     func anUpsertAndADeleteMapToTheirOperations() async throws {
       let id = UUID()
       try await recorder.run {

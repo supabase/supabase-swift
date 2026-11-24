@@ -19,7 +19,7 @@ import Helpers
   /// conventions plus the `supabase.postgrest.*` attributes.
   ///
   /// Telemetry never carries a customer's data: `url.full` goes through
-  /// ``PostgrestTelemetry/redactedURL(_:)`` and the metric carries no URL.
+  /// ``PostgrestTelemetry/redactedURL(_:keepingShapingValues:)`` and the metric carries no URL.
   enum PostgrestInstrumentation {
     /// The tracer and meter providers a call records to.
     struct Providers: @unchecked Sendable {
@@ -65,7 +65,10 @@ import Helpers
       // Redacting the URL costs a parse, so a span that does not record skips it.
       if span.isRecording {
         span.setAttributes(attributes)
-        span.setAttribute(key: "url.full", value: .string(PostgrestTelemetry.redactedURL(url)))
+        span.setAttribute(
+          key: "url.full",
+          value: .string(
+            PostgrestTelemetry.redactedURL(url, keepingShapingValues: call.operation != .rpc)))
       }
 
       let elapsed = stopwatch()

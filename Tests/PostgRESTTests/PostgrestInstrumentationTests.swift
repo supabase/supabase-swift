@@ -200,6 +200,25 @@
     }
 
     @Test
+    func aGetRPCCallRedactsEveryQueryValue() async throws {
+      let client = try makeClient()
+
+      try await recorder.run {
+        _ = try await client.rpc("get_scores", params: ["min": 10], get: true)
+          .select("id")
+          .limit(1)
+          .execute()
+      }
+
+      let span = try #require(recorder.spans.only)
+      #expect(
+        span.attributes["url.full"]
+          == .string(
+            "https://project-ref.supabase.co/rest/v1/rpc/get_scores?min=REDACTED&select=REDACTED&limit=REDACTED"
+          ))
+    }
+
+    @Test
     func theSpanIsTheChildOfTheActiveSpan() async throws {
       let client = try makeClient()
 

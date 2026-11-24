@@ -16,8 +16,9 @@ import Testing
 
 @Suite
 struct PostgrestTelemetryTests {
-  private func redacted(_ string: String) -> String {
-    PostgrestTelemetry.redactedURL(URL(string: string)!)
+  private func redacted(_ string: String, keepingShapingValues: Bool = true) -> String {
+    PostgrestTelemetry.redactedURL(
+      URL(string: string)!, keepingShapingValues: keepingShapingValues)
   }
 
   @Test
@@ -27,6 +28,17 @@ struct PostgrestTelemetryTests {
         "https://example.supabase.co/rest/v1/users?select=id,email&email=eq.john@doe.com&order=created_at.desc&limit=10&offset=20"
       )
         == "https://example.supabase.co/rest/v1/users?select=id,email&email=REDACTED&order=created_at.desc&limit=10&offset=20"
+    )
+  }
+
+  @Test
+  func redactsTheShapingKeysToo() {
+    #expect(
+      redacted(
+        "https://example.supabase.co/rest/v1/rpc/get_scores?name=eq.john&select=id&order=id&limit=1&offset=2",
+        keepingShapingValues: false
+      )
+        == "https://example.supabase.co/rest/v1/rpc/get_scores?name=REDACTED&select=REDACTED&order=REDACTED&limit=REDACTED&offset=REDACTED"
     )
   }
 

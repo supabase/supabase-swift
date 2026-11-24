@@ -52,13 +52,16 @@ enum PostgrestTelemetry {
     String(reflecting: error is URLError ? URLError.self : type(of: error))
   }
 
-  /// `url` as `url.full` records it: every query value is `REDACTED` except those of
-  /// ``shapingKeys``, and user info and fragment are dropped. PostgREST puts column filters and
-  /// their values in the query string, so a value can be a customer's data.
+  /// `url` as `url.full` records it: every query value is `REDACTED`, and user info and fragment
+  /// are dropped. PostgREST puts column filters and their values in the query string, so a value
+  /// can be a customer's data.
+  ///
+  /// The values of ``shapingKeys`` are kept only when `keepingShapingValues` is `true`. An RPC
+  /// call passes `false`: its query can carry the function's arguments.
   ///
   /// Keys and kept values stay in their percent-encoded wire form. A key with no `=` has no value
   /// to redact and is kept as sent.
-  static func redactedURL(_ url: URL) -> String {
+  static func redactedURL(_ url: URL, keepingShapingValues: Bool) -> String {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
       return ""
     }
@@ -66,7 +69,7 @@ enum PostgrestTelemetry {
     components.password = nil
     components.fragment = nil
     components.percentEncodedQueryItems = components.percentEncodedQueryItems?.map {
-      shapingKeys.contains($0.name) || $0.value == nil
+      (keepingShapingValues && shapingKeys.contains($0.name)) || $0.value == nil
         ? $0 : URLQueryItem(name: $0.name, value: "REDACTED")
     }
     if components.percentEncodedQuery?.isEmpty == true { components.percentEncodedQuery = nil }
