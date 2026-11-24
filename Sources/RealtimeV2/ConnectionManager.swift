@@ -171,8 +171,7 @@ actor ConnectionManager {
 
   private func performConnection() async throws {
     let connectionTask = Task {
-      let conn = try await transport(url, headers)
-      try Task.checkCancellation()
+      let conn = try await openConnection()
       updateState(.connected(conn))
     }
 
@@ -181,7 +180,11 @@ actor ConnectionManager {
     do {
       return try await connectionTask.value
     } catch {
-      updateState(.disconnected)
+      // A `disconnect()` and a newer `connect()` may have replaced this attempt already. Leave
+      // their state alone, or the next `disconnect()` would find no attempt to stop.
+      if case .connecting(let task) = state, task == connectionTask {
+        updateState(.disconnected)
+      }
       throw error
     }
   }
@@ -233,9 +236,19 @@ actor ConnectionManager {
   /// a failure is left for `initiateReconnect`'s loop to retry, so the outer
   /// `.reconnecting` state is preserved across attempts.
   private func performReconnectAttempt() async throws {
-    let conn = try await transport(url, headers)
-    try Task.checkCancellation()
+    let conn = try await openConnection()
     updateState(.connected(conn))
+  }
+
+  /// Opens a socket through the transport. A socket that opens after `disconnect()` cancelled the
+  /// attempt is closed, not dropped: the socket keeps its own receive loop, so it would stay open.
+  private func openConnection() async throws -> any WebSocket {
+    let conn = try await transport(url, headers)
+    guard !Task.isCancelled else {
+      conn.close(code: nil, reason: "Connection cancelled")
+      throw CancellationError()
+    }
+    return conn
   }
 
   /// Exponential backoff capped at 30s (phoenix.js's `reconnectAfterMs` ladder
