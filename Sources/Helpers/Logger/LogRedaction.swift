@@ -41,8 +41,8 @@ package enum LogRedaction {
   ///
   /// A URL loading error keeps only its domain and code: its description holds the failing URL.
   /// A coding error keeps its case and coding path: its description can echo the value. An SDK
-  /// error keeps its type, HTTP status, and request ID, and the code of the error it wraps: its
-  /// message can hold a server's or a caller's text. Any other error, such as one a caller's
+  /// error keeps its type, HTTP status, and the code of the error it wraps: its message and
+  /// headers can hold a server's or a caller's text. Any other error, such as one a caller's
   /// callback, storage, or transport throws, keeps only a label and its code: see ``code(of:)``.
   package static func summary(of error: any Error) -> String {
     switch error {
@@ -83,11 +83,7 @@ package enum LogRedaction {
   private static func summary(of error: any SupabaseError) -> String {
     var text = String(describing: type(of: error))
     if let response = error.response {
-      text += " [status \(response.status.code)"
-      if let requestID = response.requestID {
-        text += ", request \(requestID)"
-      }
-      text += "]"
+      text += " [status \(response.status.code)]"
     }
     if let underlying = error.underlyingError {
       text += " caused by \(summary(of: underlying))"

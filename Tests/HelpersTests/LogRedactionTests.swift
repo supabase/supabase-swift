@@ -125,7 +125,7 @@ struct LogRedactionSummaryTests {
   }
 
   @Test
-  func summarizesAnSDKErrorWithoutItsMessage() {
+  func summarizesAnSDKErrorWithoutItsMessageOrHeaders() {
     struct ModuleError: SupabaseError {
       var message: String
       var response: HTTPErrorResponse?
@@ -135,13 +135,13 @@ struct LogRedactionSummaryTests {
     let error = ModuleError(
       message: "upstream body: private-record",
       response: HTTPErrorResponse(
-        status: .badRequest, headers: [.sbRequestID: "req-1"],
+        status: .badRequest, headers: [.sbRequestID: "private-request-id"],
         body: Data("private-record".utf8)),
       underlyingError: URLError(.timedOut))
 
     #expect(
       LogRedaction.summary(of: error)
-        == "ModuleError [status 400, request req-1] caused by NSURLErrorDomain \(URLError.timedOut.rawValue)"
+        == "ModuleError [status 400] caused by NSURLErrorDomain \(URLError.timedOut.rawValue)"
     )
   }
 
