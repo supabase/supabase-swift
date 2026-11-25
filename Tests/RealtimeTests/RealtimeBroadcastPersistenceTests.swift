@@ -42,7 +42,7 @@ struct RealtimeBroadcastPersistenceTests {
   }
 
   @Test
-  func broadcastWithTTLSendsItsWholeSecondsInTheFrameMetadata() async throws {
+  func broadcastWithTTLSendsItInTheFrameMetadataRoundedUpToWholeSeconds() async throws {
     let host = await RealtimeTestHost()
     let channel = try await subscribedChannel(on: host, isPrivate: true)
 
@@ -53,7 +53,7 @@ struct RealtimeBroadcastPersistenceTests {
     let frame = try await lastBroadcastFrame(on: host)
     #expect(
       try JSONDecoder().decode(JSONValue.self, from: frame.metadata)
-        == ["persist": ["ttl": 3600]])
+        == ["persist": ["ttl": 3601]])
     #expect(frame.payload == Data([0x01]))
   }
 
@@ -155,6 +155,40 @@ struct RealtimeBroadcastPersistenceTests {
         URLQueryItem(name: "persist[ttl]", value: "3600"),
       ])
     #expect(http.requests.last?.body == Data([0x01]))
+  }
+
+  @Test
+  func httpSendRoundsASubSecondTTLUpToOneSecond() async throws {
+    let http = Self.acceptingTransport()
+    let host = await RealtimeTestHost(http: HTTPClient(transport: http))
+    let channel = await host.client.channel("room") { $0.isPrivate = true }
+
+    try await channel.httpSend(
+      event: "message", data: Data([0x01]),
+      persist: BroadcastPersistence(ttl: .milliseconds(500)))
+
+    #expect(try Self.queryItems(of: http).last == URLQueryItem(name: "persist[ttl]", value: "1"))
+  }
+
+  @Test
+  func httpSendKeepsTheQueryItemsOfTheConfiguredURL() async throws {
+    let http = Self.acceptingTransport()
+    let host = await RealtimeTestHost(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "http://localhost:54321/realtime/v1?region=eu")!,
+        observesAppLifecycle: false, monitorsNetworkPath: false),
+      http: HTTPClient(transport: http))
+    let channel = await host.client.channel("room") { $0.isPrivate = true }
+
+    try await channel.httpSend(
+      event: "message", data: Data([0x01]), persist: BroadcastPersistence())
+
+    #expect(
+      try Self.queryItems(of: http) == [
+        URLQueryItem(name: "region", value: "eu"),
+        URLQueryItem(name: "private", value: "true"),
+        URLQueryItem(name: "persist", value: "true"),
+      ])
   }
 
   @Test

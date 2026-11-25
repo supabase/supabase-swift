@@ -756,8 +756,9 @@ public actor RealtimeClient {
   /// Builds the REST broadcast URL for a single event: `.../api/broadcast/{topic}/events/{event}`.
   ///
   /// Topic and event are percent-encoded as individual path segments (so values containing
-  /// `/` don't introduce extra path components), and a private channel adds `?private=true`.
-  /// `persist` adds `persist=true` or `persist[ttl]=<seconds>`.
+  /// `/` don't introduce extra path components), and a private channel adds `private=true`.
+  /// `persist` adds `persist=true` or `persist[ttl]=<seconds>`. Query items of the configured
+  /// URL are kept.
   nonisolated func broadcastURL(
     topic: String, event: String, isPrivate: Bool, persist: BroadcastPersistence?
   ) -> URL {
@@ -780,7 +781,7 @@ public actor RealtimeClient {
       isPrivate ? URLQueryItem(name: "private", value: "true") : nil, persist?.queryItem,
     ].compactMap(\.self)
     if !queryItems.isEmpty {
-      components.queryItems = queryItems
+      components.queryItems = (components.queryItems ?? []) + queryItems
     }
 
     return components.url ?? url

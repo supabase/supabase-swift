@@ -86,7 +86,7 @@ extension RealtimeCore {
     guard let waiter = waiter ?? nil else { return [] }
     let outcome: WaiterOutcome
     if status == .error {
-      let reason = message.replyReason(default: "The server rejected the push.")
+      let reason = message.pushReplyReason(default: "The server rejected the push.")
       outcome = .failure(.ackError(reason: reason))
     } else {
       outcome = .success
