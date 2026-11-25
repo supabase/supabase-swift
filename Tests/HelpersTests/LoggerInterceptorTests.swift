@@ -149,6 +149,23 @@ struct LoggerInterceptorTests {
   }
 
   @Test
+  func aCustomErrorDomainIsNotLogged() async throws {
+    let (logger, capture) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+    let error = NSError(domain: "upstream body: private-record", code: 7)
+
+    await #expect(throws: NSError.self) {
+      _ = try await interceptor.intercept(self.createTestRequest(), body: nil) { _, _ in
+        throw error
+      }
+    }
+
+    let line = try #require(capture.messages.first)
+    #expect(line.hasSuffix(": NSError 7"))
+    #expect(!line.contains("private-record"))
+  }
+
+  @Test
   func theLineDropsTheQueryAndFragment() async throws {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)

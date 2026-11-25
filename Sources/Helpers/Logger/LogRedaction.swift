@@ -58,13 +58,22 @@ package enum LogRedaction {
     }
   }
 
-  /// The domain and code of `error`, and never its description.
+  /// The domains ``code(of:)`` logs as they are: the system's own, which carry no caller text.
+  private static let systemErrorDomains: Set<String> = [
+    NSURLErrorDomain, NSPOSIXErrorDomain, NSCocoaErrorDomain, NSOSStatusErrorDomain,
+  ]
+
+  /// A label and the code of `error`, and never its description.
   ///
-  /// For an error that comes from outside the SDK, such as one a custom transport throws, whose
-  /// description can hold a body or a URL. A Swift error's domain is its type name.
+  /// For an error that comes from outside the SDK, such as one a custom transport throws. Its
+  /// description, and the domain of a custom `NSError`, can hold a body or a URL. So the label is
+  /// the domain only for a system domain, and the error's type name otherwise.
   package static func code(of error: any Error) -> String {
-    let error = error as NSError
-    return "\(error.domain) \(error.code)"
+    let nsError = error as NSError
+    let label =
+      systemErrorDomains.contains(nsError.domain)
+      ? nsError.domain : String(describing: type(of: error))
+    return "\(label) \(nsError.code)"
   }
 
   private static func path(of context: DecodingError.Context?) -> String {
