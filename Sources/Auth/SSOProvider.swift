@@ -314,6 +314,7 @@ public struct CreateSSOProvider: Encodable, Hashable, Sendable {
   /// The settings for a SAML provider whose metadata the server fetches from a URL.
   ///
   /// - Parameter metadataURL: The URL of the identity provider's SAML metadata.
+  /// - Returns: The settings, ready for the optional fields.
   public static func saml(metadataURL: URL) -> CreateSSOProvider {
     var provider = CreateSSOProvider(type: .saml)
     provider.metadataURL = metadataURL
@@ -323,6 +324,7 @@ public struct CreateSSOProvider: Encodable, Hashable, Sendable {
   /// The settings for a SAML provider from its metadata document.
   ///
   /// - Parameter metadataXML: The identity provider's SAML metadata document.
+  /// - Returns: The settings, ready for the optional fields.
   public static func saml(metadataXML: String) -> CreateSSOProvider {
     var provider = CreateSSOProvider(type: .saml)
     provider.metadataXML = metadataXML
