@@ -17,8 +17,9 @@ public import Foundation
 /// let buckets = try await client.storage.analytics.listBuckets()
 /// ```
 ///
-/// Every method needs the `secret` key. The tables themselves are reached through Storage's
-/// Iceberg REST catalog with an Iceberg client; this client does not wrap the catalog.
+/// Every method needs the `secret` key. This client manages the buckets only. To manage the
+/// namespaces and tables in a bucket, add the `StorageIceberg` library and call
+/// `catalog(bucket:)` from `@_spi(Experimental) import StorageIceberg`.
 ///
 /// - Warning: Analytics buckets are a public alpha feature of Supabase Storage and this API is
 ///   experimental — it may change in a breaking way, or be unavailable on your project, until it

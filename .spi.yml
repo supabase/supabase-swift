@@ -6,6 +6,7 @@ builder:
         - Supabase
         - Auth
         - Storage
+        - StorageIceberg
         - PostgREST
         - Realtime
         - Functions

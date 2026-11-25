@@ -413,3 +413,9 @@ creditcard
 conformances
 addmedia
 Migra
+# Apache Iceberg terms (StorageIceberg): an unpartitioned table, the srid of a geometry type,
+# the zorder transform, and a value that is unencodable as JSON.
+unpartitioned
+srid
+zorder
+unencodable

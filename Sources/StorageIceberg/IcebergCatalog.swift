@@ -44,6 +44,10 @@ extension StorageAnalyticsClient {
 ///
 /// ## Topics
 ///
+/// ### The bucket
+///
+/// - ``bucket``
+///
 /// ### Managing namespaces
 ///
 /// - ``createNamespace(_:properties:)``
@@ -51,7 +55,51 @@ extension StorageAnalyticsClient {
 /// - ``namespaceProperties(_:)``
 /// - ``namespaceExists(_:)``
 /// - ``deleteNamespace(_:)``
+///
+/// ### Managing tables
+///
+/// - ``createTable(_:in:)``
+/// - ``listTables(in:)``
+/// - ``table(_:in:)``
+/// - ``updateTable(_:in:requirements:updates:)``
+/// - ``tableExists(_:in:)``
+/// - ``deleteTable(_:in:purge:)``
+///
+/// ### Namespaces
+///
 /// - ``IcebergNamespace``
+///
+/// ### Tables
+///
+/// - ``IcebergTableCreation``
+/// - ``IcebergTableIdentifier``
+/// - ``IcebergLoadedTable``
+/// - ``IcebergTableMetadata``
+/// - ``IcebergCommittedTable``
+///
+/// ### Schemas
+///
+/// - ``IcebergSchema``
+/// - ``IcebergField``
+/// - ``IcebergType``
+/// - ``IcebergPrimitiveType``
+/// - ``IcebergListType``
+/// - ``IcebergMapType``
+///
+/// ### Partitioning and sorting
+///
+/// - ``IcebergPartitionSpec``
+/// - ``IcebergPartitionField``
+/// - ``IcebergTransform``
+/// - ``IcebergSortOrder``
+/// - ``IcebergSortField``
+/// - ``IcebergSortDirection``
+/// - ``IcebergNullOrder``
+///
+/// ### Table commits
+///
+/// - ``IcebergTableUpdate``
+/// - ``IcebergTableRequirement``
 @_spi(Experimental)
 public struct IcebergCatalog: Sendable {
   let analytics: StorageAnalyticsClient

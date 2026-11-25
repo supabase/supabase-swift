@@ -13,6 +13,11 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
   - `PostgrestMacrosPlugin/`: The compiler plugin that implements the macros
   - `Realtime/`: Realtime subscriptions
   - `Storage/`: File storage client
+  - `StorageIceberg/`: The Iceberg REST catalog of Storage analytics buckets (namespaces and
+    tables). An opt-in, experimental product: `Supabase` does not re-export it. It depends on
+    `Storage` because it adds `catalog(bucket:)` to `StorageAnalyticsClient` and sends every
+    request through `sendCatalogRequest`, a `package` method of that client. So the catalog
+    uses the URL, keys, headers, retries, and transport of the Storage client
   - `Supabase/`: Main client that integrates all modules
   - `Helpers/`: Shared utilities, including the HTTP layer
   - `TestHelpers/`: Test utilities

@@ -26,16 +26,18 @@ public struct IcebergNamespace: Hashable, Sendable {
 }
 
 extension IcebergCatalog {
-  /// Creates a namespace.
+  /// Creates a namespace, or updates it when it already exists.
+  ///
+  /// Supabase Storage does not reject a name that is in use. It merges `properties` into the
+  /// properties of the existing namespace and returns the result.
   ///
   /// - Warning: Experimental. See ``IcebergCatalog``.
   ///
   /// - Parameters:
   ///   - name: The namespace name.
   ///   - properties: The properties to set on the namespace. Defaults to none.
-  /// - Returns: The created namespace, with the properties the catalog stored.
-  /// - Throws: `StorageError` when the catalog rejects the request, e.g. when the namespace
-  ///   already exists.
+  /// - Returns: The namespace, with the properties the catalog stored.
+  /// - Throws: `StorageError` when the catalog rejects the request.
   @_spi(Experimental)
   @discardableResult
   public func createNamespace(_ name: String, properties: [String: String] = [:]) async throws
