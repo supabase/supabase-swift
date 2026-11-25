@@ -223,4 +223,29 @@ struct IcebergCommitTests {
     #expect(
       IcebergTableRequirement.assertDefaultSpecID(0).kind.rawValue == "assert-default-spec-id")
   }
+
+  @Test
+  func writesAreNotRetried() async throws {
+    let sent = LockIsolated<[Sent]>([])
+    let catalog = try makeCatalog(
+      sent: sent,
+      status: .serviceUnavailable,
+      response:
+        #"{"error":{"message":"Unavailable","type":"ServiceUnavailableException","code":503}}"#)
+
+    await #expect(throws: StorageError.self) {
+      try await catalog.createTable(
+        IcebergTableCreation(
+          name: "orders",
+          schema: IcebergSchema(fields: [
+            IcebergField(id: 1, name: "id", type: .long, isRequired: true)
+          ])),
+        in: "sales")
+    }
+    await #expect(throws: StorageError.self) {
+      try await catalog.updateTable("orders", in: "sales", updates: [.setLocation("s3://b/t")])
+    }
+
+    #expect(sent.value.map(\.request.method) == [.post, .post])
+  }
 }

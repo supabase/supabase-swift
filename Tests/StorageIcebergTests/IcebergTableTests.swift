@@ -250,11 +250,13 @@ struct IcebergTableTests {
 
     _ = try await catalog.tableExists("a/b", in: "x y")
     try await catalog.deleteTable("a/b c", in: "sales")
+    _ = try await catalog.tableExists("100%", in: "café")
 
     #expect(
       sent.value.map(\.request.path) == [
         "/storage/v1/iceberg/v1/events/namespaces/x%20y/tables/a%2Fb",
         "/storage/v1/iceberg/v1/events/namespaces/sales/tables/a%2Fb%20c?purgeRequested=false",
+        "/storage/v1/iceberg/v1/events/namespaces/caf%C3%A9/tables/100%25",
       ])
   }
 }
