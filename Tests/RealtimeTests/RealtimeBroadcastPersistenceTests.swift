@@ -111,7 +111,7 @@ struct RealtimeBroadcastPersistenceTests {
         joinRef: frame.joinRef, ref: frame.ref, topic: channel.wireTopic, event: "phx_reply",
         payload: ["status": "error", "response": ["error": .string(reply)]]))
 
-    let error = await #expect(throws: RealtimeError.self) { try await send.value }
+    let error = await #expect(throws: RealtimeError.self) { try await acknowledgement(of: send) }
     #expect(error?.kind == .server)
     #expect(error?.code == code)
   }
@@ -132,7 +132,7 @@ struct RealtimeBroadcastPersistenceTests {
         joinRef: frame.joinRef, ref: frame.ref, topic: channel.wireTopic, event: "phx_reply",
         payload: ["status": "ok", "response": [:]]))
 
-    try await send.value
+    try await acknowledgement(of: send)
   }
 
   // MARK: REST
@@ -264,6 +264,19 @@ struct RealtimeBroadcastPersistenceTests {
   private func lastBroadcastFrame(on host: RealtimeTestHost) async throws -> BroadcastFrame {
     let socket = try #require(host.sockets.last)
     return BroadcastFrame(try #require(await socket.sentBinaryFrames().last))
+  }
+
+  /// Waits for `send` to finish, bounded on the wall clock: the push deadline runs on the host's
+  /// test clock, which these tests do not advance, so a reply that never arrives fails the test
+  /// instead of hanging it. Cancels `send` when the bound expires.
+  private func acknowledgement(of send: Task<Void, any Error>) async throws {
+    try await withTimeout(.seconds(5)) {
+      try await withTaskCancellationHandler {
+        try await send.value
+      } onCancel: {
+        send.cancel()
+      }
+    }
   }
 
   private func expectNotPrivate(
