@@ -203,8 +203,9 @@ extension IcebergCatalog {
   /// - Parameters:
   ///   - name: The table name.
   ///   - namespace: The namespace that holds the table.
-  /// - Returns: `true` when the table exists, `false` when the catalog answers 404, also when
-  ///   the namespace does not exist.
+  /// - Returns: `true` when the table exists, `false` when the catalog answers 404. The catalog
+  ///   also answers 404 when the namespace or the bucket does not exist, or the project has no
+  ///   Iceberg catalog, and the answer has no body, so these cases also return `false`.
   /// - Throws: `StorageError` when the catalog rejects the request for another reason.
   @_spi(Experimental)
   public func tableExists(_ name: String, in namespace: String) async throws -> Bool {

@@ -80,7 +80,9 @@ extension IcebergCatalog {
   /// - Warning: Experimental. See ``IcebergCatalog``.
   ///
   /// - Parameter name: The namespace name.
-  /// - Returns: `true` when the namespace exists, `false` when the catalog answers 404.
+  /// - Returns: `true` when the namespace exists, `false` when the catalog answers 404. The
+  ///   catalog also answers 404 when the bucket does not exist or the project has no Iceberg
+  ///   catalog, and the answer has no body, so these cases also return `false`.
   /// - Throws: `StorageError` when the catalog rejects the request for another reason.
   @_spi(Experimental)
   public func namespaceExists(_ name: String) async throws -> Bool {

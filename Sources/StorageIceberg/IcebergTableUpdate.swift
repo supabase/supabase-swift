@@ -49,6 +49,10 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
 
   /// Adds a schema to the table. It does not become the current schema.
   ///
+  /// - Important: ``IcebergField`` keeps only the keys it models. When you send back a schema
+  ///   that you decoded from ``IcebergTableMetadata``, other field keys, such as the format v3
+  ///   `initial-default` and `write-default`, are not sent.
+  ///
   /// - Parameters:
   ///   - schema: The schema to add.
   ///   - lastColumnID: The highest field ID that the table has assigned. `nil` lets the catalog

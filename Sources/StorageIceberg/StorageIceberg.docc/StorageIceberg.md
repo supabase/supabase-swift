@@ -56,7 +56,23 @@ print(table.metadata.location ?? "")
 ### Commit changes to a table
 
 `updateTable(_:in:requirements:updates:)` sends one atomic commit. The catalog checks every
-`IcebergTableRequirement`, then applies every `IcebergTableUpdate` in order.
+`IcebergTableRequirement`, then applies every `IcebergTableUpdate` in order. The factories that
+take a model, such as `addSchema(_:lastColumnID:)`, throw when the model cannot be encoded:
+
+```swift
+let loaded = try await catalog.table("orders", in: "sales")
+let fields = loaded.metadata.currentSchema?.fields ?? []
+let schema = IcebergSchema(
+  fields: fields + [IcebergField(id: 4, name: "note", type: .string, isRequired: false)]
+)
+
+try await catalog.updateTable(
+  "orders",
+  in: "sales",
+  requirements: [.assertCurrentSchemaID(loaded.metadata.currentSchemaID ?? 0)],
+  updates: [try .addSchema(schema), .setCurrentSchema(id: -1)]
+)
+```
 
 ### Handle errors
 
