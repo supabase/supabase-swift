@@ -114,12 +114,18 @@ public struct IcebergTableMetadata: Hashable, Sendable, Decodable {
   public var currentSchemaID: Int?
 
   /// Every partition spec the table has had; empty when the catalog sent none.
+  ///
+  /// A spec that this type cannot read, such as one with a format v3 multi-argument transform,
+  /// is left out. It stays in ``raw``.
   public var partitionSpecs: [IcebergPartitionSpec]
 
   /// The ID of the default partition spec in ``partitionSpecs``.
   public var defaultSpecID: Int?
 
   /// Every sort order the table has had; empty when the catalog sent none.
+  ///
+  /// A sort order that this type cannot read, such as one with a format v3 multi-argument
+  /// transform, is left out. It stays in ``raw``.
   public var sortOrders: [IcebergSortOrder]
 
   /// The ID of the default sort order in ``sortOrders``.
@@ -196,9 +202,12 @@ public struct IcebergTableMetadata: Hashable, Sendable, Decodable {
     schemas = try container.decodeIfPresent([IcebergSchema].self, forKey: .schemas) ?? []
     currentSchemaID = try container.decodeIfPresent(Int.self, forKey: .currentSchemaID)
     partitionSpecs =
-      try container.decodeIfPresent([IcebergPartitionSpec].self, forKey: .partitionSpecs) ?? []
+      try container.decodeIfPresent([Readable<IcebergPartitionSpec>].self, forKey: .partitionSpecs)?
+      .compactMap(\.value) ?? []
     defaultSpecID = try container.decodeIfPresent(Int.self, forKey: .defaultSpecID)
-    sortOrders = try container.decodeIfPresent([IcebergSortOrder].self, forKey: .sortOrders) ?? []
+    sortOrders =
+      try container.decodeIfPresent([Readable<IcebergSortOrder>].self, forKey: .sortOrders)?
+      .compactMap(\.value) ?? []
     defaultSortOrderID = try container.decodeIfPresent(Int.self, forKey: .defaultSortOrderID)
     currentSnapshotID = try container.decodeIfPresent(Int64.self, forKey: .currentSnapshotID)
   }
@@ -263,5 +272,15 @@ public struct IcebergCommittedTable: Hashable, Sendable, Decodable {
   private enum CodingKeys: String, CodingKey {
     case metadataLocation = "metadata-location"
     case metadata
+  }
+}
+
+/// A list element that decodes to `nil` when `Value` cannot read it, so one entry in a newer
+/// shape does not fail the whole metadata.
+private struct Readable<Value: Decodable>: Decodable {
+  let value: Value?
+
+  init(from decoder: any Decoder) throws {
+    value = try? Value(from: decoder)
   }
 }

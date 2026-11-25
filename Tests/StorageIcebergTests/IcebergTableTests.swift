@@ -259,6 +259,37 @@ struct IcebergTableTests {
         "/storage/v1/iceberg/v1/events/namespaces/caf%C3%A9/tables/100%25",
       ])
   }
+
+  @Test
+  func aSpecInANewerShapeIsLeftOutOfTheTypedMetadata() throws {
+    let json = #"""
+      {
+        "format-version": 3,
+        "partition-specs": [
+          {"spec-id": 0, "fields": []},
+          {"spec-id": 1, "fields": [
+            {"source-ids": [1, 2], "field-id": 1000, "name": "b", "transform": "bucket[4]"}
+          ]}
+        ],
+        "sort-orders": [
+          {"order-id": 1, "fields": [
+            {"source-ids": [1, 2], "transform": "bucket[4]", "direction": "asc",
+             "null-order": "nulls-first"}
+          ]}
+        ]
+      }
+      """#
+
+    let metadata = try JSONDecoder().decode(IcebergTableMetadata.self, from: Data(json.utf8))
+
+    #expect(metadata.partitionSpecs == [IcebergPartitionSpec(specID: 0, fields: [])])
+    #expect(metadata.sortOrders.isEmpty)
+    guard case .array(let specs)? = metadata.raw["partition-specs"] else {
+      Issue.record("raw has no partition-specs array")
+      return
+    }
+    #expect(specs.count == 2)
+  }
 }
 
 /// The text of the JSON fixture `name` in the test bundle.
