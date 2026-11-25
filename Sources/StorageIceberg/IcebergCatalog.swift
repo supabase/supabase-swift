@@ -112,6 +112,42 @@ extension IcebergCatalog {
     try await send(.get, path: ["namespaces", namespace, "tables", name])
   }
 
+  /// Commits changes to a table.
+  ///
+  /// The catalog checks every requirement, then applies every update, as one atomic commit:
+  ///
+  /// ```swift
+  /// try await catalog.updateTable(
+  ///   "orders", in: "sales",
+  ///   requirements: [.assertCurrentSchemaID(0)],
+  ///   updates: [.setProperties(["write.parquet.compression-codec": "zstd"])]
+  /// )
+  /// ```
+  ///
+  /// - Warning: Experimental. See ``IcebergCatalog``.
+  ///
+  /// - Parameters:
+  ///   - name: The table name.
+  ///   - namespace: The namespace that holds the table.
+  ///   - requirements: The conditions the table must meet for the commit. Defaults to none.
+  ///   - updates: The changes to apply, in order.
+  /// - Returns: The table after the commit.
+  /// - Throws: `StorageError` when the catalog rejects the request, e.g. with code
+  ///   `CommitFailedException` when a requirement fails, or `NoSuchTableException` when the
+  ///   table does not exist.
+  @_spi(Experimental)
+  @discardableResult
+  public func updateTable(
+    _ name: String,
+    in namespace: String,
+    requirements: [IcebergTableRequirement] = [],
+    updates: [IcebergTableUpdate]
+  ) async throws -> IcebergCommittedTable {
+    try await send(
+      .post, path: ["namespaces", namespace, "tables", name],
+      body: CommitTableRequest(requirements: requirements, updates: updates))
+  }
+
   /// Checks whether a table exists.
   ///
   /// - Warning: Experimental. See ``IcebergCatalog``.
@@ -148,4 +184,9 @@ extension IcebergCatalog {
 
 private struct ListTablesResponse: Decodable {
   let identifiers: [IcebergTableIdentifier]?
+}
+
+private struct CommitTableRequest: Encodable {
+  let requirements: [IcebergTableRequirement]
+  let updates: [IcebergTableUpdate]
 }

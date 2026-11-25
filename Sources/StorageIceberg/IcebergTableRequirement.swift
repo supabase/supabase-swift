@@ -1,0 +1,126 @@
+//
+//  IcebergTableRequirement.swift
+//  StorageIceberg
+//
+//  Created by Guilherme Souza on 25/11/26.
+//
+
+public import Helpers
+
+/// A condition that a table must meet for
+/// ``IcebergCatalog/updateTable(_:in:requirements:updates:)`` to commit.
+///
+/// When a requirement fails, the catalog commits nothing and answers 409 with code
+/// `CommitFailedException`.
+///
+/// - Warning: Experimental. See ``IcebergCatalog``.
+@_spi(Experimental)
+public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
+  /// The kind of condition, such as `assert-current-schema-id`. It is sent as `type`.
+  public var kind: Kind
+
+  /// The other fields of the condition, keyed by their wire names.
+  public var fields: JSONObject
+
+  /// A condition with any kind and fields.
+  ///
+  /// - Parameters:
+  ///   - kind: The kind as the catalog spells it, such as `assert-create`.
+  ///   - fields: The other fields, keyed by their wire names. A `type` key here is ignored.
+  public static func custom(_ kind: Kind, fields: JSONObject = [:]) -> Self {
+    Self(kind: kind, fields: fields)
+  }
+
+  /// The table must not exist yet.
+  public static func assertCreate() -> Self {
+    custom("assert-create")
+  }
+
+  /// The table UUID must match.
+  ///
+  /// - Parameter uuid: The expected table UUID.
+  public static func assertTableUUID(_ uuid: String) -> Self {
+    custom("assert-table-uuid", fields: ["uuid": .string(uuid)])
+  }
+
+  /// A branch or tag must point at a snapshot.
+  ///
+  /// - Parameters:
+  ///   - ref: The branch or tag name, such as `main`.
+  ///   - snapshotID: The expected snapshot ID. `nil` means the ref must not exist.
+  public static func assertRefSnapshotID(ref: String, snapshotID: Int64?) -> Self {
+    custom(
+      "assert-ref-snapshot-id",
+      fields: [
+        "ref": .string(ref),
+        "snapshot-id": snapshotID.map { .number(JSONNumber($0)) } ?? .null,
+      ])
+  }
+
+  /// The current schema ID must match.
+  ///
+  /// - Parameter id: The expected current schema ID.
+  public static func assertCurrentSchemaID(_ id: Int) -> Self {
+    custom("assert-current-schema-id", fields: ["current-schema-id": .number(JSONNumber(id))])
+  }
+
+  /// The highest field ID that the table has assigned must match.
+  ///
+  /// - Parameter id: The expected field ID.
+  public static func assertLastAssignedFieldID(_ id: Int) -> Self {
+    custom(
+      "assert-last-assigned-field-id", fields: ["last-assigned-field-id": .number(JSONNumber(id))])
+  }
+
+  /// The highest partition field ID that the table has assigned must match.
+  ///
+  /// - Parameter id: The expected partition field ID.
+  public static func assertLastAssignedPartitionID(_ id: Int) -> Self {
+    custom(
+      "assert-last-assigned-partition-id",
+      fields: ["last-assigned-partition-id": .number(JSONNumber(id))])
+  }
+
+  /// The default partition spec ID must match.
+  ///
+  /// - Parameter id: The expected spec ID.
+  public static func assertDefaultSpecID(_ id: Int) -> Self {
+    custom("assert-default-spec-id", fields: ["default-spec-id": .number(JSONNumber(id))])
+  }
+
+  /// The default sort order ID must match.
+  ///
+  /// - Parameter id: The expected sort order ID.
+  public static func assertDefaultSortOrderID(_ id: Int) -> Self {
+    custom(
+      "assert-default-sort-order-id", fields: ["default-sort-order-id": .number(JSONNumber(id))])
+  }
+
+  /// Encodes ``fields`` with `type` set to ``kind``.
+  public func encode(to encoder: any Encoder) throws {
+    var object = fields
+    object["type"] = .string(kind.rawValue)
+    try object.encode(to: encoder)
+  }
+}
+
+extension IcebergTableRequirement {
+  /// The kind of an ``IcebergTableRequirement``, as the catalog spells it, such as
+  /// `assert-create`.
+  ///
+  /// - Warning: Experimental. See ``IcebergCatalog``.
+  public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The kind as the catalog spells it.
+    public let rawValue: String
+
+    /// Creates a ``Kind`` from its name.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates a ``Kind`` from its name.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+  }
+}
