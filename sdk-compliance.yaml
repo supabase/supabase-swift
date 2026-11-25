@@ -3489,6 +3489,17 @@ features:
       - IcebergTableUpdate.Action
       - IcebergTableUpdate.Action.init
       - IcebergTableUpdate.Action.rawValue
+      - IcebergTableUpdate.Action.assignUUID
+      - IcebergTableUpdate.Action.upgradeFormatVersion
+      - IcebergTableUpdate.Action.addSchema
+      - IcebergTableUpdate.Action.setCurrentSchema
+      - IcebergTableUpdate.Action.addPartitionSpec
+      - IcebergTableUpdate.Action.setDefaultPartitionSpec
+      - IcebergTableUpdate.Action.addSortOrder
+      - IcebergTableUpdate.Action.setDefaultSortOrder
+      - IcebergTableUpdate.Action.setLocation
+      - IcebergTableUpdate.Action.setProperties
+      - IcebergTableUpdate.Action.removeProperties
       - IcebergTableRequirement
       - IcebergTableRequirement.kind
       - IcebergTableRequirement.fields
@@ -3505,6 +3516,14 @@ features:
       - IcebergTableRequirement.Kind
       - IcebergTableRequirement.Kind.init
       - IcebergTableRequirement.Kind.rawValue
+      - IcebergTableRequirement.Kind.assertCreate
+      - IcebergTableRequirement.Kind.assertTableUUID
+      - IcebergTableRequirement.Kind.assertRefSnapshotID
+      - IcebergTableRequirement.Kind.assertCurrentSchemaID
+      - IcebergTableRequirement.Kind.assertLastAssignedFieldID
+      - IcebergTableRequirement.Kind.assertLastAssignedPartitionID
+      - IcebergTableRequirement.Kind.assertDefaultSpecID
+      - IcebergTableRequirement.Kind.assertDefaultSortOrderID
       - IcebergCommittedTable
       - IcebergCommittedTable.init
       - IcebergCommittedTable.metadataLocation
