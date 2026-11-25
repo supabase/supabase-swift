@@ -41,7 +41,8 @@ package enum LogRedaction {
   ///
   /// A URL loading error keeps only its domain and code: its description holds the failing URL.
   /// A coding error keeps its case and coding path: its description can echo the value. An SDK
-  /// error keeps its description, which the SDK writes. Any other error, such as one a caller's
+  /// error keeps its type, HTTP status, and request ID, and the code of the error it wraps: its
+  /// message can hold a server's or a caller's text. Any other error, such as one a caller's
   /// callback, storage, or transport throws, keeps only a label and its code: see ``code(of:)``.
   package static func summary(of error: any Error) -> String {
     switch error {
@@ -55,7 +56,7 @@ package enum LogRedaction {
     case let error as NSError where error.domain == NSURLErrorDomain:
       return "\(error.domain) \(error.code)"
     case let error as any SupabaseError:
-      return String(describing: error)
+      return summary(of: error)
     default:
       return code(of: error)
     }
@@ -77,6 +78,21 @@ package enum LogRedaction {
       systemErrorDomains.contains(nsError.domain)
       ? nsError.domain : String(describing: type(of: error))
     return "\(label) \(nsError.code)"
+  }
+
+  private static func summary(of error: any SupabaseError) -> String {
+    var text = String(describing: type(of: error))
+    if let response = error.response {
+      text += " [status \(response.status.code)"
+      if let requestID = response.requestID {
+        text += ", request \(requestID)"
+      }
+      text += "]"
+    }
+    if let underlying = error.underlyingError {
+      text += " caused by \(summary(of: underlying))"
+    }
+    return text
   }
 
   private static func path(of context: DecodingError.Context?) -> String {

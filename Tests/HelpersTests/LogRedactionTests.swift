@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Logging
 import TestHelpers
 import Testing
@@ -121,6 +122,27 @@ struct LogRedactionSummaryTests {
     )
 
     #expect(LogRedaction.summary(of: error) == "EncodingError.invalidValue at 'access_token'")
+  }
+
+  @Test
+  func summarizesAnSDKErrorWithoutItsMessage() {
+    struct ModuleError: SupabaseError {
+      var message: String
+      var response: HTTPErrorResponse?
+      var underlyingError: (any Error)?
+      var description: String { message }
+    }
+    let error = ModuleError(
+      message: "upstream body: private-record",
+      response: HTTPErrorResponse(
+        status: .badRequest, headers: [.sbRequestID: "req-1"],
+        body: Data("private-record".utf8)),
+      underlyingError: URLError(.timedOut))
+
+    #expect(
+      LogRedaction.summary(of: error)
+        == "ModuleError [status 400, request req-1] caused by NSURLErrorDomain \(URLError.timedOut.rawValue)"
+    )
   }
 
   @Test
