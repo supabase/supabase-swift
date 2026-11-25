@@ -97,7 +97,7 @@ struct IcebergSchemaCodingTests {
 
   @Test
   func primitiveHelpersSpellTheWireNames() throws {
-    #expect(try encoded(IcebergType.decimal(precision: 10, scale: 2)) == "decimal(10,2)")
+    #expect(try encoded(IcebergType.decimal(precision: 10, scale: 2)) == "decimal(10, 2)")
     #expect(try encoded(IcebergType.fixed(length: 16)) == "fixed[16]")
     #expect(IcebergPrimitiveType.timestampNs.rawValue == "timestamp_ns")
     #expect(IcebergPrimitiveType.timestamptzNs.rawValue == "timestamptz_ns")
@@ -151,6 +151,14 @@ struct IcebergSchemaCodingTests {
               sourceID: 1, transform: .identity, direction: .descending, nullOrder: .nullsLast)
           ]))
     #expect(try encoded(order) == jsonValue(orderJSON))
+  }
+
+  @Test
+  func aDecimalMatchesTheFormTheCatalogReturns() throws {
+    let field = try decode(
+      IcebergField.self, #"{"id":1,"name":"total","required":false,"type":"decimal(10, 2)"}"#)
+
+    #expect(field.type == .decimal(precision: 10, scale: 2))
   }
 }
 

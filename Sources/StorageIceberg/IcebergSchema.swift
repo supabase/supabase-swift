@@ -91,7 +91,7 @@ public struct IcebergField: Codable, Hashable, Sendable {
 
 /// The type of an Iceberg field.
 ///
-/// A primitive type is a string on the wire, such as `long` or `decimal(10,2)`. A nested type is
+/// A primitive type is a string on the wire, such as `long` or `decimal(10, 2)`. A nested type is
 /// an object whose `type` is `struct`, `list`, or `map`. Any other value decodes to ``unknown(_:)``
 /// and encodes back unchanged.
 ///
@@ -140,7 +140,7 @@ public indirect enum IcebergType: Codable, Hashable, Sendable {
   /// The `binary` type: bytes of any length.
   public static let binary = IcebergType.primitive(.binary)
 
-  /// The `decimal(P,S)` type.
+  /// The `decimal(P, S)` type.
   ///
   /// - Parameters:
   ///   - precision: The number of digits.
@@ -208,7 +208,7 @@ public indirect enum IcebergType: Codable, Hashable, Sendable {
   }
 }
 
-/// The name of a primitive Iceberg type, such as `long` or `decimal(10,2)`.
+/// The name of a primitive Iceberg type, such as `long` or `decimal(10, 2)`.
 ///
 /// - Warning: Experimental. See ``IcebergCatalog``.
 @_spi(Experimental)
@@ -257,13 +257,13 @@ public struct IcebergPrimitiveType: RawRepresentable, Codable, Hashable, Sendabl
   /// `binary`: bytes of any length.
   public static let binary: IcebergPrimitiveType = "binary"
 
-  /// `decimal(P,S)`.
+  /// `decimal(P, S)`.
   ///
   /// - Parameters:
   ///   - precision: The number of digits.
   ///   - scale: The number of digits after the decimal point.
   public static func decimal(precision: Int, scale: Int) -> IcebergPrimitiveType {
-    IcebergPrimitiveType(rawValue: "decimal(\(precision),\(scale))")
+    IcebergPrimitiveType(rawValue: "decimal(\(precision), \(scale))")
   }
 
   /// `fixed[L]`: bytes of a fixed length.
