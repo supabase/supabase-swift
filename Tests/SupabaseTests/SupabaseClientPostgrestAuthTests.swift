@@ -70,4 +70,21 @@ struct SupabaseClientPostgrestAuthTests {
     let request = try #require(transport.requests.last)
     #expect(request.head.headerFields[.authorization] == "Bearer PUBLISHABLE_KEY")
   }
+
+  @Test
+  func openAPIDocumentRequestUsesLiveAccessToken() async throws {
+    let client = try makeClient(
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        accessToken: { "live-session-token" }
+      )
+    )
+
+    _ = try? await client.openAPIDocument()
+
+    let request = try #require(transport.requests.last)
+    #expect(request.head.url?.absoluteString == "https://project-ref.supabase.co/rest/v1/")
+    #expect(request.head.headerFields[.accept] == "application/openapi+json")
+    #expect(request.head.headerFields[.authorization] == "Bearer live-session-token")
+  }
 }

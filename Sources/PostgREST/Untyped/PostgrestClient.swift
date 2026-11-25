@@ -46,6 +46,10 @@ public import Logging
 ///
 /// - ``schema(_:)->PostgrestClient``
 ///
+/// ### Describing the Schema
+///
+/// - ``openAPIDocument()``
+///
 /// ### Inspecting Configuration
 ///
 /// - ``configuration``
@@ -310,6 +314,45 @@ public struct PostgrestClient: Sendable {
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try rpc(fn, params: NoParams(), head: head, get: get, count: count)
+  }
+
+  /// Fetches the OpenAPI document PostgREST publishes for this client's schema.
+  ///
+  /// PostgREST answers with an OpenAPI 2.0 (Swagger) document. Its `paths` lists the tables,
+  /// views, and functions in the schema, and its `definitions` describes the table shapes.
+  /// PostgREST filters the document by the role of the request, so it lists only the objects
+  /// that role holds privileges on.
+  ///
+  /// A `db-root-spec` function on the server replaces the generated document with its own
+  /// result. So the method returns the raw JSON object: do not assume any field beyond
+  /// `swagger`, `info`, and `paths`.
+  ///
+  /// The document describes the schema of this client. Call ``schema(_:)->PostgrestClient``
+  /// first to describe another schema:
+  ///
+  /// ```swift
+  /// let document = try await client.openAPIDocument()
+  /// let paths = document["paths"]?.objectValue?.keys
+  ///
+  /// let billing = try await client.schema("billing").openAPIDocument()
+  /// ```
+  ///
+  /// The request goes to the root of the REST endpoint (`GET /`) with the client's headers, so an
+  /// `AccessTokenMiddleware` scopes the document to the signed-in user. Transient failures are
+  /// retried as for any other `GET` request.
+  ///
+  /// - Returns: The OpenAPI document as a JSON object.
+  /// - Throws: ``PostgrestError`` with kind `.server` if PostgREST returns a non-2xx status, for
+  ///   example when OpenAPI output is disabled or the schema is not exposed (`PGRST106`),
+  ///   `.decoding` if the body is not a JSON object, `.transport` if the request never completes,
+  ///   or `.accessToken` if the access token provider fails. `CancellationError` if the task is
+  ///   cancelled.
+  public func openAPIDocument() async throws -> JSONObject {
+    var request = makeRequest("")
+    request.headerFields[.accept] = "application/openapi+json"
+    return try await request.execute(on: self) { data in
+      try JSONDecoder().decode(JSONObject.self, from: data)
+    }.value
   }
 
   /// Returns a new client that queries the specified PostgreSQL schema.

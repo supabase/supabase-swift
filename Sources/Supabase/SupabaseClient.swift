@@ -42,6 +42,7 @@ import Logging
 /// - ``rpc(_:params:count:)``
 /// - ``rpc(_:count:)``
 /// - ``schema(_:)->PostgrestClient``
+/// - ``openAPIDocument()``
 ///
 /// ### Realtime Channels
 /// - ``channels``
@@ -365,6 +366,22 @@ public final class SupabaseClient: Sendable {
   /// - Returns: A ``PostgrestClient`` configured for the given schema.
   public func schema(_ schema: String) -> PostgrestClient {
     rest.schema(schema)
+  }
+
+  /// Fetches the OpenAPI document PostgREST publishes for the database schema.
+  ///
+  /// The request carries the same headers as every other query, so the document lists only the
+  /// objects the signed-in user's role holds privileges on. Call ``schema(_:)->PostgrestClient``
+  /// first to describe another schema. See ``PostgrestClient/openAPIDocument()``.
+  ///
+  /// ```swift
+  /// let document = try await supabase.openAPIDocument()
+  /// ```
+  ///
+  /// - Returns: The OpenAPI document as a JSON object.
+  /// - Throws: ``PostgrestError`` if the request fails or the body is not a JSON object.
+  public func openAPIDocument() async throws -> JSONObject {
+    try await rest.openAPIDocument()
   }
 
   /// Returns a scope that only queries relations declared to live in the given schema.
