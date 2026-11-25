@@ -168,23 +168,24 @@ public indirect enum IcebergType: Codable, Hashable, Sendable {
       return
     }
 
-    let value = try container.decode(JSONValue.self)
-    guard case .object(let object) = value, case .string(let type)? = object["type"] else {
-      self = .unknown(value)
-      return
+    if let keyed = try? decoder.container(keyedBy: StructCodingKeys.self),
+      let type = try? keyed.decode(String.self, forKey: .type)
+    {
+      switch type {
+      case "struct":
+        self = .struct(try keyed.decode([IcebergField].self, forKey: .fields))
+        return
+      case "list":
+        self = .list(try IcebergListType(from: decoder))
+        return
+      case "map":
+        self = .map(try IcebergMapType(from: decoder))
+        return
+      default:
+        break
+      }
     }
-
-    switch type {
-    case "struct":
-      let keyed = try decoder.container(keyedBy: StructCodingKeys.self)
-      self = .struct(try keyed.decode([IcebergField].self, forKey: .fields))
-    case "list":
-      self = .list(try IcebergListType(from: decoder))
-    case "map":
-      self = .map(try IcebergMapType(from: decoder))
-    default:
-      self = .unknown(value)
-    }
+    self = .unknown(try container.decode(JSONValue.self))
   }
 
   /// Encodes the type in the form ``init(from:)`` reads.
