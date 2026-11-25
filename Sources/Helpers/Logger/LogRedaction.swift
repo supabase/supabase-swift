@@ -33,10 +33,6 @@ package enum LogRedaction {
     return result
   }
 
-  /// JSON keys that hold a signed URL or a sign-in link. A response body redacts them on top of
-  /// ``sensitiveKeys``; a log message does not, because a URL in text loses only its query.
-  package static let linkKeys: Set<String> = ["actionlink", "signedurl", "url"]
-
   /// A description of `error` for an `.error` line that leaves out what is known to leak.
   ///
   /// A URL loading error keeps only its domain and code: its description holds the failing URL.
@@ -113,12 +109,6 @@ package enum LogRedaction {
 
   package static func isSensitive(key: String) -> Bool {
     sensitiveKeys.contains(normalized(key))
-  }
-
-  /// Whether a response body redacts the value of `key`: a sensitive key or a link key.
-  package static func isSensitive(jsonKey key: String) -> Bool {
-    let key = normalized(key)
-    return sensitiveKeys.contains(key) || linkKeys.contains(key)
   }
 
   private static func normalized(_ key: String) -> String {

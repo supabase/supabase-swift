@@ -259,7 +259,7 @@ extension RealtimeCore {
     case .error:
       // The join stands, so broadcast and presence keep working.
       let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
-      logger.error("Channel '\(topic(of: channel))' reported an error: \(reason)")
+      logger.error("Channel '\(topic(of: channel))' reported an error")
       if isPostgresChanges {
         return [.deliver(channel, .event(.postgresChangesFailed(reason)))]
       } else if isReplication {
@@ -347,7 +347,9 @@ extension RealtimeCore {
       logger.debug("Token expired for channel '\(topic(of: channel))', rejoining with a fresh one")
       return rejoinWithFreshToken(channel, attempt: attempt + 1)
     case .fail, .refreshToken:
-      logger.error("Failed to subscribe to channel '\(topic(of: channel))': \(error.message)")
+      logger.error(
+        "Failed to subscribe to channel '\(topic(of: channel))': \(LogRedaction.summary(of: error))"
+      )
       return failSubscribe(channel, with: error)
     case .backOff:
       return waitToRejoin(

@@ -44,15 +44,15 @@ package struct LoggerInterceptor: ClientMiddleware {
     let clock = ContinuousClock()
     let start = clock.now
 
+    func elapsed() -> Int { Int(start.duration(to: clock.now).timeInterval * 1000) }
+
     do {
       let (head, responseBody) = try await next(request, body)
-      let elapsed = Self.milliseconds(start.duration(to: clock.now))
-      logger.debug("\(requestLine) -> \(head.status.code) in \(elapsed) ms")
+      logger.debug("\(requestLine) -> \(head.status.code) in \(elapsed()) ms")
       return (head, responseBody)
     } catch {
-      let elapsed = Self.milliseconds(start.duration(to: clock.now))
       logger.debug(
-        "\(requestLine) failed in \(elapsed) ms: \(LogRedaction.code(of: error))")
+        "\(requestLine) failed in \(elapsed()) ms: \(LogRedaction.code(of: error))")
       throw error
     }
   }
@@ -65,10 +65,5 @@ package struct LoggerInterceptor: ClientMiddleware {
     components.query = nil
     components.fragment = nil
     return components.string?.removingPercentEncoding ?? ""
-  }
-
-  private static func milliseconds(_ duration: Duration) -> Int64 {
-    let (seconds, attoseconds) = duration.components
-    return seconds * 1000 + attoseconds / 1_000_000_000_000_000
   }
 }

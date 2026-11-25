@@ -867,7 +867,7 @@ public final class AuthClient: Sendable {
       do {
         return try await dependencies.flowStore.pendingFlows()
       } catch {
-        logger.error("Failure reading the pending flows: \(error.localizedDescription)")
+        logger.error("Failure reading the pending flows: \(LogRedaction.summary(of: error))")
         return []
       }
     } != nil
@@ -1120,7 +1120,7 @@ public final class AuthClient: Sendable {
     do {
       try await dependencies.flowStore.remove(id: id)
     } catch {
-      logger.error("Failure removing a finished flow: \(error.localizedDescription)")
+      logger.error("Failure removing a finished flow: \(LogRedaction.summary(of: error))")
     }
   }
 
@@ -1308,7 +1308,8 @@ public final class AuthClient: Sendable {
     do {
       try await dependencies.flowStore.removeAll()
     } catch {
-      configuration.logger.error("Failure removing pending flows: \(error.localizedDescription)")
+      configuration.logger.error(
+        "Failure removing pending flows: \(LogRedaction.summary(of: error))")
     }
   }
 

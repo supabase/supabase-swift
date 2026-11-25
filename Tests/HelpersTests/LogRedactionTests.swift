@@ -155,16 +155,6 @@ struct LogRedactionSummaryTests {
     #expect(summary.hasPrefix("CallbackError "))
     #expect(!summary.contains("private-record"))
   }
-
-  @Test(arguments: ["signedURL", "signedUrl", "url", "action_link", "refresh_token", "otp"])
-  func redactsSensitiveAndLinkKeysInJSON(key: String) {
-    #expect(LogRedaction.isSensitive(jsonKey: key))
-  }
-
-  @Test(arguments: ["path", "id", "status"])
-  func keepsOtherJSONKeys(key: String) {
-    #expect(!LogRedaction.isSensitive(jsonKey: key))
-  }
 }
 
 @Suite

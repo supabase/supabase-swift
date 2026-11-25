@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import Logging
 
 /// Stores each pending PKCE flow as its own record, with an index of the live flows.
@@ -55,7 +56,7 @@ actor FlowStore {
       do {
         try await storage.remove(key: recordKey(id))
       } catch {
-        logger.error("Failure removing a dropped flow record: \(error.localizedDescription)")
+        logger.error("Failure removing a dropped flow record: \(LogRedaction.summary(of: error))")
       }
     }
 
@@ -99,7 +100,7 @@ actor FlowStore {
       do {
         try await storage.remove(key: recordKey(id))
       } catch {
-        logger.error("Failure removing a pending flow record: \(error.localizedDescription)")
+        logger.error("Failure removing a pending flow record: \(LogRedaction.summary(of: error))")
       }
     }
   }
