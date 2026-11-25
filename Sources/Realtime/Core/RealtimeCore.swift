@@ -69,8 +69,10 @@ struct RealtimeCore {
       waiter: WaiterID, snapshot: JoinSnapshot)
     case unsubscribe(channel: ChannelID, waiter: WaiterID)
     case push(channel: ChannelID, event: String, payload: JSONObject, waiter: WaiterID?)
+    /// `metadata` goes in the frame's metadata, such as `persist`.
     case broadcast(
-      channel: ChannelID, event: String, payload: BroadcastPushPayload, waiter: WaiterID)
+      channel: ChannelID, event: String, payload: BroadcastPushPayload,
+      metadata: JSONObject? = nil, waiter: WaiterID)
     case removeChannel(channel: ChannelID, waiter: WaiterID)
     case bindingsChanged(channel: ChannelID, bindings: [PostgresJoinConfig])
     case setAuth(token: String?)
@@ -105,7 +107,8 @@ struct RealtimeCore {
     case send(RealtimeMessage)
     /// Write a broadcast as a binary frame. `topic` is the wire topic.
     case sendBroadcast(
-      joinRef: Ref?, ref: Ref, topic: String, event: String, payload: BroadcastPushPayload)
+      joinRef: Ref?, ref: Ref, topic: String, event: String, payload: BroadcastPushPayload,
+      metadata: JSONObject? = nil)
     /// Apply `.timerFired(id)` after `after`, replacing the pending timer with this id.
     case schedule(TimerID, after: Duration)
     case cancel(TimerID)
@@ -136,10 +139,10 @@ struct RealtimeCore {
       case (.send(let a), .send(let b)):
         return a == b
       case (
-        .sendBroadcast(let ja, let ra, let ta, let ea, let pa),
-        .sendBroadcast(let jb, let rb, let tb, let eb, let pb)
+        .sendBroadcast(let ja, let ra, let ta, let ea, let pa, let ma),
+        .sendBroadcast(let jb, let rb, let tb, let eb, let pb, let mb)
       ):
-        return ja == jb && ra == rb && ta == tb && ea == eb && pa == pb
+        return ja == jb && ra == rb && ta == tb && ea == eb && pa == pb && ma == mb
       case (.schedule(let a, let da), .schedule(let b, let db)):
         return a == b && da == db
       case (.cancel(let a), .cancel(let b)):
@@ -280,8 +283,8 @@ struct RealtimeCore {
       return removeChannel(channel, waiter: waiter)
     case .push(let channel, let event, let payload, let waiter):
       return push(channel, event: event, payload: payload, waiter: waiter)
-    case .broadcast(let channel, let event, let payload, let waiter):
-      return broadcast(channel, event: event, payload: payload, waiter: waiter)
+    case .broadcast(let channel, let event, let payload, let metadata, let waiter):
+      return broadcast(channel, event: event, payload: payload, metadata: metadata, waiter: waiter)
     case .timerFired(.pushTimeout(let channel, let ref)):
       return pushTimedOut(channel, ref: ref)
 

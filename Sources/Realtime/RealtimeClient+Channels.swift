@@ -139,10 +139,11 @@ extension RealtimeClient {
   }
 
   func broadcast(
-    _ channel: RealtimeChannel, event: String, payload: BroadcastPushPayload
+    _ channel: RealtimeChannel, event: String, payload: BroadcastPushPayload,
+    metadata: JSONObject?
   ) async throws {
     try await wait(on: channel) { [id = channel.id] in
-      .broadcast(channel: id, event: event, payload: payload, waiter: $0)
+      .broadcast(channel: id, event: event, payload: payload, metadata: metadata, waiter: $0)
     }
   }
 

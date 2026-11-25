@@ -64,9 +64,9 @@ methods on ``BroadcastMessage``, ``PostgresRow``, ``PresenceEntry`` and ``Presen
 synchronous, and ``TypedPostgresChange/row()`` runs on the caller's actor. Called from the main
 actor, they accept a main actor-isolated conformance.
 
-**Types you send work as written too.** ``RealtimeChannel/broadcast(event:payload:encoder:)``,
+**Types you send work as written too.** ``RealtimeChannel/broadcast(event:payload:persist:encoder:)``,
 ``RealtimeChannel/track(_:encoder:)`` and
-``RealtimeChannel/httpSend(event:payload:encoder:timeout:)`` encode the payload on the caller's
+``RealtimeChannel/httpSend(event:payload:persist:timeout:encoder:)`` encode the payload on the caller's
 actor, before the call goes to the client. Called from the main actor, they accept a main
 actor-isolated `Encodable` conformance:
 

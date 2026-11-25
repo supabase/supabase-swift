@@ -129,10 +129,12 @@ extension RealtimeCore {
 }
 
 extension RealtimeMessage {
-  /// The reason an error reply gives: its `response.reason`, or a `response` that is a string,
-  /// or else `default`.
+  /// The reason an error reply gives: its `response.reason`, its `response.error` (the code of
+  /// a broadcast the server did not store), or a `response` that is a string, or else `default`.
   func replyReason(default: String) -> String {
     let response = payload["response"]
-    return response?.objectValue?["reason"]?.stringValue ?? response?.stringValue ?? `default`
+    let object = response?.objectValue
+    return object?["reason"]?.stringValue ?? object?["error"]?.stringValue
+      ?? response?.stringValue ?? `default`
   }
 }

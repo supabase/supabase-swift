@@ -103,7 +103,8 @@ public struct RealtimeError: SupabaseError {
   }
 
   /// The code the server prefixes to a join or channel error reason, as in
-  /// `"Unauthorized: You do not have permissions…"`.
+  /// `"Unauthorized: You do not have permissions…"`, or the code of an acknowledged broadcast
+  /// that the server did not store, such as `"persistence_failed"`.
   ///
   /// The server owns this set and adds to it without notice, so compare against the static
   /// members and keep a fallback branch.
@@ -176,6 +177,19 @@ public struct RealtimeError: SupabaseError {
       "PostgresChangesSubscribeTimeout"
     /// The server met an error it has no code for.
     public static let unknownErrorOnChannel: Code = "UnknownErrorOnChannel"
+    /// The sender has no `persistence` policy on `realtime.messages`. The server delivered the
+    /// broadcast but did not store it.
+    public static let persistenceUnauthorized: Code = "persistence_unauthorized"
+    /// The server could not store the broadcast. It delivered the broadcast.
+    public static let persistenceFailed: Code = "persistence_failed"
+    /// The server refused the ttl of ``BroadcastPersistence``. It neither delivered nor stored
+    /// the broadcast.
+    public static let persistenceInvalidTTL: Code = "persistence_invalid_ttl"
+
+    /// The codes of an acknowledged broadcast that asked to be stored and was not.
+    static let persistence: Set<Code> = [
+      .persistenceUnauthorized, .persistenceFailed, .persistenceInvalidTTL,
+    ]
 
     /// Codes the server emits for conditions the caller must fix: a bad token, a denied
     /// policy, a disabled tenant, invalid replay parameters. Retrying as-is cannot succeed.
@@ -346,7 +360,22 @@ extension RealtimeError {
         kind: .payloadTooLarge, message: "Broadcast payload is over the project's size limit.",
         isRetryable: false)
     }
+    let code = Code(rawValue: reason)
+    if Code.persistence.contains(code) {
+      return RealtimeError(kind: .server, message: persistenceMessage(code), code: code)
+    }
     return RealtimeError(kind: .server, message: reason, code: Code.parse(reason))
+  }
+
+  private static func persistenceMessage(_ code: Code) -> String {
+    switch code {
+    case .persistenceUnauthorized:
+      "The broadcast was delivered but not stored: the sender has no persistence policy."
+    case .persistenceFailed:
+      "The broadcast was delivered but not stored: the server could not store it."
+    default:
+      "The broadcast was neither delivered nor stored: the server refused its ttl."
+    }
   }
 
   /// The error for a WebSocket that closed while the client still needed it.

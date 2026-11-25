@@ -41,6 +41,22 @@ do {
 check failed. ``RealtimeError/Code-swift.struct`` is an open set too: the server adds codes
 without notice, so keep a fallback branch.
 
+### Errors from a stored broadcast
+
+A broadcast sent with ``BroadcastPersistence`` needs a private channel. On a public channel the
+send throws ``RealtimeError/Kind-swift.struct/invalidRequest`` and sends nothing.
+
+Over the WebSocket, only a channel with
+``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledgesMessages`` learns whether the
+server stored the message. When it did not, the send throws
+``RealtimeError/Kind-swift.struct/server`` with one of these codes:
+
+| Code | The message was |
+| --- | --- |
+| ``RealtimeError/Code-swift.struct/persistenceUnauthorized`` | Delivered, not stored: the sender has no `persistence` policy. |
+| ``RealtimeError/Code-swift.struct/persistenceFailed`` | Delivered, not stored: the server could not store it. |
+| ``RealtimeError/Code-swift.struct/persistenceInvalidTTL`` | Neither delivered nor stored: the server refused the ttl. |
+
 ### Failures that are a status, not an error
 
 A lost socket does not throw from a stream. It is a status on
@@ -62,7 +78,7 @@ A channel that the server closes does not join again. See
 
 ``RealtimeClient/Configuration/accessToken`` supplies the token. When it throws during a join or
 a heartbeat, the client keeps the current token. When it throws during
-``RealtimeChannel/httpSend(event:payload:encoder:timeout:)``, the call throws a ``RealtimeError`` with kind
+``RealtimeChannel/httpSend(event:payload:persist:timeout:encoder:)``, the call throws a ``RealtimeError`` with kind
 ``RealtimeError/Kind-swift.struct/accessToken``, and your error is in
 ``RealtimeError/underlyingError``. No request is sent.
 

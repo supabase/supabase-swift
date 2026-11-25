@@ -55,11 +55,12 @@ import Helpers
 /// - ``subscribe()``
 /// - ``unsubscribe()``
 /// ### Broadcasting
-/// - ``broadcast(event:payload:encoder:)``
-/// - ``broadcast(event:data:)``
-/// - ``broadcast(_:encoder:)``
-/// - ``httpSend(event:payload:encoder:timeout:)``
-/// - ``httpSend(event:data:timeout:)``
+/// - ``broadcast(event:payload:persist:encoder:)``
+/// - ``broadcast(event:data:persist:)``
+/// - ``broadcast(_:persist:encoder:)``
+/// - ``BroadcastPersistence``
+/// - ``httpSend(event:payload:persist:timeout:encoder:)``
+/// - ``httpSend(event:data:persist:timeout:)``
 /// ### Presence
 /// - ``presenceState``
 /// - ``presenceStates()``
@@ -219,7 +220,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// Sends a broadcast message to every client on the channel, over the WebSocket.
   ///
   /// The channel must be subscribed. There is no fallback to the REST API; to broadcast without
-  /// a subscription, use ``httpSend(event:payload:encoder:timeout:)``.
+  /// a subscription, use ``httpSend(event:payload:persist:timeout:encoder:)``.
   ///
   /// Returns as soon as the frame is queued for the socket, unless
   /// ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledgesMessages`` is on: then it waits for
@@ -232,13 +233,25 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// > ``RealtimeError/Kind-swift.struct/server``. With it off, the call returns and the refusal
   /// > goes unseen.
   ///
+  /// With `persist`, the server also stores the message for broadcast replay. The SDK sends it
+  /// in the frame's metadata, never in the payload. Only with `acknowledgesMessages` on does
+  /// the call report a message the server did not store: it throws
+  /// ``RealtimeError/Kind-swift.struct/server`` with code
+  /// ``RealtimeError/Code-swift.struct/persistenceUnauthorized`` or
+  /// ``RealtimeError/Code-swift.struct/persistenceFailed`` when the message was delivered but
+  /// not stored, and ``RealtimeError/Code-swift.struct/persistenceInvalidTTL`` when the server
+  /// refused the ttl and neither delivered nor stored the message.
+  ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - payload: The value to send. It must encode as a JSON object.
+  ///   - persist: Asks the server to store the message. `nil` sends no persistence request.
+  ///     It needs a private channel.
   ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
   /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
   ///   when `payload` does not encode as a JSON object, when `event` is over 255 UTF-8 bytes,
-  ///   or when the channel's ``topic`` is over 246 UTF-8 bytes, and nothing is sent;
+  ///   when the channel's ``topic`` is over 246 UTF-8 bytes, or when `persist` is set on a
+  ///   channel that is not private, and nothing is sent;
   ///   ``RealtimeError/Kind-swift.struct/notSubscribed`` when the
   ///   channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no reply
   ///   arrived within the client's configured timeout, the server's reason as
@@ -248,10 +261,13 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   ``RealtimeError/Kind-swift.struct/notConnected`` when the client was released, and
   ///   `CancellationError` when the awaiting task is cancelled.
   public func broadcast(
-    event: String, payload: some Encodable, encoder: JSONEncoder? = nil
+    event: String,
+    payload: some Encodable,
+    persist: BroadcastPersistence? = nil,
+    encoder: JSONEncoder? = nil
   ) async throws {
     let message = try Self.jsonObject(payload, encoder: encoder)
-    try await broadcast(event: event, payload: .json(message))
+    try await broadcast(event: event, payload: .json(message), persist: persist)
   }
 
   /// Sends a binary broadcast message over the WebSocket.
@@ -259,11 +275,16 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the payload.
-  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``. Here
+  ///   - persist: Asks the server to store the message. `nil` sends no persistence request.
+  ///     It needs a private channel.
+  /// - Throws: The errors of ``broadcast(event:payload:persist:encoder:)``. Here
   ///   ``RealtimeError/Kind-swift.struct/invalidRequest`` means only that `event` or the
-  ///   channel's ``topic`` is too long.
-  public func broadcast(event: String, data: Data) async throws {
-    try await broadcast(event: event, payload: .binary(data))
+  ///   channel's ``topic`` is too long, or that `persist` is set on a channel that is not
+  ///   private.
+  public func broadcast(
+    event: String, data: Data, persist: BroadcastPersistence? = nil
+  ) async throws {
+    try await broadcast(event: event, payload: .binary(data), persist: persist)
   }
 
   /// Sends a ``BroadcastEvent`` value over the WebSocket, under the type's event name.
@@ -275,16 +296,33 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// - Parameters:
   ///   - message: The value to send. Its type's ``BroadcastEvent/event`` is the event name. It
   ///     must encode as a JSON object.
+  ///   - persist: Asks the server to store the message. `nil` sends no persistence request.
+  ///     It needs a private channel.
   ///   - encoder: The encoder for `message`. `nil` uses `JSONEncoder.supabase()`.
-  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``.
+  /// - Throws: The errors of ``broadcast(event:payload:persist:encoder:)``.
   public func broadcast<Event: BroadcastEvent & Encodable>(
-    _ message: Event, encoder: JSONEncoder? = nil
+    _ message: Event, persist: BroadcastPersistence? = nil, encoder: JSONEncoder? = nil
   ) async throws {
-    try await broadcast(event: Event.checkedEvent, payload: message, encoder: encoder)
+    try await broadcast(
+      event: Event.checkedEvent, payload: message, persist: persist, encoder: encoder)
   }
 
-  private func broadcast(event: String, payload: BroadcastPushPayload) async throws {
-    try await clientForAction().broadcast(self, event: event, payload: payload)
+  private func broadcast(
+    event: String, payload: BroadcastPushPayload, persist: BroadcastPersistence?
+  ) async throws {
+    try checkPersistable(persist)
+    try await clientForAction().broadcast(
+      self, event: event, payload: payload, metadata: persist?.frameMetadata)
+  }
+
+  /// Throws when `persist` is set on a channel that is not private.
+  ///
+  /// The server ignores `persist` on a public channel and still acknowledges the message, so
+  /// without this check the app would read a message that was never stored as stored.
+  func checkPersistable(_ persist: BroadcastPersistence?) throws(RealtimeError) {
+    guard persist != nil, !configuration.isPrivate else { return }
+    throw .invalidRequest(
+      "Only a private channel can store a broadcast message. Set `isPrivate` on the channel.")
   }
 
   // MARK: - Presence

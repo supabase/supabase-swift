@@ -36,7 +36,7 @@ let message = try broadcast.decode(as: ChatMessage.self, decoder: decoder)
 
 A type that conforms to ``BroadcastEvent`` names its own event, so the sender and the receivers
 cannot disagree on the name. ``RealtimeChannel/broadcasts(of:bufferingPolicy:decoder:)`` binds
-the type to the stream, and ``RealtimeChannel/broadcast(_:encoder:)`` sends a value under the
+the type to the stream, and ``RealtimeChannel/broadcast(_:persist:encoder:)`` sends a value under the
 type's event name.
 
 ```swift
@@ -111,6 +111,6 @@ nonisolated struct Tick: Decodable {
 
 Do this for every type you decode in a `@concurrent` function, on another actor, or in a task
 group child, such as the loop in <doc:HighRateFeeds>. Types you send follow the same rule:
-``RealtimeChannel/broadcast(event:payload:encoder:)`` and ``RealtimeChannel/track(_:encoder:)``
+``RealtimeChannel/broadcast(event:payload:persist:encoder:)`` and ``RealtimeChannel/track(_:encoder:)``
 encode on the caller's actor, so a main actor conformance works when you call them from the
 main actor. <doc:Isolation> explains why.

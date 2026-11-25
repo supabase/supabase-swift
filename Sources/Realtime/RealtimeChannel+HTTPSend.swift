@@ -26,23 +26,32 @@ extension RealtimeChannel {
   /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
   /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
   ///
+  /// With `persist`, the server also stores the message for broadcast replay. The SDK sends it
+  /// in the query string, as `persist=true` or `persist[ttl]=3600`, never in the body. A ttl
+  /// the server does not allow fails the call with `.server` and the server's message.
+  ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - payload: The value to send as the JSON request body.
-  ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
+  ///   - persist: Asks the server to store the message. `nil` sends no persistence request.
+  ///     It needs a private channel.
   ///   - timeout: How long the call may take, including the access token fetch, like every
   ///     other Realtime timeout. `nil` uses ``RealtimeClient/Configuration/requestTimeout``.
   ///     ``RealtimeClient/Configuration/http`` explains the idle timeout.
-  /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode, and
-  ///   nothing is sent; `.accessToken` when the `accessToken` closure throws; `.server`,
-  ///   `.transport`, `.timeout` when `timeout` runs out, `.channelRemoved`, or `.notConnected`
-  ///   when the client was released.
+  ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
+  /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode, or
+  ///   when `persist` is set on a channel that is not private, and nothing is sent;
+  ///   `.accessToken` when the `accessToken` closure throws; `.server`, `.transport`, `.timeout`
+  ///   when `timeout` runs out, `.channelRemoved`, or `.notConnected` when the client was
+  ///   released.
   public func httpSend(
     event: String,
     payload: some Encodable,
-    encoder: JSONEncoder? = nil,
-    timeout: Duration? = nil
+    persist: BroadcastPersistence? = nil,
+    timeout: Duration? = nil,
+    encoder: JSONEncoder? = nil
   ) async throws {
+    try checkPersistable(persist)
     let body: Data
     do {
       body = try (encoder ?? JSONValue.encoder).encode(payload)
@@ -54,6 +63,7 @@ extension RealtimeChannel {
       event: event,
       body: body,
       contentType: "application/json",
+      persist: persist,
       timeout: timeout
     )
   }
@@ -65,39 +75,47 @@ extension RealtimeChannel {
   /// content type — use this for raw binary payloads (e.g. images, custom binary formats)
   /// that shouldn't be JSON-encoded.
   ///
-  /// Headers and retry follow ``httpSend(event:payload:encoder:timeout:)``.
+  /// Headers, retry and `persist` follow ``httpSend(event:payload:persist:timeout:encoder:)``.
   ///
   /// > Important: Requires a Realtime server version >= 2.97.0.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
+  ///   - persist: Asks the server to store the message. `nil` sends no persistence request.
+  ///     It needs a private channel.
   ///   - timeout: How long the call may take, including the access token fetch, like every
   ///     other Realtime timeout. `nil` uses ``RealtimeClient/Configuration/requestTimeout``.
   ///     ``RealtimeClient/Configuration/http`` explains the idle timeout.
-  /// - Throws: ``RealtimeError`` with kind `.accessToken` when the `accessToken` closure throws;
-  ///   `.server`, `.transport`, `.timeout` when `timeout` runs out, `.channelRemoved`, or
-  ///   `.notConnected` when the client was released.
+  /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `persist` is set on a channel
+  ///   that is not private, and nothing is sent; `.accessToken` when the `accessToken` closure
+  ///   throws; `.server`, `.transport`, `.timeout` when `timeout` runs out, `.channelRemoved`,
+  ///   or `.notConnected` when the client was released.
   public func httpSend(
     event: String,
     data: Data,
+    persist: BroadcastPersistence? = nil,
     timeout: Duration? = nil
   ) async throws {
+    try checkPersistable(persist)
     try await httpSend(
-      event: event, body: data, contentType: "application/octet-stream", timeout: timeout)
+      event: event, body: data, contentType: "application/octet-stream", persist: persist,
+      timeout: timeout)
   }
 
   private func httpSend(
     event: String,
     body: Data,
     contentType: String,
+    persist: BroadcastPersistence?,
     timeout: Duration?
   ) async throws {
     let client = try clientForAction()
     try await client.checkUsable(self)
     var headers = client.headers
     headers[.contentType] = contentType
-    let url = client.broadcastURL(topic: topic, event: event, isPrivate: configuration.isPrivate)
+    let url = client.broadcastURL(
+      topic: topic, event: event, isPrivate: configuration.isPrivate, persist: persist)
 
     let response: HTTPResponse
     let data: Data
