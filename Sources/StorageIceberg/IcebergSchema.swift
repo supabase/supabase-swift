@@ -145,6 +145,7 @@ public indirect enum IcebergType: Codable, Hashable, Sendable {
   /// - Parameters:
   ///   - precision: The number of digits.
   ///   - scale: The number of digits after the decimal point.
+  /// - Returns: The type.
   public static func decimal(precision: Int, scale: Int) -> IcebergType {
     .primitive(.decimal(precision: precision, scale: scale))
   }
@@ -152,6 +153,7 @@ public indirect enum IcebergType: Codable, Hashable, Sendable {
   /// The `fixed[L]` type: bytes of a fixed length.
   ///
   /// - Parameter length: The number of bytes.
+  /// - Returns: The type.
   public static func fixed(length: Int) -> IcebergType {
     .primitive(.fixed(length: length))
   }
@@ -263,6 +265,7 @@ public struct IcebergPrimitiveType: RawRepresentable, Hashable, Sendable,
   /// - Parameters:
   ///   - precision: The number of digits.
   ///   - scale: The number of digits after the decimal point.
+  /// - Returns: The primitive type.
   public static func decimal(precision: Int, scale: Int) -> IcebergPrimitiveType {
     IcebergPrimitiveType(rawValue: "decimal(\(precision), \(scale))")
   }
@@ -270,6 +273,7 @@ public struct IcebergPrimitiveType: RawRepresentable, Hashable, Sendable,
   /// `fixed[L]`: bytes of a fixed length.
   ///
   /// - Parameter length: The number of bytes.
+  /// - Returns: The primitive type.
   public static func fixed(length: Int) -> IcebergPrimitiveType {
     IcebergPrimitiveType(rawValue: "fixed[\(length)]")
   }

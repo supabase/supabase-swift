@@ -28,6 +28,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   ///   - kind: The kind as the catalog spells it, such as `assert-create`.
   ///   - fields: The other fields, keyed by their wire names. A `type` key here is overwritten
   ///     by the discriminator.
+  /// - Returns: The requirement.
   public static func custom(_ kind: Kind, fields: JSONObject = [:]) -> Self {
     Self(kind: kind, fields: fields)
   }
@@ -40,6 +41,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// The table UUID must match.
   ///
   /// - Parameter uuid: The expected table UUID.
+  /// - Returns: The requirement.
   public static func assertTableUUID(_ uuid: String) -> Self {
     custom(.assertTableUUID, fields: ["uuid": .string(uuid)])
   }
@@ -49,6 +51,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// - Parameters:
   ///   - ref: The branch or tag name, such as `main`.
   ///   - snapshotID: The expected snapshot ID. `nil` means the ref must not exist.
+  /// - Returns: The requirement.
   public static func assertRefSnapshotID(ref: String, snapshotID: Int64?) -> Self {
     custom(
       .assertRefSnapshotID,
@@ -61,6 +64,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// The current schema ID must match.
   ///
   /// - Parameter id: The expected current schema ID.
+  /// - Returns: The requirement.
   public static func assertCurrentSchemaID(_ id: Int) -> Self {
     custom(.assertCurrentSchemaID, fields: ["current-schema-id": .number(JSONNumber(id))])
   }
@@ -68,6 +72,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// The highest field ID that the table has assigned must match.
   ///
   /// - Parameter id: The expected field ID.
+  /// - Returns: The requirement.
   public static func assertLastAssignedFieldID(_ id: Int) -> Self {
     custom(
       .assertLastAssignedFieldID, fields: ["last-assigned-field-id": .number(JSONNumber(id))])
@@ -76,6 +81,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// The highest partition field ID that the table has assigned must match.
   ///
   /// - Parameter id: The expected partition field ID.
+  /// - Returns: The requirement.
   public static func assertLastAssignedPartitionID(_ id: Int) -> Self {
     custom(
       .assertLastAssignedPartitionID,
@@ -85,6 +91,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// The default partition spec ID must match.
   ///
   /// - Parameter id: The expected spec ID.
+  /// - Returns: The requirement.
   public static func assertDefaultSpecID(_ id: Int) -> Self {
     custom(.assertDefaultSpecID, fields: ["default-spec-id": .number(JSONNumber(id))])
   }
@@ -92,6 +99,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// The default sort order ID must match.
   ///
   /// - Parameter id: The expected sort order ID.
+  /// - Returns: The requirement.
   public static func assertDefaultSortOrderID(_ id: Int) -> Self {
     custom(
       .assertDefaultSortOrderID, fields: ["default-sort-order-id": .number(JSONNumber(id))])

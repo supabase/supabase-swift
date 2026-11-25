@@ -96,6 +96,7 @@ public struct IcebergTransform: RawRepresentable, Codable, Hashable, Sendable,
   /// `bucket[N]`: a hash of the source value, modulo `count`.
   ///
   /// - Parameter count: The number of buckets.
+  /// - Returns: The transform.
   public static func bucket(_ count: Int) -> IcebergTransform {
     IcebergTransform(rawValue: "bucket[\(count)]")
   }
@@ -103,6 +104,7 @@ public struct IcebergTransform: RawRepresentable, Codable, Hashable, Sendable,
   /// `truncate[W]`: the source value truncated to `width`.
   ///
   /// - Parameter width: The truncation width.
+  /// - Returns: The transform.
   public static func truncate(_ width: Int) -> IcebergTransform {
     IcebergTransform(rawValue: "truncate[\(width)]")
   }
