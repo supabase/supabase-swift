@@ -213,7 +213,7 @@ public indirect enum IcebergType: Codable, Hashable, Sendable {
 ///
 /// - Warning: Experimental. See ``IcebergCatalog``.
 @_spi(Experimental)
-public struct IcebergPrimitiveType: RawRepresentable, Codable, Hashable, Sendable,
+public struct IcebergPrimitiveType: RawRepresentable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   /// The type name as the catalog spells it.
