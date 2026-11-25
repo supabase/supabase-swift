@@ -99,6 +99,7 @@ Heartbeating
 HMAC
 hostnames
 HTTPURL
+IDPSSO
 idtoken
 Ilike
 ilike

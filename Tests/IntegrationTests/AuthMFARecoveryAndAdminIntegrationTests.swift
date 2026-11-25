@@ -106,6 +106,34 @@ struct AuthMFARecoveryAndAdminIntegrationTests {
     try await admin.deleteUser(id: userID)
   }
 
+  @Test
+  func adminRenamesAUsersFactor() async throws {
+    _ = try await auth.signUp(email: mockEmail(), password: Self.password)
+    let userID = try await auth.session().user.id
+    let enrollment = try await auth.mfa.enrollTOTP(friendlyName: "Before")
+
+    let renamed = try await admin.mfa.updateFactor(
+      id: enrollment.id, forUser: userID, AdminUpdateFactor(friendlyName: "After"))
+    #expect(renamed.id == enrollment.id)
+    #expect(renamed.friendlyName == "After")
+    #expect(try await admin.mfa.listFactors(forUser: userID).map(\.friendlyName) == ["After"])
+
+    // The server answers an empty update, and a phone on a non-phone factor, with the factor
+    // unchanged.
+    let unchanged = try await admin.mfa.updateFactor(
+      id: enrollment.id, forUser: userID, AdminUpdateFactor(phone: "+15555550100"))
+    #expect(unchanged.friendlyName == "After")
+    #expect(unchanged.phone == nil)
+
+    let missing = await #expect(throws: AuthError.self) {
+      try await admin.mfa.updateFactor(
+        id: UUID(), forUser: userID, AdminUpdateFactor(friendlyName: "Nope"))
+    }
+    #expect(missing?.code?.rawValue == "mfa_factor_not_found")
+
+    try await admin.deleteUser(id: userID)
+  }
+
   // MARK: - Admin users
 
   @Test
