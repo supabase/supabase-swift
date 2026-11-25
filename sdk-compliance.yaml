@@ -1609,7 +1609,9 @@ features:
     symbols:
       - PostgrestClient.rpc
       - SupabaseClient.rpc
-  database.query.openapi_spec: not_implemented
+  database.query.openapi_spec:
+    status: not_applicable
+    note: "Schema introspection is a tooling concern; Swift apps use build-time typegen. Send GET / with Accept: application/openapi+json if needed."
 
   database.generated_types.typed_queries:
     status: implemented
