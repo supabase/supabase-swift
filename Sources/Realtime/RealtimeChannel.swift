@@ -310,7 +310,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   private func broadcast(
     event: String, payload: BroadcastPushPayload, persist: BroadcastPersistence?
   ) async throws {
-    try checkPersistable(persist)
+    try checkCanPersist(persist)
     try await clientForAction().broadcast(
       self, event: event, payload: payload, metadata: persist?.frameMetadata)
   }
@@ -319,7 +319,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///
   /// The server ignores `persist` on a public channel and still acknowledges the message, so
   /// without this check the app would read a message that was never stored as stored.
-  func checkPersistable(_ persist: BroadcastPersistence?) throws(RealtimeError) {
+  func checkCanPersist(_ persist: BroadcastPersistence?) throws(RealtimeError) {
     guard persist != nil, !configuration.isPrivate else { return }
     throw .invalidRequest(
       "Only a private channel can store a broadcast message. Set `isPrivate` on the channel.")

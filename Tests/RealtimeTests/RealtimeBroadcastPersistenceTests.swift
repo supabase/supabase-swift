@@ -42,7 +42,7 @@ struct RealtimeBroadcastPersistenceTests {
   }
 
   @Test
-  func broadcastWithATTLSendsItsWholeSecondsInTheFrameMetadata() async throws {
+  func broadcastWithTTLSendsItsWholeSecondsInTheFrameMetadata() async throws {
     let host = await RealtimeTestHost()
     let channel = try await subscribedChannel(on: host, isPrivate: true)
 
@@ -58,7 +58,7 @@ struct RealtimeBroadcastPersistenceTests {
   }
 
   @Test
-  func broadcastSendsATTLTheServerMayRefuseAsGiven() async throws {
+  func broadcastSendsAnOutOfRangeTtlAsGiven() async throws {
     let host = await RealtimeTestHost()
     let channel = try await subscribedChannel(on: host, isPrivate: true)
 
@@ -167,7 +167,7 @@ struct RealtimeBroadcastPersistenceTests {
   }
 
   @Test
-  func httpSendWithATTLSendsItsWholeSecondsInTheQueryString() async throws {
+  func httpSendWithTTLSendsItsWholeSecondsInTheQueryString() async throws {
     let http = Self.acceptingTransport()
     let host = await RealtimeTestHost(http: HTTPClient(transport: http))
     let channel = await host.client.channel("room") { $0.isPrivate = true }
@@ -201,7 +201,7 @@ struct RealtimeBroadcastPersistenceTests {
   }
 
   @Test
-  func httpSendWithATTLTheServerRefusesThrowsTheServerMessage() async throws {
+  func httpSendThrowsTheServerMessageWhenTheServerRefusesTheTTL() async throws {
     let message = "persist ttl must be a positive integer of seconds from 1 to 259200"
     let http = RecordingTransport()
     http.respond { _, _ in
