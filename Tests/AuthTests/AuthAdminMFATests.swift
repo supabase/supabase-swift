@@ -120,4 +120,51 @@ struct AuthAdminMFATests {
 
     try await sut.mfa.deleteFactor(id: factorID, forUser: userID)
   }
+
+  @Test
+  func updateFactor() async throws {
+    let responseData = """
+      {
+        "id": "\(factorID)",
+        "friendly_name": "Work phone",
+        "factor_type": "phone",
+        "status": "verified",
+        "phone": "+15555550100",
+        "created_at": "2024-01-01T00:00:00.000Z",
+        "updated_at": "2024-01-03T00:00:00.000Z"
+      }
+      """.data(using: .utf8)!
+
+    transport.stub(.put, "admin/users/\(userID)/factors/\(factorID)", data: responseData) {
+      #"""
+      curl \
+      	--request PUT \
+      	--header "Authorization: Bearer supabase.secret.key" \
+      	--header "Content-Length: 53" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: supabase.secret.key" \
+      	--data "{\"friendly_name\":\"Work phone\",\"phone\":\"+15555550100\"}" \
+      	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/factors/0D3AA138-DA96-4AEA-8D9E-C8B0E1234567"
+      """#
+    }
+
+    let sut = AuthAdminClient.testing(http: transport)
+
+    let factor = try await sut.mfa.updateFactor(
+      id: factorID, forUser: userID,
+      AdminUpdateFactor(friendlyName: "Work phone", phone: "+15555550100"))
+
+    #expect(factor.friendlyName == "Work phone")
+    #expect(factor.phone == "+15555550100")
+  }
+
+  @Test
+  func updateFactorSendsOnlyTheFieldsSet() throws {
+    let body = try AuthClient.Configuration.jsonEncoder.encode(
+      AdminUpdateFactor(friendlyName: "Laptop"))
+
+    #expect(String(decoding: body, as: UTF8.self) == #"{"friendly_name":"Laptop"}"#)
+  }
 }

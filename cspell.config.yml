@@ -54,9 +54,14 @@ patterns:
   - name: tus-upload-metadata-pair
     pattern: /\b(bucketName|objectName|contentType|cacheControl|metadata) [A-Za-z0-9+/=]+/g
 
+  # SAML URNs (`urn:oasis:names:tc:SAML:2.0:nameid-format:persistent`) join
+  # spec terms into tokens such as "nameid". Ignore the whole URN.
+  - name: saml-urn
+    pattern: /urn:oasis:names:tc:SAML:[A-Za-z0-9:._-]+/g
 ignoreRegExpList:
   - github-url-host
   - base64-blob
   - base64-header-value
   - url-encoded-fragment
   - tus-upload-metadata-pair
+  - saml-urn
