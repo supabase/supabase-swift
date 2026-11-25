@@ -78,7 +78,7 @@ docker run -d --name "$STORAGE" "${LABELS[@]}" --network "$NETWORK" --network-al
 for _ in $(seq 1 60); do
   if [[ "$(docker inspect "$STORAGE" --format '{{.State.Health.Status}}')" == healthy ]] \
     && curl -fsS http://127.0.0.1:54329/requests >/dev/null 2>&1 \
-    && docker exec "$STORAGE" wget -q -O /dev/null http://iceberg-rest:8181/v1/config 2>/dev/null; then
+    && docker exec "$STORAGE" wget -q -T 2 --tries=1 -O /dev/null http://iceberg-rest:8181/v1/config 2>/dev/null; then
     echo "Storage restarted with lifecycles, versioning, an Iceberg REST catalog and a CDN purge stub."
     exit 0
   fi
