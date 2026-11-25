@@ -186,6 +186,26 @@ struct RealtimeSerializerTests {
   }
 
   @Test
+  func encodeBroadcastPush_metadataIsJSONInTheMetadataField() throws {
+    let metadata: JSONObject = ["persist": ["ttl": 60]]
+    let data = try serializer.encodeBroadcastPush(
+      joinRef: "1",
+      ref: "2",
+      topic: "realtime:t",
+      event: "e",
+      metadata: metadata,
+      jsonPayload: ["a": 1]
+    )
+
+    let metaLen = Int(data[5])
+    let metaStart = 7 + 1 + 1 + "realtime:t".utf8.count + "e".utf8.count
+    let meta = data[metaStart..<metaStart + metaLen]
+    #expect(try JSONDecoder().decode(JSONObject.self, from: meta) == metadata)
+    let payload = data[(metaStart + metaLen)...]
+    #expect(try JSONDecoder().decode(JSONObject.self, from: payload) == ["a": 1])
+  }
+
+  @Test
   func encodeBroadcastPush_nilRefs() throws {
     let data = try serializer.encodeBroadcastPush(
       joinRef: nil,

@@ -13,6 +13,16 @@ import Testing
 @Suite
 struct RealtimeMessageTests {
   @Test
+  func errorKeyIsAPushReplyReasonButNotAJoinReplyReason() {
+    let reply = RealtimeMessage(
+      joinRef: "1", ref: "2", topic: "realtime:room", event: "phx_reply",
+      payload: ["status": "error", "response": ["error": "persistence_failed"]])
+
+    #expect(reply.pushReplyReason(default: "push") == "persistence_failed")
+    #expect(reply.replyReason(default: "join") == "join")
+  }
+
+  @Test
   func status() {
     var message = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "heartbeat", event: "event", payload: ["status": "ok"])

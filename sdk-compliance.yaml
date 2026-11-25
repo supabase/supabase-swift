@@ -2177,7 +2177,18 @@ features:
     status: implemented
     symbols:
       - RealtimeChannel.httpSend
-  realtime.channel.broadcast_persist: not_implemented
+  realtime.channel.broadcast_persist:
+    status: implemented
+    symbols:
+      - BroadcastPersistence
+      - BroadcastPersistence.ttl
+      - RealtimeChannel.broadcast
+      - RealtimeChannel.httpSend
+    supporting_symbols:
+      - BroadcastPersistence.init
+      - RealtimeError.Code.persistenceUnauthorized
+      - RealtimeError.Code.persistenceFailed
+      - RealtimeError.Code.persistenceInvalidTTL
 
   realtime.subscriptions.broadcast:
     status: implemented

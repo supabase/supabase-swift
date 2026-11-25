@@ -190,8 +190,10 @@ extension RealtimeClient {
       }
       outbox.enqueue(message)
 
-    case .sendBroadcast(let joinRef, let ref, let topic, let event, let payload):
-      sendBroadcast(joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
+    case .sendBroadcast(let joinRef, let ref, let topic, let event, let payload, let metadata):
+      sendBroadcast(
+        joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload,
+        metadata: metadata)
 
     case .schedule(let id, let delay):
       scheduleTimer(id, after: delay)
@@ -338,7 +340,8 @@ extension RealtimeClient {
   }
 
   private func sendBroadcast(
-    joinRef: Ref?, ref: Ref, topic: String, event: String, payload: BroadcastPushPayload
+    joinRef: Ref?, ref: Ref, topic: String, event: String, payload: BroadcastPushPayload,
+    metadata: JSONObject?
   ) {
     guard let outbox else {
       logger.debug("Dropping broadcast '\(event)' on '\(topic)': no socket")
@@ -349,10 +352,12 @@ extension RealtimeClient {
         switch payload {
         case .json(let object):
           try serializer.encodeBroadcastPush(
-            joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: object)
+            joinRef: joinRef, ref: ref, topic: topic, event: event, metadata: metadata,
+            jsonPayload: object)
         case .binary(let binary):
           try serializer.encodeBroadcastPush(
-            joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: binary)
+            joinRef: joinRef, ref: ref, topic: topic, event: event, metadata: metadata,
+            binaryPayload: binary)
         }
       outbox.enqueue(.binary(data))
     } catch {

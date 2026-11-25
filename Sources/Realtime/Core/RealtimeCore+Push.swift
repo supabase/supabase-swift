@@ -38,8 +38,10 @@ extension RealtimeCore {
   /// ``RealtimeError/notSubscribed``. The frame gives each header field a one-byte length, so on
   /// a subscribed channel an `event` or wire topic over ``RealtimeSerializer/maxHeaderFieldBytes``
   /// fails the waiter with ``RealtimeError/Kind-swift.struct/invalidRequest``, and nothing is sent.
+  /// `metadata` goes in the frame's metadata.
   mutating func broadcast(
-    _ channel: ChannelID, event: String, payload: BroadcastPushPayload, waiter: WaiterID
+    _ channel: ChannelID, event: String, payload: BroadcastPushPayload,
+    metadata: JSONObject?, waiter: WaiterID
   ) -> [Effect] {
     guard let record = channels[channel], let joinRef = subscribedJoinRef(channel) else {
       logger.debug(
@@ -57,7 +59,7 @@ extension RealtimeCore {
     let ref = makeRef()
     let send = Effect.sendBroadcast(
       joinRef: joinRef, ref: ref, topic: record.wireTopic, event: event,
-      payload: payload)
+      payload: payload, metadata: metadata)
     guard record.configuration.broadcast.acknowledgesMessages else {
       return [send, .resume(waiter, .success)]
     }
@@ -83,7 +85,7 @@ extension RealtimeCore {
     guard let waiter = waiter ?? nil else { return [] }
     let outcome: WaiterOutcome
     if status == .error {
-      let reason = message.replyReason(default: "The server rejected the push.")
+      let reason = message.pushReplyReason(default: "The server rejected the push.")
       outcome = .failure(.ackError(reason: reason))
     } else {
       outcome = .success

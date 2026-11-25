@@ -61,6 +61,43 @@ struct RealtimeCorePushTests {
   }
 
   @Test
+  func broadcastCarriesItsMetadataToTheFrame() {
+    var harness = Self.subscribed()
+    let w = harness.waiter()
+    let metadata: JSONObject = ["persist": true]
+
+    #expect(
+      harness.send(
+        .broadcast(
+          channel: .room, event: "cursor", payload: Self.cursor, metadata: metadata, waiter: w))
+        == [
+          .sendBroadcast(
+            joinRef: "1", ref: "2", topic: Self.wireTopic, event: "cursor", payload: Self.cursor,
+            metadata: metadata),
+          .resume(w, .success),
+        ])
+  }
+
+  @Test
+  func ackPushFailsWithThePersistenceCodeOfAnErrorReply() {
+    var harness = Self.subscribed(configuration: Self.acknowledged)
+    let w = harness.waiter()
+    _ = harness.send(
+      .broadcast(
+        channel: .room, event: "cursor", payload: Self.cursor, metadata: ["persist": true],
+        waiter: w))
+
+    let effects = harness.send(
+      .frame(Self.reply(ref: "2", status: "error", response: ["error": "persistence_failed"])))
+
+    #expect(
+      effects == [
+        .resume(w, .failure(.ackError(reason: "persistence_failed"))),
+        .cancel(.pushTimeout(channel: .room, ref: "2")),
+      ])
+  }
+
+  @Test
   func pushNotSubscribedFailsNotSubscribed() {
     var harness = CoreHarness.connected()
     _ = harness.send(Self.subscribe(harness.waiter()))

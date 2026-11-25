@@ -58,7 +58,7 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     /// Whether the server sends this client's own broadcasts back to it. Defaults to `false`.
     public var receivesOwnMessages = false
 
-    /// Whether ``RealtimeChannel/broadcast(event:payload:encoder:)`` waits for the server to
+    /// Whether ``RealtimeChannel/broadcast(event:payload:persist:encoder:)`` waits for the server to
     /// acknowledge each message. Defaults to `false`.
     ///
     /// On a private channel the server refuses a broadcast that row level security denies. With

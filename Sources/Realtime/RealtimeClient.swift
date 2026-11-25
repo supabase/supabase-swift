@@ -756,8 +756,12 @@ public actor RealtimeClient {
   /// Builds the REST broadcast URL for a single event: `.../api/broadcast/{topic}/events/{event}`.
   ///
   /// Topic and event are percent-encoded as individual path segments (so values containing
-  /// `/` don't introduce extra path components), and a private channel adds `?private=true`.
-  nonisolated func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
+  /// `/` don't introduce extra path components), and a private channel adds `private=true`.
+  /// `persist` adds `persist=true` or `persist[ttl]=<seconds>`. Query items of the configured
+  /// URL are kept.
+  nonisolated func broadcastURL(
+    topic: String, event: String, isPrivate: Bool, persist: BroadcastPersistence?
+  ) -> URL {
     let url = configuration.url
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
       return url
@@ -773,8 +777,11 @@ public actor RealtimeClient {
     path += "/api/broadcast/\(encodedTopic)/events/\(encodedEvent)"
     components.percentEncodedPath = path
 
-    if isPrivate {
-      components.queryItems = [URLQueryItem(name: "private", value: "true")]
+    let queryItems = [
+      isPrivate ? URLQueryItem(name: "private", value: "true") : nil, persist?.queryItem,
+    ].compactMap(\.self)
+    if !queryItems.isEmpty {
+      components.queryItems = (components.queryItems ?? []) + queryItems
     }
 
     return components.url ?? url

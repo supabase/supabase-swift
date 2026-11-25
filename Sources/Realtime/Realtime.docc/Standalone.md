@@ -42,7 +42,7 @@ your own ``WebSocketTransport`` to use another stack. See <doc:CustomTransports>
 ### The HTTP transport
 
 ``RealtimeClient/Configuration/http`` is the `HTTPClientConfiguration` every module shares. Only
-``RealtimeChannel/httpSend(event:payload:encoder:timeout:)`` uses it. The WebSocket does not.
+``RealtimeChannel/httpSend(event:payload:persist:timeout:encoder:)`` uses it. The WebSocket does not.
 
 ### Timing
 

@@ -191,9 +191,9 @@ Changes that still compile but behave differently. Check each one by hand.
 | `broadcast.acknowledgeBroadcasts`, `.receiveOwnBroadcasts`, `.replicationReady` | `broadcast.acknowledgesMessages`, `.receivesOwnMessages`, `.waitsForReplication` |
 | `ReplayOption(since: Int, limit:)` (milliseconds) | `RealtimeChannelConfiguration.Broadcast.Replay(since: Date, limit:)` |
 | `presence.key` (`""` for none) | `presence.key: String?` (`nil` for none) |
-| `broadcast(event:message:)` (`async`) | `broadcast(event:payload:encoder:) async throws`; waits for the server reply when `broadcast.acknowledgesMessages` is on |
+| `broadcast(event:message:)` (`async`) | `broadcast(event:payload:persist:encoder:) async throws`; waits for the server reply when `broadcast.acknowledgesMessages` is on |
 | `broadcast(event:data:)` (`async`) | `async throws` |
-| `httpSend(event:message:timeout:)` | `httpSend(event:payload:encoder:timeout:)` |
+| `httpSend(event:message:timeout:)` | `httpSend(event:payload:persist:timeout:encoder:)` |
 | `RealtimePostgresFilterValue.rawValue` | `realtimeFilterValue` |
 | `track(_:)`, `track(state: JSONObject)`, `untrack()` | `track(_:encoder:)` (a `JSONObject` is `Encodable`), `untrack()`; both `async throws` and always wait for the server reply |
 | `RealtimeMessageV2`, `PushStatus` | removed; the client builds and reads the protocol messages, and a push throws `RealtimeError` (see [Pushes throw](#pushes-throw-instead-of-returning-a-status)) |
@@ -409,7 +409,7 @@ for await change in await channel.postgresChanges(of: Todo.self, table: "todos")
 
 ## Pushes throw instead of returning a status
 
-`broadcast(event:payload:encoder:)`, `broadcast(event:data:)`, `track(_:encoder:)` and `untrack()` are
+`broadcast(event:payload:persist:encoder:)`, `broadcast(event:data:persist:)`, `track(_:encoder:)` and `untrack()` are
 `async throws`. The broadcasts return once the frame is queued for the socket; `disconnect()`
 still writes the frames queued before it, up to the client's `requestTimeout`. When
 `broadcast.acknowledgesMessages` is on, the broadcasts wait for the server reply first. `track` and

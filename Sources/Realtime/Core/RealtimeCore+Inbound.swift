@@ -135,4 +135,10 @@ extension RealtimeMessage {
     let response = payload["response"]
     return response?.objectValue?["reason"]?.stringValue ?? response?.stringValue ?? `default`
   }
+
+  /// The reason a push's error reply gives: its `response.error`, the code of a broadcast the
+  /// server did not store, or else ``replyReason(default:)``.
+  func pushReplyReason(default: String) -> String {
+    payload["response"]?.objectValue?["error"]?.stringValue ?? replyReason(default: `default`)
+  }
 }

@@ -34,7 +34,7 @@ When the token is a JWT, the client also calls the closure 60 seconds before the
 while it is connected, and sends the new token to every joined channel. So a channel does not
 reach the server's expiry check.
 
-``RealtimeChannel/httpSend(event:payload:encoder:timeout:)`` calls the closure for every request,
+``RealtimeChannel/httpSend(event:payload:persist:timeout:encoder:)`` calls the closure for every request,
 with no 10-second limit. If the closure throws, `httpSend` throws ``RealtimeError`` with kind
 ``RealtimeError/Kind-swift.struct/accessToken``. A `nil` result means no signed-in user, so
 `httpSend` sends only `apikey`, which is enough for a public channel. The socket clears its own

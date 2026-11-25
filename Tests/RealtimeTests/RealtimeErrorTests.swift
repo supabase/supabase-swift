@@ -263,6 +263,17 @@ struct RealtimeErrorTests {
     #expect(error.message == "something else")
   }
 
+  @Test(arguments: [
+    RealtimeError.Code.persistenceUnauthorized, .persistenceFailed, .persistenceInvalidTTL,
+  ])
+  func ackErrorMapsAPersistenceCodeToAServerErrorWithThatCode(code: RealtimeError.Code) {
+    let error = RealtimeError.ackError(reason: code.rawValue)
+
+    #expect(error.kind == .server)
+    #expect(error.code == code)
+    #expect(error.message != code.rawValue)
+  }
+
   @Test
   func socketClosedCarriesTheCloseCodeAndIsRetryable() {
     let error = RealtimeError.socketClosed(code: WebSocketCloseCode(rawValue: 1006), reason: "x")

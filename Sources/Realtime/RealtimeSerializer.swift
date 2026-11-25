@@ -101,11 +101,15 @@ package struct RealtimeSerializer: Sendable {
   /// [kind:1][joinRef_len:1][ref_len:1][topic_len:1][event_len:1][meta_len:1][encoding:1]
   /// [joinRef][ref][topic][event][metadata][payload]
   /// ```
+  ///
+  /// `metadata` is JSON-encoded into the metadata field, which the server reads for options such
+  /// as `persist`. Without it, the field is empty.
   package func encodeBroadcastPush(
     joinRef: String?,
     ref: String?,
     topic: String,
     event: String,
+    metadata: JSONObject? = nil,
     jsonPayload: JSONObject
   ) throws -> Data {
     let payloadData = try JSONEncoder().encode(jsonPayload)
@@ -114,6 +118,7 @@ package struct RealtimeSerializer: Sendable {
       ref: ref,
       topic: topic,
       event: event,
+      metadata: metadata,
       encoding: .json,
       payload: payloadData
     )
@@ -125,6 +130,7 @@ package struct RealtimeSerializer: Sendable {
     ref: String?,
     topic: String,
     event: String,
+    metadata: JSONObject? = nil,
     binaryPayload: Data
   ) throws -> Data {
     try _encodeBroadcastPush(
@@ -132,6 +138,7 @@ package struct RealtimeSerializer: Sendable {
       ref: ref,
       topic: topic,
       event: event,
+      metadata: metadata,
       encoding: .binary,
       payload: binaryPayload
     )
@@ -142,6 +149,7 @@ package struct RealtimeSerializer: Sendable {
     ref: String?,
     topic: String,
     event: String,
+    metadata: JSONObject?,
     encoding: PayloadEncoding,
     payload: Data
   ) throws -> Data {
@@ -149,7 +157,7 @@ package struct RealtimeSerializer: Sendable {
     let refBytes = Data((ref ?? "").utf8)
     let topicBytes = Data(topic.utf8)
     let eventBytes = Data(event.utf8)
-    let metaBytes = Data()
+    let metaBytes = try metadata.map { try JSONEncoder().encode($0) } ?? Data()
 
     let limit = Self.maxHeaderFieldBytes
     guard joinRefBytes.count <= limit,
