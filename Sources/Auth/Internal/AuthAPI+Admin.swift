@@ -108,6 +108,16 @@ extension AuthAPI {
     request(.get, "admin/users/\(userID)/factors", decode: decoding([Factor].self))
   }
 
+  func adminUpdateFactor(
+    id: UUID,
+    userID: UUID,
+    _ changes: AdminUpdateFactor
+  ) throws -> AuthRequest<Factor> {
+    try request(
+      .put, "admin/users/\(userID)/factors/\(id)", body: encodeBody(changes),
+      decode: decoding(Factor.self))
+  }
+
   func adminDeleteFactor(id: UUID, userID: UUID) -> AuthRequest<Void> {
     request(.delete, "admin/users/\(userID)/factors/\(id)", decode: ignoringBody)
   }
@@ -206,5 +216,51 @@ extension AuthAPI {
 
   func adminDeleteCustomProvider(identifier: String) -> AuthRequest<Void> {
     request(.delete, "admin/custom-providers/\(identifier)", decode: ignoringBody)
+  }
+}
+
+// MARK: - SSO providers
+
+extension AuthAPI {
+  func adminListSSOProviders(
+    resourceID: String?,
+    resourceIDPrefix: String?
+  ) -> AuthRequest<[SSOProvider]> {
+    struct Response: Decodable {
+      // The server sends `null` when no provider matches.
+      let items: [SSOProvider]?
+    }
+
+    return request(
+      .get, "admin/sso/providers",
+      query: [
+        resourceID.map { URLQueryItem(name: "resource_id", value: $0) },
+        resourceIDPrefix.map { URLQueryItem(name: "resource_id_prefix", value: $0) },
+      ].compactMap { $0 },
+      decode: decoding(Response.self) { $0.items ?? [] }
+    )
+  }
+
+  func adminCreateSSOProvider(_ provider: CreateSSOProvider) throws -> AuthRequest<SSOProvider> {
+    try request(
+      .post, "admin/sso/providers", body: encodeBody(provider),
+      decode: decoding(SSOProvider.self))
+  }
+
+  func adminSSOProvider(id: String) -> AuthRequest<SSOProvider> {
+    request(.get, "admin/sso/providers/\(id)", decode: decoding(SSOProvider.self))
+  }
+
+  func adminUpdateSSOProvider(
+    id: String,
+    _ changes: UpdateSSOProvider
+  ) throws -> AuthRequest<SSOProvider> {
+    try request(
+      .put, "admin/sso/providers/\(id)", body: encodeBody(changes),
+      decode: decoding(SSOProvider.self))
+  }
+
+  func adminDeleteSSOProvider(id: String) -> AuthRequest<Void> {
+    request(.delete, "admin/sso/providers/\(id)", decode: ignoringBody)
   }
 }

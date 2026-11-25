@@ -366,8 +366,9 @@ supporting_symbols:
   - PostgrestClient.Configuration.headers
   - PostgrestClient.Configuration.encoder
   - PostgrestClient.Configuration.decoder
-  # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
-  # auth.admin.delete_mfa_factor rather than owned by one.
+  # The admin MFA namespace is shared by auth.admin.list_mfa_factors,
+  # auth.admin.update_mfa_factor, and auth.admin.delete_mfa_factor rather than
+  # owned by one.
   - AuthAdminClient.mfa
   - AuthAdminMFA
   # The admin OAuth namespace is shared by every auth.oauth_admin.* capability.
@@ -426,6 +427,43 @@ supporting_symbols:
   - OIDCDiscoveryDocument.responseTypesSupported
   - OIDCDiscoveryDocument.grantTypesSupported
   - OIDCDiscoveryDocument.subjectTypesSupported
+  # The SSO admin namespace and its types are shared by every
+  # auth.sso_admin.* capability rather than owned by one.
+  - AuthAdminClient.sso
+  - AuthAdminSSO
+  - SSOProvider
+  - SSOProvider.init
+  - SSOProvider.id
+  - SSOProvider.resourceID
+  - SSOProvider.isDisabled
+  - SSOProvider.saml
+  - SSOProvider.domains
+  - SSOProvider.createdAt
+  - SSOProvider.updatedAt
+  - SSOProvider.SAMLSettings
+  - SSOProvider.SAMLSettings.init
+  - SSOProvider.SAMLSettings.entityID
+  - SSOProvider.SAMLSettings.metadataXML
+  - SSOProvider.SAMLSettings.metadataURL
+  - SSOProvider.SAMLSettings.attributeMapping
+  - SSOProvider.SAMLSettings.nameIDFormat
+  - SSOProvider.SAMLSettings.usesDedicatedScope
+  - SAMLAttributeMapping
+  - SAMLAttributeMapping.init
+  - SAMLAttributeMapping.keys
+  - SAMLAttribute
+  - SAMLAttribute.init
+  - SAMLAttribute.name
+  - SAMLAttribute.names
+  - SAMLAttribute.default
+  - SAMLAttribute.isArray
+  - SAMLNameIDFormat
+  - SAMLNameIDFormat.init
+  - SAMLNameIDFormat.rawValue
+  - SAMLNameIDFormat.persistent
+  - SAMLNameIDFormat.emailAddress
+  - SAMLNameIDFormat.transient
+  - SAMLNameIDFormat.unspecified
   # The recovery codes namespace is shared by every auth.mfa_recovery_codes.*
   # capability rather than owned by one, and its generate response is returned
   # by both generate and regenerate.
@@ -1284,15 +1322,62 @@ features:
     status: implemented
     symbols:
       - AuthAdminCustomProviders.list
-  auth.admin.update_mfa_factor: not_implemented
+  auth.admin.update_mfa_factor:
+    status: implemented
+    symbols:
+      - AuthAdminMFA.updateFactor
+      - AdminUpdateFactor
+      - AdminUpdateFactor.init
+      - AdminUpdateFactor.friendlyName
+      - AdminUpdateFactor.phone
 
   # ── Auth — Admin SSO Providers ─────────────────────────────────────────────
 
-  auth.sso_admin.create_provider: not_implemented
-  auth.sso_admin.delete_provider: not_implemented
-  auth.sso_admin.get_provider: not_implemented
-  auth.sso_admin.list_providers: not_implemented
-  auth.sso_admin.update_provider: not_implemented
+  auth.sso_admin.create_provider:
+    status: implemented
+    symbols:
+      - AuthAdminSSO.createProvider
+      - CreateSSOProvider
+      - CreateSSOProvider.init
+      - CreateSSOProvider.saml
+      - CreateSSOProvider.type
+      - CreateSSOProvider.metadataURL
+      - CreateSSOProvider.metadataXML
+      - CreateSSOProvider.domains
+      - CreateSSOProvider.attributeMapping
+      - CreateSSOProvider.nameIDFormat
+      - CreateSSOProvider.resourceID
+      - CreateSSOProvider.isDisabled
+      - CreateSSOProvider.usesDedicatedScope
+      - SSOProviderType
+      - SSOProviderType.rawValue
+      - SSOProviderType.init
+      - SSOProviderType.saml
+  auth.sso_admin.delete_provider:
+    status: implemented
+    symbols:
+      - AuthAdminSSO.deleteProvider
+  auth.sso_admin.get_provider:
+    status: implemented
+    symbols:
+      - AuthAdminSSO.provider
+  auth.sso_admin.list_providers:
+    status: implemented
+    symbols:
+      - AuthAdminSSO.listProviders
+  auth.sso_admin.update_provider:
+    status: implemented
+    symbols:
+      - AuthAdminSSO.updateProvider
+      - UpdateSSOProvider
+      - UpdateSSOProvider.init
+      - UpdateSSOProvider.metadataURL
+      - UpdateSSOProvider.metadataXML
+      - UpdateSSOProvider.domains
+      - UpdateSSOProvider.attributeMapping
+      - UpdateSSOProvider.nameIDFormat
+      - UpdateSSOProvider.resourceID
+      - UpdateSSOProvider.isDisabled
 
   # AuthPasskeys and AuthAdminPasskeys are @_spi(Experimental). The compliance
   # scanner reads SPI symbols too, so these lists are checked like public API.

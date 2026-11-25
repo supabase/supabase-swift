@@ -53,6 +53,7 @@ import IssueReporting
 /// - ``mfa``
 /// - ``oauth``
 /// - ``customProviders``
+/// - ``sso``
 public struct AuthAdminClient: Sendable {
   /// The settings an ``AuthAdminClient`` is created with.
   public struct Configuration: Sendable {
@@ -166,6 +167,11 @@ public struct AuthAdminClient: Sendable {
   /// Admin operations on custom OAuth 2.0 and OIDC providers.
   public var customProviders: AuthAdminCustomProviders {
     AuthAdminCustomProviders(admin: self)
+  }
+
+  /// Admin operations on single sign-on (SAML) identity providers.
+  public var sso: AuthAdminSSO {
+    AuthAdminSSO(admin: self)
   }
 
   /// Gets a user.

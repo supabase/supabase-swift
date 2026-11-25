@@ -167,4 +167,25 @@ import Testing
     challenge.webauthn = nil
     #expect(challenge.webauthn == nil)
   }
+
+  @Test func ssoProviderModelsAreBuildableAndMutable() {
+    var provider = SSOProvider(
+      id: id, isDisabled: false, saml: SSOProvider.SAMLSettings(entityID: "https://idp.example"),
+      domains: ["example.com"], createdAt: date, updatedAt: date)
+    provider.saml.nameIDFormat = .emailAddress
+    provider.saml.attributeMapping.keys["email"] = SAMLAttribute(name: "mail")
+    #expect(provider.saml.attributeMapping.keys["email"]?.name == "mail")
+
+    var create = CreateSSOProvider.saml(metadataURL: url)
+    create.domains = ["example.com"]
+    #expect(create.type == .saml)
+
+    var update = UpdateSSOProvider(domains: [])
+    update.isDisabled = true
+    #expect(update.domains == [])
+
+    var factorChanges = AdminUpdateFactor(friendlyName: "laptop")
+    factorChanges.phone = "+15550100"
+    #expect(factorChanges.phone == "+15550100")
+  }
 }
