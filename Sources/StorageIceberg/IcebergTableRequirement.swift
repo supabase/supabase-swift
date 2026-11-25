@@ -26,7 +26,8 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   ///
   /// - Parameters:
   ///   - kind: The kind as the catalog spells it, such as `assert-create`.
-  ///   - fields: The other fields, keyed by their wire names. A `type` key here is ignored.
+  ///   - fields: The other fields, keyed by their wire names. A `type` key here is overwritten
+  ///     by the discriminator.
   public static func custom(_ kind: Kind, fields: JSONObject = [:]) -> Self {
     Self(kind: kind, fields: fields)
   }

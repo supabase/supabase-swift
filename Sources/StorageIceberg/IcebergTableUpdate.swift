@@ -7,6 +7,8 @@
 
 public import Helpers
 
+@_spi(Experimental) import Storage
+
 /// A change to apply to a table with ``IcebergCatalog/updateTable(_:in:requirements:updates:)``.
 ///
 /// Use a factory such as ``setProperties(_:)`` for a common change, or ``custom(_:fields:)`` for
@@ -25,7 +27,8 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
   ///
   /// - Parameters:
   ///   - action: The action as the catalog spells it, such as `add-snapshot`.
-  ///   - fields: The other fields, keyed by their wire names. An `action` key here is ignored.
+  ///   - fields: The other fields, keyed by their wire names. An `action` key here is
+  ///     overwritten by the discriminator.
   public static func custom(_ action: Action, fields: JSONObject = [:]) -> Self {
     Self(action: action, fields: fields)
   }
@@ -50,8 +53,10 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
   ///   - schema: The schema to add.
   ///   - lastColumnID: The highest field ID that the table has assigned. `nil` lets the catalog
   ///     compute it.
-  public static func addSchema(_ schema: IcebergSchema, lastColumnID: Int? = nil) -> Self {
-    var fields: JSONObject = ["schema": jsonValue(of: schema)]
+  /// - Throws: `StorageError` with kind `invalidRequest` when `schema` cannot be encoded as
+  ///   JSON, e.g. when it holds a number that no Swift number type holds exactly.
+  public static func addSchema(_ schema: IcebergSchema, lastColumnID: Int? = nil) throws -> Self {
+    var fields: JSONObject = ["schema": try jsonValue(of: schema)]
     if let lastColumnID {
       fields["last-column-id"] = .number(JSONNumber(lastColumnID))
     }
@@ -68,8 +73,9 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
   /// Adds a partition spec to the table. It does not become the default spec.
   ///
   /// - Parameter spec: The partition spec to add.
-  public static func addPartitionSpec(_ spec: IcebergPartitionSpec) -> Self {
-    custom("add-spec", fields: ["spec": jsonValue(of: spec)])
+  /// - Throws: `StorageError` with kind `invalidRequest` when `spec` cannot be encoded as JSON.
+  public static func addPartitionSpec(_ spec: IcebergPartitionSpec) throws -> Self {
+    custom("add-spec", fields: ["spec": try jsonValue(of: spec)])
   }
 
   /// Makes a partition spec of the table the default spec.
@@ -82,8 +88,10 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
   /// Adds a sort order to the table. It does not become the default sort order.
   ///
   /// - Parameter sortOrder: The sort order to add.
-  public static func addSortOrder(_ sortOrder: IcebergSortOrder) -> Self {
-    custom("add-sort-order", fields: ["sort-order": jsonValue(of: sortOrder)])
+  /// - Throws: `StorageError` with kind `invalidRequest` when `sortOrder` cannot be encoded as
+  ///   JSON.
+  public static func addSortOrder(_ sortOrder: IcebergSortOrder) throws -> Self {
+    custom("add-sort-order", fields: ["sort-order": try jsonValue(of: sortOrder)])
   }
 
   /// Makes a sort order of the table the default sort order.
@@ -143,8 +151,13 @@ extension IcebergTableUpdate {
 }
 
 /// The JSON form of an Iceberg model.
-private func jsonValue(of value: some Encodable) -> JSONValue {
-  // The Iceberg models hold only strings, integers, Booleans, and `JSONValue`s, so encoding
-  // them cannot fail.
-  try! JSONValue(value)
+private func jsonValue<Value: Encodable>(of value: Value) throws -> JSONValue {
+  do {
+    return try JSONValue(value)
+  } catch {
+    throw StorageError(
+      kind: .invalidRequest,
+      message: "The Iceberg table update cannot encode \(Value.self) as JSON.",
+      underlyingError: error)
+  }
 }

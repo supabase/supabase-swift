@@ -200,4 +200,18 @@ struct IcebergCommitTests {
     #expect(try JSONValue(update) == ["action": "set-location"])
     #expect(try JSONValue(requirement) == ["type": "assert-create"])
   }
+
+  @Test
+  func aModelThatCannotEncodeThrowsInvalidRequest() throws {
+    let unencodable = IcebergType.unknown(.number(try #require(JSONNumber("1e400"))))
+    let schema = IcebergSchema(fields: [
+      IcebergField(id: 1, name: "x", type: unencodable, isRequired: true)
+    ])
+
+    let error = try #require(throws: StorageError.self) {
+      try IcebergTableUpdate.addSchema(schema)
+    }
+    #expect(error.kind == .invalidRequest)
+    #expect(error.underlyingError is EncodingError)
+  }
 }
