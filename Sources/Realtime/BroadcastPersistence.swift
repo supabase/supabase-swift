@@ -57,7 +57,10 @@ public struct BroadcastPersistence: Hashable, Sendable {
   /// ``ttl`` in whole seconds, rounded up, as the server reads it.
   private var ttlSeconds: Int64? {
     guard let (seconds, attoseconds) = ttl?.components else { return nil }
-    return attoseconds > 0 ? seconds + 1 : seconds
+    guard attoseconds > 0 else { return seconds }
+    // Saturates instead of trapping at `Int64.max`; the server refuses that ttl anyway.
+    let (roundedUp, overflow) = seconds.addingReportingOverflow(1)
+    return overflow ? seconds : roundedUp
   }
 
   /// The frame metadata of a WebSocket broadcast: `{"persist": true}` or

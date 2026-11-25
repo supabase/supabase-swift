@@ -171,6 +171,21 @@ struct RealtimeBroadcastPersistenceTests {
   }
 
   @Test
+  func httpSendSendsTheLargestTTLWithAFractionWithoutTrapping() async throws {
+    let http = Self.acceptingTransport()
+    let host = await RealtimeTestHost(http: HTTPClient(transport: http))
+    let channel = await host.client.channel("room") { $0.isPrivate = true }
+    let ttl = Duration(secondsComponent: .max, attosecondsComponent: 1)
+
+    try await channel.httpSend(
+      event: "message", data: Data([0x01]), persist: BroadcastPersistence(ttl: ttl))
+
+    #expect(
+      try Self.queryItems(of: http).last
+        == URLQueryItem(name: "persist[ttl]", value: String(Int64.max)))
+  }
+
+  @Test
   func httpSendKeepsTheQueryItemsOfTheConfiguredURL() async throws {
     let http = Self.acceptingTransport()
     let host = await RealtimeTestHost(
