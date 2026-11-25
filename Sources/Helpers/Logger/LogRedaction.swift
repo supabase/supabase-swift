@@ -40,8 +40,9 @@ package enum LogRedaction {
   /// A description of `error` for an `.error` line that leaves out what is known to leak.
   ///
   /// A URL loading error keeps only its domain and code: its description holds the failing URL.
-  /// A coding error keeps its case and coding path: its description can echo the value. Any
-  /// other error keeps its description, which the redacting handler cleans.
+  /// A coding error keeps its case and coding path: its description can echo the value. An SDK
+  /// error keeps its description, which the SDK writes. Any other error, such as one a caller's
+  /// callback, storage, or transport throws, keeps only a label and its code: see ``code(of:)``.
   package static func summary(of error: any Error) -> String {
     switch error {
     case let error as DecodingError:
@@ -53,8 +54,10 @@ package enum LogRedaction {
       return "\(NSURLErrorDomain) \(error.errorCode)"
     case let error as NSError where error.domain == NSURLErrorDomain:
       return "\(error.domain) \(error.code)"
-    default:
+    case let error as any SupabaseError:
       return String(describing: error)
+    default:
+      return code(of: error)
     }
   }
 

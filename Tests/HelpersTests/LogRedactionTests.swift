@@ -124,12 +124,14 @@ struct LogRedactionSummaryTests {
   }
 
   @Test
-  func keepsTheDescriptionOfAnErrorThatDoesNotLeak() {
-    struct Closed: Error, CustomStringConvertible {
-      var description: String { "closed with code 4000" }
+  func summarizesAForeignErrorByItsTypeAndCodeWithoutItsDescription() {
+    struct CallbackError: Error, CustomStringConvertible {
+      var description: String { "upstream body: private-record" }
     }
 
-    #expect(LogRedaction.summary(of: Closed()) == "closed with code 4000")
+    let summary = LogRedaction.summary(of: CallbackError())
+    #expect(summary.hasPrefix("CallbackError "))
+    #expect(!summary.contains("private-record"))
   }
 
   @Test(arguments: ["signedURL", "signedUrl", "url", "action_link", "refresh_token", "otp"])
