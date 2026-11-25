@@ -58,7 +58,8 @@ public struct FunctionsError: SupabaseError {
     /// Nothing to retry; fix the type or the function. ``FunctionsError/underlyingError`` is
     /// usually a `DecodingError`.
     public static let decoding: Kind = "decoding"
-    /// The SDK refused to send the request: the body could not be encoded. Nothing was sent.
+    /// The SDK refused to send the request: the body could not be encoded, or Foundation could not
+    /// parse the query in the function name. Nothing was sent. For a body,
     /// ``FunctionsError/underlyingError`` is the `EncodingError`.
     public static let invalidRequest: Kind = "invalidRequest"
     /// ``FunctionsClient/init(configuration:)`` refused the configuration: its URL has no scheme

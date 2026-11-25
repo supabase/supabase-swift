@@ -93,6 +93,14 @@ struct FunctionsIntegrationTests {
   }
 
   @Test
+  func queryInNameReachesTheFunction() async throws {
+    let echo: Echo = try await client.invoke(
+      "echo?month=2026-09&page=1", options: .init(method: .get, region: .euWest1))
+    #expect(echo.path == "/echo")
+    #expect(echo.query == ["month": "2026-09", "page": "1", "forceFunctionRegion": "eu-west-1"])
+  }
+
+  @Test
   func subPathAndRegionReachTheFunction() async throws {
     let echo: Echo = try await client.invoke(
       "echo/sub/path", options: .init(region: .euWest1))

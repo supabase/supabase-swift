@@ -145,12 +145,15 @@ public struct FunctionsClient: Sendable {
   /// ```
   ///
   /// - Parameters:
-  ///   - name: The function's slug. May contain a sub-path, like `"api/users/1"`.
+  ///   - name: The function's slug. May contain a sub-path, like `"api/users/1"`, and a query,
+  ///     like `"search?q=swift"`, sent as written. Pass values that need encoding in the `query`
+  ///     option. A `query` option or the region replaces a same-named item.
   ///   - body: What to send. `nil` sends no body.
   ///   - options: Method, headers, query, region and timeout for this call.
   /// - Returns: The status, headers and body the function answered with.
-  /// - Throws: ``FunctionsError`` for a relay failure, a non-2xx status, a transport failure or an
-  ///   access token provider failure; `CancellationError` if the task is cancelled; whatever a
+  /// - Throws: ``FunctionsError`` for a query in `name` that Foundation cannot parse, a relay
+  ///   failure, a non-2xx status, a transport failure or an access token provider failure;
+  ///   `CancellationError` if the task is cancelled; whatever a
   ///   custom transport or middleware throws.
   @discardableResult
   public func invoke(
@@ -181,7 +184,7 @@ public struct FunctionsClient: Sendable {
   /// module works.
   ///
   /// - Parameters:
-  ///   - name: The function's slug.
+  ///   - name: The function's slug. May contain a sub-path and a query, like `"search?q=swift"`.
   ///   - body: What to send. `nil` sends no body.
   ///   - options: Method, headers, query, region and timeout for this call.
   ///   - type: The type to decode. Inferred from the call site when omitted.
@@ -217,12 +220,15 @@ public struct FunctionsClient: Sendable {
   /// > (`URLSessionTransport` buffers it there).
   ///
   /// - Parameters:
-  ///   - name: The function's slug. May contain a sub-path, like `"api/users/1"`.
+  ///   - name: The function's slug. May contain a sub-path, like `"api/users/1"`, and a query,
+  ///     like `"search?q=swift"`, sent as written. Pass values that need encoding in the `query`
+  ///     option. A `query` option or the region replaces a same-named item.
   ///   - body: What to send. `nil` sends no body.
   ///   - options: Method, headers, query, region and timeout for this call.
   /// - Returns: The status and headers, and the body still to be read.
-  /// - Throws: ``FunctionsError`` for a relay failure, a non-2xx status, a transport failure or an
-  ///   access token provider failure before the head arrives; `CancellationError` if the task is
+  /// - Throws: ``FunctionsError`` for a query in `name` that Foundation cannot parse, a relay
+  ///   failure, a non-2xx status, a transport failure or an access token provider failure before
+  ///   the head arrives; `CancellationError` if the task is
   ///   cancelled; whatever a custom transport or middleware throws.
   public func stream(
     _ name: String,

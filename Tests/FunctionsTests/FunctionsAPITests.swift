@@ -142,8 +142,8 @@ struct FunctionsAPITests {
   }
 
   @Test(arguments: [HTTPRequest.Method.get, .put, .patch, .delete])
-  func method(_ method: HTTPRequest.Method) {
-    let (request, _) = FunctionsAPI.makeRequest(
+  func method(_ method: HTTPRequest.Method) throws {
+    let (request, _) = try FunctionsAPI.makeRequest(
       name: "hello-world", body: nil, options: .init(method: method), configuration: configuration)
     #expect(request.method == method)
   }
@@ -176,6 +176,63 @@ struct FunctionsAPITests {
       	"http://localhost:5432/functions/v1/hello-world?key=value&q=a%20b"
       """
     }
+  }
+
+  @Test(arguments: [
+    ("search?q=x&q=y", "search?q=x&q=y"),
+    ("search/sub?q=a+b&path=%2Fx&s=a%20b#top?x=1", "search/sub?q=a+b&path=%2Fx&s=a%20b"),
+    ("search#frag?x=1", "search"),
+    ("search#\u{0301}?x=1", "search"),
+    ("search?", "search"),
+  ])
+  func queryInNameIsSentAsQuery(name: String, expected: String) throws {
+    let (request, _) = try FunctionsAPI.makeRequest(
+      name: name, body: nil, options: .init(), configuration: configuration)
+    #expect(request.url?.absoluteString == "http://localhost:5432/functions/v1/\(expected)")
+  }
+
+  @Test
+  @available(macOS 14, iOS 17, tvOS 17, watchOS 10, *)
+  func rawQueryInNameIsEncodedByFoundation() throws {
+    let (request, _) = try FunctionsAPI.makeRequest(
+      name: "search?q=caf\u{00E9}&f[a]=1", body: nil, options: .init(),
+      configuration: configuration)
+    #expect(
+      request.url?.absoluteString
+        == "http://localhost:5432/functions/v1/search?q=caf%C3%A9&f%5Ba%5D=1")
+  }
+
+  @Test
+  func queryOptionReplacesAFormEncodedNameInName() throws {
+    let (request, _) = try FunctionsAPI.makeRequest(
+      name: "search?my+key=1&my%20key=2&page=2", body: nil,
+      options: .init(query: [URLQueryItem(name: "my key", value: "3")]),
+      configuration: configuration)
+    #expect(
+      request.url?.absoluteString
+        == "http://localhost:5432/functions/v1/search?page=2&my%20key=3")
+  }
+
+  @Test
+  func queryOptionDoesNotReplaceACanonicallyEquivalentName() throws {
+    let (request, _) = try FunctionsAPI.makeRequest(
+      name: "search?e%CC%81=keep&%C3%A9=drop", body: nil,
+      options: .init(query: [URLQueryItem(name: "\u{00E9}", value: "new")]),
+      configuration: configuration)
+    #expect(
+      request.url?.absoluteString
+        == "http://localhost:5432/functions/v1/search?e%CC%81=keep&%C3%A9=new")
+  }
+
+  @Test
+  func queryOptionAndRegionReplaceSameNamedItemsInName() throws {
+    let (request, _) = try FunctionsAPI.makeRequest(
+      name: "search?q=x&forceFunctionRegion=us-east-1&page=2", body: nil,
+      options: .init(query: [URLQueryItem(name: "q", value: "y")], region: .euCentral2),
+      configuration: configuration)
+    #expect(
+      request.url?.absoluteString
+        == "http://localhost:5432/functions/v1/search?page=2&q=y&forceFunctionRegion=eu-central-2")
   }
 
   @Test
@@ -256,8 +313,8 @@ struct FunctionsAPITests {
   }
 
   @Test
-  func clientInfoDefaultsToTheModuleVersion() {
-    let (request, _) = FunctionsAPI.makeRequest(
+  func clientInfoDefaultsToTheModuleVersion() throws {
+    let (request, _) = try FunctionsAPI.makeRequest(
       name: "f", body: nil, options: .init(),
       configuration: .init(url: configuration.url))
     #expect(request.headerFields[.xClientInfo] == clientInfo(library: "functions-swift"))
@@ -334,7 +391,7 @@ struct FunctionsAPITests {
     line: UInt = #line,
     column: UInt = #column
   ) async throws {
-    let (request, requestBody) = FunctionsAPI.makeRequest(
+    let (request, requestBody) = try FunctionsAPI.makeRequest(
       name: name, body: body, options: options, configuration: configuration ?? self.configuration)
     var urlRequest = try #require(URLRequest(httpRequest: request))
     if let requestBody { urlRequest.httpBody = try await Data(collecting: requestBody, upTo: .max) }
