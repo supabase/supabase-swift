@@ -309,7 +309,7 @@ let package = Package(
     ),
     .testTarget(
       name: "DefaultIsolationTests",
-      dependencies: ["PostgrestMacros", "Supabase"]
+      dependencies: ["PostgrestMacros", "StorageIceberg", "Supabase"]
     ),
     // Compiles the Swift snippets of README.md; see scripts/check-doc-snippets.sh.
     .testTarget(

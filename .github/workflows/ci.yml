@@ -621,6 +621,8 @@ jobs:
         run: ./scripts/check-isolation-coverage.sh PostgREST Tests/DefaultIsolationTests/PostgRESTIsolationTests.swift
       - name: Check main-actor call sites cover the Storage API
         run: ./scripts/check-isolation-coverage.sh Storage Tests/DefaultIsolationTests/StorageIsolationTests.swift
+      - name: Check main-actor call sites cover the StorageIceberg API
+        run: ./scripts/check-isolation-coverage.sh StorageIceberg Tests/DefaultIsolationTests/StorageIcebergIsolationTests.swift
 
   lint:
     name: SwiftLint
