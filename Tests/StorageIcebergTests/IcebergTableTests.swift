@@ -158,15 +158,73 @@ struct IcebergTableTests {
   @Test
   func tableExistsThrowsOnServerError() async throws {
     let catalog = try makeCatalog(
-      status: .internalServerError,
+      status: .forbidden,
       response: #"""
-        {"error":{"message":"Internal error","type":"InternalServerError","code":500}}
+        {"error":{"message":"Forbidden","type":"ForbiddenException","code":403}}
         """#)
 
     let error = try await #require(throws: StorageError.self) {
       try await catalog.tableExists("orders", in: "sales")
     }
-    #expect(error.response?.status == .internalServerError)
+    #expect(error.response?.status == .forbidden)
+  }
+
+  @Test
+  func createTableSendsWriteOrderAndLocation() async throws {
+    let sent = LockIsolated<[Sent]>([])
+    let catalog = try makeCatalog(sent: sent, response: try fixture("load-table"))
+
+    try await catalog.createTable(
+      IcebergTableCreation(
+        name: "orders",
+        schema: IcebergSchema(fields: [
+          IcebergField(id: 1, name: "id", type: .long, isRequired: true)
+        ]),
+        writeOrder: IcebergSortOrder(
+          orderID: 1,
+          fields: [
+            IcebergSortField(
+              sourceID: 1, transform: .identity, direction: .descending, nullOrder: .nullsLast)
+          ]),
+        location: "s3://events/orders"
+      ),
+      in: "sales"
+    )
+
+    #expect(
+      try jsonEqual(
+        sent.value.first?.body,
+        #"""
+        {
+          "name": "orders",
+          "schema": {
+            "type": "struct",
+            "fields": [{"id": 1, "name": "id", "type": "long", "required": true}]
+          },
+          "write-order": {
+            "order-id": 1,
+            "fields": [
+              {
+                "source-id": 1, "transform": "identity",
+                "direction": "desc", "null-order": "nulls-last"
+              }
+            ]
+          },
+          "properties": {},
+          "location": "s3://events/orders"
+        }
+        """#))
+  }
+
+  @Test
+  func aNestedNamespaceJoinsItsLevelsWithADot() async throws {
+    let catalog = try makeCatalog(
+      response: #"{"identifiers":[{"namespace":["a","b"],"name":"orders"}]}"#)
+
+    #expect(
+      try await catalog.listTables(in: "a") == [
+        IcebergTableIdentifier(namespace: "a.b", name: "orders")
+      ])
   }
 
   @Test
@@ -191,10 +249,12 @@ struct IcebergTableTests {
     let catalog = try makeCatalog(sent: sent, status: .noContent, response: "")
 
     _ = try await catalog.tableExists("a/b", in: "x y")
+    try await catalog.deleteTable("a/b c", in: "sales")
 
     #expect(
       sent.value.map(\.request.path) == [
-        "/storage/v1/iceberg/v1/events/namespaces/x%20y/tables/a%2Fb"
+        "/storage/v1/iceberg/v1/events/namespaces/x%20y/tables/a%2Fb",
+        "/storage/v1/iceberg/v1/events/namespaces/sales/tables/a%2Fb%20c?purgeRequested=false",
       ])
   }
 }
