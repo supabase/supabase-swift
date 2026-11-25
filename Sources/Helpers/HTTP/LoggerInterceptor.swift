@@ -52,7 +52,7 @@ package struct LoggerInterceptor: ClientMiddleware {
     } catch {
       let elapsed = Self.milliseconds(start.duration(to: clock.now))
       logger.debug(
-        "\(requestLine) failed in \(elapsed) ms: \(LogRedaction.summary(of: error))")
+        "\(requestLine) failed in \(elapsed) ms: \(LogRedaction.code(of: error))")
       throw error
     }
   }

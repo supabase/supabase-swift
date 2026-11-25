@@ -129,6 +129,26 @@ struct LoggerInterceptorTests {
   }
 
   @Test
+  func aTransportErrorLogsItsCodeAndNotItsDescription() async throws {
+    let (logger, capture) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+
+    struct TransportError: Error, CustomStringConvertible {
+      var description: String { "upstream body: private-record" }
+    }
+
+    await #expect(throws: TransportError.self) {
+      _ = try await interceptor.intercept(self.createTestRequest(), body: nil) { _, _ in
+        throw TransportError()
+      }
+    }
+
+    let line = try #require(capture.messages.first)
+    #expect(line.contains("TransportError"))
+    #expect(!line.contains("private-record"))
+  }
+
+  @Test
   func theLineDropsTheQueryAndFragment() async throws {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)

@@ -58,6 +58,15 @@ package enum LogRedaction {
     }
   }
 
+  /// The domain and code of `error`, and never its description.
+  ///
+  /// For an error that comes from outside the SDK, such as one a custom transport throws, whose
+  /// description can hold a body or a URL. A Swift error's domain is its type name.
+  package static func code(of error: any Error) -> String {
+    let error = error as NSError
+    return "\(error.domain) \(error.code)"
+  }
+
   private static func path(of context: DecodingError.Context?) -> String {
     context?.codingPath.map(\.stringValue).joined(separator: ".") ?? ""
   }
