@@ -50,9 +50,7 @@ extension RealtimeClient {
       case .binaryBroadcast(let broadcast):
         apply(.binaryBroadcast(broadcast))
       case .closed(let code, let reason):
-        logger.debug(
-          "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason ?? "<none>")"
-        )
+        logger.debug("WebSocket closed. Code: \(code?.description ?? "<none>")")
         apply(.socketClosed(code: code, reason: reason))
       }
 

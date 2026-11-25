@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import Helpers
 import Logging
 
 /// A tus upload that can be paused, resumed, cancelled, and continued after the process
@@ -440,7 +441,8 @@ public actor ResumableUpload {
           break
         }
         api.configuration.logger.debug(
-          "Resumable upload \(id.rawValue) retrying in \(delay) after: \(error.message)")
+          "Resumable upload \(id.rawValue) retrying in \(delay) after: \(LogRedaction.summary(of: error))"
+        )
         try? await api.configuration.clock.sleep(for: delay)
         if Task.isCancelled { break }
         next = .resync(after: nil)

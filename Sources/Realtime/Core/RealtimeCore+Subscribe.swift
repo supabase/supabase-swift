@@ -189,8 +189,7 @@ extension RealtimeCore {
       effects = joinAccepted(message, ref: ref, attempt: attempt, on: channel)
     } else if message.status == .error {
       let reason = message.replyReason(default: "The server rejected the join.")
-      logger.debug(
-        "Server refused the join for channel '\(topic(of: channel))' (ref: \(ref)): \(reason)")
+      logger.debug("Server refused the join for channel '\(topic(of: channel))' (ref: \(ref))")
       effects = joinAttemptFailed(channel, attempt: attempt, error: .joinError(reason: reason))
     } else {
       return []
@@ -388,7 +387,8 @@ extension RealtimeCore {
   mutating func setPhase(_ phase: ChannelRecord.Phase, for channel: ChannelID) -> [Effect] {
     guard let previous = channels[channel]?.phase else { return [] }
     channels.update(channel) { $0.phase = phase }
-    logger.debug("Channel '\(topic(of: channel))': \(previous) → \(phase)")
+    logger.debug(
+      "Channel '\(topic(of: channel))': \(caseName(of: previous)) → \(caseName(of: phase))")
     guard !phase.status.isSame(as: previous.status) else { return [] }
     return [.publishChannelStatus(channel, phase.status)]
   }

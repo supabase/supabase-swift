@@ -36,7 +36,7 @@ extension RealtimeCore {
     }
     guard connection != previous else { return effects }
 
-    logger.debug("Connection → \(connection) on \(event)")
+    logger.debug("Connection → \(caseName(of: connection)) on \(caseName(of: event))")
     switch connection {
     case .connecting:
       lastAttemptStart = now.elapsed
