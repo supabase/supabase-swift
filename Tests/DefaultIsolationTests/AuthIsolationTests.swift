@@ -23,6 +23,9 @@ enum AuthIsolationTests {
     var generateLink: GenerateLink
     var createCustomProvider: CreateCustomProvider
     var updateCustomProvider: UpdateCustomProvider
+    var createSSOProvider: CreateSSOProvider
+    var updateSSOProvider: UpdateSSOProvider
+    var adminUpdateFactor: AdminUpdateFactor
     var createOAuthClient: CreateOAuthClient
     var updateOAuthClient: UpdateOAuthClient
     var idTokenCredentials: IDTokenCredentials
@@ -158,6 +161,7 @@ enum AuthIsolationTests {
     _ = try await users.next()
 
     _ = try await admin.mfa.listFactors(forUser: id)
+    _ = try await admin.mfa.updateFactor(id: id, forUser: id, inputs.adminUpdateFactor)
     try await admin.mfa.deleteFactor(id: id, forUser: id)
 
     _ = try await admin.oauth.listClients()
@@ -173,6 +177,12 @@ enum AuthIsolationTests {
     _ = try await admin.customProviders.update(
       identifier: "custom:acme", inputs.updateCustomProvider)
     try await admin.customProviders.delete(identifier: "custom:acme")
+
+    _ = try await admin.sso.listProviders()
+    _ = try await admin.sso.createProvider(inputs.createSSOProvider)
+    _ = try await admin.sso.provider(id: "resource_acme")
+    _ = try await admin.sso.updateProvider(id: "resource_acme", inputs.updateSSOProvider)
+    try await admin.sso.deleteProvider(id: "resource_acme")
 
     _ = try await admin.passkeys.list(forUser: id)
     try await admin.passkeys.delete(id: id, forUser: id)
