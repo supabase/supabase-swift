@@ -3450,7 +3450,7 @@ features:
       - IcebergTableMetadata.formatVersion
       - IcebergTableMetadata.tableUUID
       - IcebergTableMetadata.location
-      - IcebergTableMetadata.lastUpdatedMilliseconds
+      - IcebergTableMetadata.lastUpdated
       - IcebergTableMetadata.properties
       - IcebergTableMetadata.schemas
       - IcebergTableMetadata.currentSchemaID

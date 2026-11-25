@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 25/11/26.
 //
 
+public import Foundation
 public import Helpers
 
 /// The identifier of a table in an ``IcebergCatalog``: its namespace and its name.
@@ -101,8 +102,9 @@ public struct IcebergTableMetadata: Hashable, Sendable, Decodable {
   /// The location of the table data.
   public var location: String?
 
-  /// When the table last changed, in milliseconds since the Unix epoch.
-  public var lastUpdatedMilliseconds: Int64?
+  /// When the table last changed. The catalog sends milliseconds since the Unix epoch; the exact
+  /// value is in ``raw`` under `last-updated-ms`.
+  public var lastUpdated: Date?
 
   /// The table properties; empty when the catalog sent none.
   public var properties: [String: String]
@@ -148,7 +150,7 @@ public struct IcebergTableMetadata: Hashable, Sendable, Decodable {
     formatVersion: Int? = nil,
     tableUUID: String? = nil,
     location: String? = nil,
-    lastUpdatedMilliseconds: Int64? = nil,
+    lastUpdated: Date? = nil,
     properties: [String: String] = [:],
     schemas: [IcebergSchema] = [],
     currentSchemaID: Int? = nil,
@@ -162,7 +164,7 @@ public struct IcebergTableMetadata: Hashable, Sendable, Decodable {
     self.formatVersion = formatVersion
     self.tableUUID = tableUUID
     self.location = location
-    self.lastUpdatedMilliseconds = lastUpdatedMilliseconds
+    self.lastUpdated = lastUpdated
     self.properties = properties
     self.schemas = schemas
     self.currentSchemaID = currentSchemaID
@@ -195,8 +197,8 @@ public struct IcebergTableMetadata: Hashable, Sendable, Decodable {
     formatVersion = try container.decodeIfPresent(Int.self, forKey: .formatVersion)
     tableUUID = try container.decodeIfPresent(String.self, forKey: .tableUUID)
     location = try container.decodeIfPresent(String.self, forKey: .location)
-    lastUpdatedMilliseconds = try container.decodeIfPresent(
-      Int64.self, forKey: .lastUpdatedMilliseconds)
+    lastUpdated = try container.decodeIfPresent(Int64.self, forKey: .lastUpdatedMilliseconds)
+      .map { Date(timeIntervalSince1970: Double($0) / 1000) }
     properties =
       try container.decodeIfPresent([String: String].self, forKey: .properties) ?? [:]
     schemas = try container.decodeIfPresent([IcebergSchema].self, forKey: .schemas) ?? []

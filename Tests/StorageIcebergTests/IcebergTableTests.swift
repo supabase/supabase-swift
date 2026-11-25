@@ -110,7 +110,9 @@ struct IcebergTableTests {
     #expect(metadata.formatVersion == 2)
     #expect(metadata.currentSchema?.fields.count == 2)
     #expect(metadata.currentSchemaID == 0)
-    #expect(metadata.lastUpdatedMilliseconds == 1_795_632_563_602)
+    #expect(
+      metadata.lastUpdated.map { Int64(($0.timeIntervalSince1970 * 1000).rounded()) }
+        == 1_795_632_563_602)
     #expect(metadata.properties == ["write.parquet.compression-codec": "zstd"])
     #expect(metadata.defaultSpecID == 0)
     #expect(metadata.sortOrders == [IcebergSortOrder(orderID: 0, fields: [])])
