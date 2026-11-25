@@ -37,14 +37,14 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
   ///
   /// - Parameter uuid: The new UUID.
   public static func assignUUID(_ uuid: String) -> Self {
-    custom("assign-uuid", fields: ["uuid": .string(uuid)])
+    custom(.assignUUID, fields: ["uuid": .string(uuid)])
   }
 
   /// Upgrades the table to a newer Iceberg format version.
   ///
   /// - Parameter formatVersion: The format version, such as `3`.
   public static func upgradeFormatVersion(to formatVersion: Int) -> Self {
-    custom("upgrade-format-version", fields: ["format-version": .number(JSONNumber(formatVersion))])
+    custom(.upgradeFormatVersion, fields: ["format-version": .number(JSONNumber(formatVersion))])
   }
 
   /// Adds a schema to the table. It does not become the current schema.
@@ -60,14 +60,14 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
     if let lastColumnID {
       fields["last-column-id"] = .number(JSONNumber(lastColumnID))
     }
-    return custom("add-schema", fields: fields)
+    return custom(.addSchema, fields: fields)
   }
 
   /// Makes a schema of the table the current schema.
   ///
   /// - Parameter id: The schema ID. `-1` means the schema that this commit last added.
   public static func setCurrentSchema(id: Int) -> Self {
-    custom("set-current-schema", fields: ["schema-id": .number(JSONNumber(id))])
+    custom(.setCurrentSchema, fields: ["schema-id": .number(JSONNumber(id))])
   }
 
   /// Adds a partition spec to the table. It does not become the default spec.
@@ -75,14 +75,14 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
   /// - Parameter spec: The partition spec to add.
   /// - Throws: `StorageError` with kind `invalidRequest` when `spec` cannot be encoded as JSON.
   public static func addPartitionSpec(_ spec: IcebergPartitionSpec) throws -> Self {
-    custom("add-spec", fields: ["spec": try jsonValue(of: spec)])
+    custom(.addPartitionSpec, fields: ["spec": try jsonValue(of: spec)])
   }
 
   /// Makes a partition spec of the table the default spec.
   ///
   /// - Parameter id: The spec ID. `-1` means the spec that this commit last added.
   public static func setDefaultPartitionSpec(id: Int) -> Self {
-    custom("set-default-spec", fields: ["spec-id": .number(JSONNumber(id))])
+    custom(.setDefaultPartitionSpec, fields: ["spec-id": .number(JSONNumber(id))])
   }
 
   /// Adds a sort order to the table. It does not become the default sort order.
@@ -91,35 +91,35 @@ public struct IcebergTableUpdate: Hashable, Sendable, Encodable {
   /// - Throws: `StorageError` with kind `invalidRequest` when `sortOrder` cannot be encoded as
   ///   JSON.
   public static func addSortOrder(_ sortOrder: IcebergSortOrder) throws -> Self {
-    custom("add-sort-order", fields: ["sort-order": try jsonValue(of: sortOrder)])
+    custom(.addSortOrder, fields: ["sort-order": try jsonValue(of: sortOrder)])
   }
 
   /// Makes a sort order of the table the default sort order.
   ///
   /// - Parameter id: The sort order ID. `-1` means the sort order that this commit last added.
   public static func setDefaultSortOrder(id: Int) -> Self {
-    custom("set-default-sort-order", fields: ["sort-order-id": .number(JSONNumber(id))])
+    custom(.setDefaultSortOrder, fields: ["sort-order-id": .number(JSONNumber(id))])
   }
 
   /// Sets the location of the table data.
   ///
   /// - Parameter location: The new location.
   public static func setLocation(_ location: String) -> Self {
-    custom("set-location", fields: ["location": .string(location)])
+    custom(.setLocation, fields: ["location": .string(location)])
   }
 
   /// Adds or replaces table properties.
   ///
   /// - Parameter properties: The properties to set.
   public static func setProperties(_ properties: [String: String]) -> Self {
-    custom("set-properties", fields: ["updates": .object(properties.mapValues(JSONValue.string))])
+    custom(.setProperties, fields: ["updates": .object(properties.mapValues(JSONValue.string))])
   }
 
   /// Removes table properties.
   ///
   /// - Parameter keys: The keys of the properties to remove.
   public static func removeProperties(_ keys: [String]) -> Self {
-    custom("remove-properties", fields: ["removals": .array(keys.map(JSONValue.string))])
+    custom(.removeProperties, fields: ["removals": .array(keys.map(JSONValue.string))])
   }
 
   /// Encodes ``fields`` with `action` set to ``action``.
@@ -147,6 +147,39 @@ extension IcebergTableUpdate {
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
+
+    /// `assign-uuid`: Sets the table UUID.
+    public static let assignUUID: Action = "assign-uuid"
+
+    /// `upgrade-format-version`: Upgrades the table format version.
+    public static let upgradeFormatVersion: Action = "upgrade-format-version"
+
+    /// `add-schema`: Adds a schema.
+    public static let addSchema: Action = "add-schema"
+
+    /// `set-current-schema`: Sets the current schema.
+    public static let setCurrentSchema: Action = "set-current-schema"
+
+    /// `add-spec`: Adds a partition spec.
+    public static let addPartitionSpec: Action = "add-spec"
+
+    /// `set-default-spec`: Sets the default partition spec.
+    public static let setDefaultPartitionSpec: Action = "set-default-spec"
+
+    /// `add-sort-order`: Adds a sort order.
+    public static let addSortOrder: Action = "add-sort-order"
+
+    /// `set-default-sort-order`: Sets the default sort order.
+    public static let setDefaultSortOrder: Action = "set-default-sort-order"
+
+    /// `set-location`: Sets the table location.
+    public static let setLocation: Action = "set-location"
+
+    /// `set-properties`: Adds or replaces table properties.
+    public static let setProperties: Action = "set-properties"
+
+    /// `remove-properties`: Removes table properties.
+    public static let removeProperties: Action = "remove-properties"
   }
 }
 

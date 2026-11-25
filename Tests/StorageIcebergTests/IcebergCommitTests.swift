@@ -214,4 +214,13 @@ struct IcebergCommitTests {
     #expect(error.kind == .invalidRequest)
     #expect(error.underlyingError is EncodingError)
   }
+
+  @Test
+  func theKnownValuesMatchTheFactories() {
+    #expect(IcebergTableUpdate.setProperties([:]).action == .setProperties)
+    #expect(IcebergTableUpdate.setDefaultPartitionSpec(id: 0).action.rawValue == "set-default-spec")
+    #expect(IcebergTableRequirement.assertCreate().kind == .assertCreate)
+    #expect(
+      IcebergTableRequirement.assertDefaultSpecID(0).kind.rawValue == "assert-default-spec-id")
+  }
 }

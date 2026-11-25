@@ -34,14 +34,14 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
 
   /// The table must not exist yet.
   public static func assertCreate() -> Self {
-    custom("assert-create")
+    custom(.assertCreate)
   }
 
   /// The table UUID must match.
   ///
   /// - Parameter uuid: The expected table UUID.
   public static func assertTableUUID(_ uuid: String) -> Self {
-    custom("assert-table-uuid", fields: ["uuid": .string(uuid)])
+    custom(.assertTableUUID, fields: ["uuid": .string(uuid)])
   }
 
   /// A branch or tag must point at a snapshot.
@@ -51,7 +51,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   ///   - snapshotID: The expected snapshot ID. `nil` means the ref must not exist.
   public static func assertRefSnapshotID(ref: String, snapshotID: Int64?) -> Self {
     custom(
-      "assert-ref-snapshot-id",
+      .assertRefSnapshotID,
       fields: [
         "ref": .string(ref),
         "snapshot-id": snapshotID.map { .number(JSONNumber($0)) } ?? .null,
@@ -62,7 +62,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   ///
   /// - Parameter id: The expected current schema ID.
   public static func assertCurrentSchemaID(_ id: Int) -> Self {
-    custom("assert-current-schema-id", fields: ["current-schema-id": .number(JSONNumber(id))])
+    custom(.assertCurrentSchemaID, fields: ["current-schema-id": .number(JSONNumber(id))])
   }
 
   /// The highest field ID that the table has assigned must match.
@@ -70,7 +70,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// - Parameter id: The expected field ID.
   public static func assertLastAssignedFieldID(_ id: Int) -> Self {
     custom(
-      "assert-last-assigned-field-id", fields: ["last-assigned-field-id": .number(JSONNumber(id))])
+      .assertLastAssignedFieldID, fields: ["last-assigned-field-id": .number(JSONNumber(id))])
   }
 
   /// The highest partition field ID that the table has assigned must match.
@@ -78,7 +78,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// - Parameter id: The expected partition field ID.
   public static func assertLastAssignedPartitionID(_ id: Int) -> Self {
     custom(
-      "assert-last-assigned-partition-id",
+      .assertLastAssignedPartitionID,
       fields: ["last-assigned-partition-id": .number(JSONNumber(id))])
   }
 
@@ -86,7 +86,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   ///
   /// - Parameter id: The expected spec ID.
   public static func assertDefaultSpecID(_ id: Int) -> Self {
-    custom("assert-default-spec-id", fields: ["default-spec-id": .number(JSONNumber(id))])
+    custom(.assertDefaultSpecID, fields: ["default-spec-id": .number(JSONNumber(id))])
   }
 
   /// The default sort order ID must match.
@@ -94,7 +94,7 @@ public struct IcebergTableRequirement: Hashable, Sendable, Encodable {
   /// - Parameter id: The expected sort order ID.
   public static func assertDefaultSortOrderID(_ id: Int) -> Self {
     custom(
-      "assert-default-sort-order-id", fields: ["default-sort-order-id": .number(JSONNumber(id))])
+      .assertDefaultSortOrderID, fields: ["default-sort-order-id": .number(JSONNumber(id))])
   }
 
   /// Encodes ``fields`` with `type` set to ``kind``.
@@ -123,5 +123,29 @@ extension IcebergTableRequirement {
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
+
+    /// `assert-create`: The table must not exist yet.
+    public static let assertCreate: Kind = "assert-create"
+
+    /// `assert-table-uuid`: The table UUID must match.
+    public static let assertTableUUID: Kind = "assert-table-uuid"
+
+    /// `assert-ref-snapshot-id`: A branch or tag must point at a snapshot.
+    public static let assertRefSnapshotID: Kind = "assert-ref-snapshot-id"
+
+    /// `assert-current-schema-id`: The current schema ID must match.
+    public static let assertCurrentSchemaID: Kind = "assert-current-schema-id"
+
+    /// `assert-last-assigned-field-id`: The highest assigned field ID must match.
+    public static let assertLastAssignedFieldID: Kind = "assert-last-assigned-field-id"
+
+    /// `assert-last-assigned-partition-id`: The highest assigned partition field ID must match.
+    public static let assertLastAssignedPartitionID: Kind = "assert-last-assigned-partition-id"
+
+    /// `assert-default-spec-id`: The default partition spec ID must match.
+    public static let assertDefaultSpecID: Kind = "assert-default-spec-id"
+
+    /// `assert-default-sort-order-id`: The default sort order ID must match.
+    public static let assertDefaultSortOrderID: Kind = "assert-default-sort-order-id"
   }
 }
