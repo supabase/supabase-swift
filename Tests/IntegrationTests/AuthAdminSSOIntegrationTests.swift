@@ -21,10 +21,7 @@ struct AuthAdminSSOIntegrationTests {
   func adminCreatesReadsListsAndDeletesAProvider() async throws {
     let fixture = Fixture()
 
-    var settings = CreateSSOProvider.saml(metadataXML: fixture.metadataXML)
-    settings.domains = [fixture.domain]
-    settings.attributeMapping = SAMLAttributeMapping(keys: ["email": SAMLAttribute(name: "mail")])
-    settings.nameIDFormat = .persistent
+    var settings = fixture.settings(nameIDFormat: .persistent)
     settings.resourceID = fixture.resourceID
     let created = try await admin.sso.createProvider(settings)
 
@@ -61,11 +58,8 @@ struct AuthAdminSSOIntegrationTests {
   func adminUpdateKeepsUnsetFieldsAndClearsEmptyOnes() async throws {
     let fixture = Fixture()
 
-    var settings = CreateSSOProvider.saml(metadataXML: fixture.metadataXML)
-    settings.domains = [fixture.domain]
-    settings.attributeMapping = SAMLAttributeMapping(keys: ["email": SAMLAttribute(name: "mail")])
-    settings.nameIDFormat = .emailAddress
-    let created = try await admin.sso.createProvider(settings)
+    let created = try await admin.sso.createProvider(
+      fixture.settings(nameIDFormat: .emailAddress))
     let id = created.id.uuidString
 
     // Unset domains and mapping keep their stored values. The format is sent to keep it.
@@ -109,6 +103,15 @@ struct AuthAdminSSOIntegrationTests {
     var domain: String { "sso-\(suffix).example.test" }
     var resourcePrefix: String { "swift-sdk-" }
     var resourceID: String { "\(resourcePrefix)\(suffix)" }
+
+    /// A SAML provider with one domain, an `email` mapping, and the given format.
+    func settings(nameIDFormat: SAMLNameIDFormat) -> CreateSSOProvider {
+      var settings = CreateSSOProvider.saml(metadataXML: metadataXML)
+      settings.domains = [domain]
+      settings.attributeMapping = SAMLAttributeMapping(keys: ["email": SAMLAttribute(name: "mail")])
+      settings.nameIDFormat = nameIDFormat
+      return settings
+    }
 
     var metadataXML: String {
       """

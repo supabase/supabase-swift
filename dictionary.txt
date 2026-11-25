@@ -139,7 +139,6 @@ metas
 Metas
 mmsdk
 myapp
-nameid
 newbucket
 newkey
 niled

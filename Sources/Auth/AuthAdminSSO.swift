@@ -38,6 +38,9 @@ public import Foundation
 public struct AuthAdminSSO: Sendable {
   let admin: AuthAdminClient
 
+  var api: APIClient { admin.api }
+  var authAPI: AuthAPI { admin.authAPI }
+
   /// Lists the SSO providers.
   ///
   /// The providers in the result have no ``SSOProvider/SAMLSettings/metadataXML``. Use
@@ -54,8 +57,8 @@ public struct AuthAdminSSO: Sendable {
     resourceID: String? = nil,
     resourceIDPrefix: String? = nil
   ) async throws -> [SSOProvider] {
-    try await admin.api.execute(
-      admin.authAPI.adminListSSOProviders(
+    try await api.execute(
+      authAPI.adminListSSOProviders(
         resourceID: resourceID, resourceIDPrefix: resourceIDPrefix))
   }
 
@@ -70,7 +73,7 @@ public struct AuthAdminSSO: Sendable {
   ///   cancelled.
   @discardableResult
   public func createProvider(_ provider: CreateSSOProvider) async throws -> SSOProvider {
-    try await admin.api.execute(admin.authAPI.adminCreateSSOProvider(provider))
+    try await api.execute(authAPI.adminCreateSSOProvider(provider))
   }
 
   /// Gets an SSO provider, with its SAML metadata.
@@ -80,7 +83,7 @@ public struct AuthAdminSSO: Sendable {
   /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
   ///   cancelled.
   public func provider(id: String) async throws -> SSOProvider {
-    try await admin.api.execute(admin.authAPI.adminSSOProvider(id: id))
+    try await api.execute(authAPI.adminSSOProvider(id: id))
   }
 
   /// Updates an SSO provider.
@@ -97,7 +100,7 @@ public struct AuthAdminSSO: Sendable {
   ///   cancelled.
   @discardableResult
   public func updateProvider(id: String, _ changes: UpdateSSOProvider) async throws -> SSOProvider {
-    try await admin.api.execute(admin.authAPI.adminUpdateSSOProvider(id: id, changes))
+    try await api.execute(authAPI.adminUpdateSSOProvider(id: id, changes))
   }
 
   /// Deletes an SSO provider and its domains.
@@ -106,6 +109,6 @@ public struct AuthAdminSSO: Sendable {
   /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
   ///   cancelled.
   public func deleteProvider(id: String) async throws {
-    try await admin.api.execute(admin.authAPI.adminDeleteSSOProvider(id: id))
+    try await api.execute(authAPI.adminDeleteSSOProvider(id: id))
   }
 }

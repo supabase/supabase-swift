@@ -183,7 +183,9 @@ import Testing
     var update = UpdateSSOProvider(domains: [])
     update.isDisabled = true
     #expect(update.domains == [])
+  }
 
+  @Test func adminUpdateFactorIsBuildableAndMutable() {
     var factorChanges = AdminUpdateFactor(friendlyName: "laptop")
     factorChanges.phone = "+15550100"
     #expect(factorChanges.phone == "+15550100")

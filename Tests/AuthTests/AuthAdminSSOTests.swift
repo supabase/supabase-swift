@@ -199,12 +199,12 @@ struct AuthAdminSSOTests {
   @Test
   func providerDecodesANameIDFormatTheSDKDoesNotKnow() throws {
     let json = Data(
-      #"{"entity_id": "e", "name_id_format": "urn:example:nameid-format:future"}"#.utf8)
+      #"{"entity_id": "e", "name_id_format": "urn:example:future-format"}"#.utf8)
 
     let saml = try AuthClient.Configuration.jsonDecoder.decode(
       SSOProvider.SAMLSettings.self, from: json)
 
-    #expect(saml.nameIDFormat?.rawValue == "urn:example:nameid-format:future")
+    #expect(saml.nameIDFormat?.rawValue == "urn:example:future-format")
     #expect(saml.attributeMapping.keys.isEmpty)
     #expect(!saml.usesDedicatedScope)
   }
@@ -239,25 +239,21 @@ struct AuthAdminSSOTests {
   }
 
   @Test
-  func updateProviderOmitsFieldsThatAreNotSet() throws {
-    let body = try AuthClient.Configuration.jsonEncoder.encode(UpdateSSOProvider())
+  func updateProviderOmitsUnsetFieldsAndSendsEmptyOnes() throws {
+    func json(_ changes: UpdateSSOProvider) throws -> String {
+      String(decoding: try AuthClient.Configuration.jsonEncoder.encode(changes), as: UTF8.self)
+    }
 
-    #expect(String(decoding: body, as: UTF8.self) == "{}")
-  }
-
-  @Test
-  func updateProviderSendsEmptyDomainsAndAttributeMapping() throws {
-    let body = try AuthClient.Configuration.jsonEncoder.encode(
-      UpdateSSOProvider(domains: [], attributeMapping: SAMLAttributeMapping(), resourceID: ""))
-
+    #expect(try json(UpdateSSOProvider()) == "{}")
     #expect(
-      String(decoding: body, as: UTF8.self)
+      try json(
+        UpdateSSOProvider(domains: [], attributeMapping: SAMLAttributeMapping(), resourceID: ""))
         == #"{"attribute_mapping":{"keys":{}},"domains":[],"resource_id":""}"#)
   }
 
   @Test
   func deleteProviderReachesTheProviderPath() async throws {
-    transport.stub(.delete, "admin/sso/providers/resource_acme", data: Data(providerJSON.utf8)) {
+    transport.stub(.delete, "admin/sso/providers/resource_acme") {
       #"""
       curl \
       	--request DELETE \
