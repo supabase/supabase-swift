@@ -292,6 +292,59 @@ struct IcebergTableTests {
     }
     #expect(specs.count == 2)
   }
+
+  @Test
+  func theMemberwiseInitsKeepTheirValues() {
+    let metadata = IcebergTableMetadata(
+      formatVersion: 2,
+      tableUUID: "uuid",
+      location: "s3://b/t",
+      lastUpdated: Date(timeIntervalSince1970: 1),
+      properties: ["k": "v"],
+      currentSchemaID: 0,
+      defaultSpecID: 0,
+      defaultSortOrderID: 0,
+      currentSnapshotID: 7,
+      raw: ["format-version": 2])
+    let loaded = IcebergLoadedTable(
+      metadataLocation: "m", metadata: metadata, config: ["token": "t"])
+    let committed = IcebergCommittedTable(metadataLocation: "m2", metadata: metadata)
+
+    #expect(metadata.tableUUID == "uuid")
+    #expect(metadata.currentSnapshotID == 7)
+    #expect(loaded.config == ["token": "t"])
+    #expect(committed.metadataLocation == "m2")
+    #expect(committed.metadata == loaded.metadata)
+  }
+
+  @Test
+  func aBodyThatDoesNotDecodeThrowsDecoding() async throws {
+    let catalog = try makeCatalog(response: #"{"identifiers":"not a list"}"#)
+
+    let error = try await #require(throws: StorageError.self) {
+      try await catalog.listTables(in: "sales")
+    }
+    #expect(error.kind == .decoding)
+  }
+
+  @Test
+  func aDefinitionThatCannotEncodeThrowsInvalidRequestAndSendsNothing() async throws {
+    let sent = LockIsolated<[Sent]>([])
+    let catalog = try makeCatalog(sent: sent, response: "{}")
+    let unencodable = IcebergType.unknown(.number(try #require(JSONNumber("1e400"))))
+
+    let error = try await #require(throws: StorageError.self) {
+      try await catalog.createTable(
+        IcebergTableCreation(
+          name: "orders",
+          schema: IcebergSchema(fields: [
+            IcebergField(id: 1, name: "x", type: unencodable, isRequired: true)
+          ])),
+        in: "sales")
+    }
+    #expect(error.kind == .invalidRequest)
+    #expect(sent.value.isEmpty)
+  }
 }
 
 /// The text of the JSON fixture `name` in the test bundle.
