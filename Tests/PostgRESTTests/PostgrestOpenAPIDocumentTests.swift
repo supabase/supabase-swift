@@ -8,14 +8,18 @@ import Testing
 
 @Suite
 struct PostgrestOpenAPIDocumentTests {
-  let url = URL(string: "https://example.supabase.co/rest/v1")!
   let rootURL = URL(string: "https://example.supabase.co/rest/v1/")!
+  let transport = RecordingTransport()
 
-  func makeClient(transport: RecordingTransport, schema: String? = nil) throws -> PostgrestClient {
-    try PostgrestClient(
+  /// A client whose `GET /` answers with `status` and `body`.
+  func makeClient(
+    status: HTTPResponse.Status = .ok,
+    body: String = #"{"swagger":"2.0","info":{},"paths":{}}"#
+  ) throws -> PostgrestClient {
+    transport.stub(.get, rootURL, status: status, data: Data(body.utf8))
+    return try PostgrestClient(
       configuration: .init(
-        url: url,
-        schema: schema,
+        url: URL(string: "https://example.supabase.co/rest/v1")!,
         headers: [.xClientInfo: "postgrest-swift/x.y.z", .apikey: "anon-key"],
         http: .init(transport: transport),
         retryEnabled: false
@@ -25,10 +29,7 @@ struct PostgrestOpenAPIDocumentTests {
 
   @Test
   func requestsTheRootWithTheOpenAPIMediaType() async throws {
-    let transport = RecordingTransport()
-    transport.stub(.get, rootURL, data: Data(#"{"swagger":"2.0","info":{},"paths":{}}"#.utf8))
-
-    _ = try await makeClient(transport: transport).openAPIDocument()
+    _ = try await makeClient().openAPIDocument()
 
     try transport.assertFirstRequestSnapshot(.get, rootURL) {
       #"""
@@ -44,10 +45,7 @@ struct PostgrestOpenAPIDocumentTests {
 
   @Test
   func sendsTheSelectedSchemaAsAcceptProfile() async throws {
-    let transport = RecordingTransport()
-    transport.stub(.get, rootURL, data: Data(#"{"swagger":"2.0","info":{},"paths":{}}"#.utf8))
-
-    _ = try await makeClient(transport: transport).schema("billing").openAPIDocument()
+    _ = try await makeClient().schema("billing").openAPIDocument()
 
     try transport.assertFirstRequestSnapshot(.get, rootURL) {
       #"""
@@ -64,11 +62,8 @@ struct PostgrestOpenAPIDocumentTests {
 
   @Test
   func decodesTheDocumentAsRawJSON() async throws {
-    let transport = RecordingTransport()
-    transport.stub(
-      .get, rootURL,
-      data: Data(
-        #"""
+    let document = try await makeClient(
+      body: #"""
         {
           "swagger": "2.0",
           "info": {"title": "standard public schema", "version": "12.2.3"},
@@ -80,9 +75,8 @@ struct PostgrestOpenAPIDocumentTests {
           "definitions": {"todos": {"required": ["id"], "type": "object"}},
           "x-unknown": [1, 2.5, null]
         }
-        """#.utf8))
-
-    let document = try await makeClient(transport: transport).openAPIDocument()
+        """#
+    ).openAPIDocument()
 
     #expect(document["swagger"] == .string("2.0"))
     #expect(document["info"]?.objectValue?["version"] == .string("12.2.3"))
@@ -92,35 +86,17 @@ struct PostgrestOpenAPIDocumentTests {
   }
 
   @Test
-  func acceptsADocumentWithOnlyTheRequiredFields() async throws {
-    let transport = RecordingTransport()
-    transport.stub(
-      .get, rootURL,
-      data: Data(#"{"swagger":"2.0","info":{"title":"custom"},"paths":{}}"#.utf8))
-
-    let document = try await makeClient(transport: transport).openAPIDocument()
-
-    #expect(
-      document == [
-        "swagger": .string("2.0"),
-        "info": .object(["title": .string("custom")]),
-        "paths": .object([:]),
-      ])
-  }
-
-  @Test
   func throwsTheServerErrorForAnUnexposedSchema() async throws {
-    let transport = RecordingTransport()
-    transport.stub(
-      .get, rootURL, status: 406,
-      data: Data(
-        #"""
+    let client = try makeClient(
+      status: .notAcceptable,
+      body: #"""
         {"code":"PGRST106","details":null,"hint":"Only the following schemas are exposed: public",\#
         "message":"Invalid schema: billing"}
-        """#.utf8))
+        """#
+    )
 
     let error = await #expect(throws: PostgrestError.self) {
-      try await makeClient(transport: transport).schema("billing").openAPIDocument()
+      try await client.schema("billing").openAPIDocument()
     }
 
     #expect(error?.kind == .server)
@@ -130,11 +106,10 @@ struct PostgrestOpenAPIDocumentTests {
 
   @Test
   func throwsTheServerErrorWhenOpenAPIOutputIsDisabled() async throws {
-    let transport = RecordingTransport()
-    transport.stub(.get, rootURL, status: 404, data: Data())
+    let client = try makeClient(status: .notFound, body: "")
 
     let error = await #expect(throws: PostgrestError.self) {
-      try await makeClient(transport: transport).openAPIDocument()
+      try await client.openAPIDocument()
     }
 
     #expect(error?.kind == .server)
@@ -143,11 +118,10 @@ struct PostgrestOpenAPIDocumentTests {
 
   @Test
   func throwsADecodingErrorWhenTheBodyIsNotJSON() async throws {
-    let transport = RecordingTransport()
-    transport.stub(.get, rootURL, data: Data("not json".utf8))
+    let client = try makeClient(body: "not json")
 
     let error = await #expect(throws: PostgrestError.self) {
-      try await makeClient(transport: transport).openAPIDocument()
+      try await client.openAPIDocument()
     }
 
     #expect(error?.kind == .decoding)

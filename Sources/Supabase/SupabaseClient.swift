@@ -368,15 +368,8 @@ public final class SupabaseClient: Sendable {
     rest.schema(schema)
   }
 
-  /// Fetches the OpenAPI document PostgREST publishes for the database schema.
-  ///
-  /// The request carries the same headers as every other query, so the document lists only the
-  /// objects the signed-in user's role holds privileges on. Call ``schema(_:)->PostgrestClient``
-  /// first to describe another schema. See ``PostgrestClient/openAPIDocument()``.
-  ///
-  /// ```swift
-  /// let document = try await supabase.openAPIDocument()
-  /// ```
+  /// Fetches the OpenAPI document PostgREST publishes for the database schema, scoped to the
+  /// signed-in user's role. See ``PostgrestClient/openAPIDocument()``.
   ///
   /// - Returns: The OpenAPI document as a JSON object.
   /// - Throws: ``PostgrestError`` if the request fails or the body is not a JSON object.
