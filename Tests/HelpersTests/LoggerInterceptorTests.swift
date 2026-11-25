@@ -24,8 +24,8 @@ struct LoggerInterceptorTests {
   typealias Method = HTTPTypes.HTTPRequest.Method
 
   final class LogCapture: @unchecked Sendable {
-    var verboseLogs: [String] = []
-    var errorLogs: [String] = []
+    var lines: [(level: Logging.Logger.Level, message: String)] = []
+    var messages: [String] { lines.map(\.message) }
   }
 
   struct CapturingLogHandler: LogHandler {
@@ -47,21 +47,14 @@ struct LoggerInterceptorTests {
       function: String,
       line: UInt
     ) {
-      switch level {
-      case .trace:
-        capture.verboseLogs.append("\(message)")
-      case .error:
-        capture.errorLogs.append("\(message)")
-      default:
-        break
-      }
+      capture.lines.append((level, "\(message)"))
     }
   }
 
-  func makeLogger() -> (Logging.Logger, LogCapture) {
+  func makeLogger(level: Logging.Logger.Level = .trace) -> (Logging.Logger, LogCapture) {
     let capture = LogCapture()
     var logger = Logging.Logger(label: "test") { _ in CapturingLogHandler(capture: capture) }
-    logger.logLevel = .trace
+    logger.logLevel = level
     return (logger, capture)
   }
 
@@ -77,83 +70,40 @@ struct LoggerInterceptorTests {
   }
 
   @Test
-  func interceptorLogsRequest() async throws {
+  func aRequestLogsOneDebugLineWithItsOutcomeAndTiming() async throws {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
 
-    let request = createTestRequest(url: "https://api.example.com/users", method: .get)
-
-    let _ = try await interceptor.intercept(request, body: nil) { _, _ in
-      (self.createTestResponse(), nil)
+    _ = try await interceptor.intercept(
+      createTestRequest(url: "https://api.example.com/users", method: .post), body: nil
+    ) { _, _ in
+      (self.createTestResponse(statusCode: 201), nil)
     }
 
-    #expect(capture.verboseLogs.count == 2)
-    #expect(capture.verboseLogs[0].contains("Request:"))
-    #expect(capture.verboseLogs[0].contains("/users"))
+    #expect(capture.lines.count == 1)
+    #expect(capture.lines.first?.level == .debug)
+    let line = try #require(capture.messages.first)
+    #expect(line.hasPrefix("POST https://api.example.com/users -> 201 in "))
+    #expect(line.hasSuffix(" ms"))
   }
 
   @Test
-  func interceptorLogsResponse() async throws {
+  func aFailureLogsADebugLineAndNotAnError() async throws {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
-
-    let request = createTestRequest()
-    let responseData = #"{"success": true}"#.data(using: .utf8)!
-
-    let _ = try await interceptor.intercept(request, body: nil) { _, _ in
-      (self.createTestResponse(statusCode: 200), HTTPBody(responseData))
-    }
-
-    #expect(capture.verboseLogs.count == 2)
-    #expect(capture.verboseLogs[1].contains("Response: Status code: 200"))
-  }
-
-  @Test
-  func interceptorLogsContentLengthHeaderWhenPresent() async throws {
-    let (logger, capture) = makeLogger()
-    let interceptor = LoggerInterceptor(logger: logger)
-
-    let _ = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
-      (
-        HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentLength: "17"]),
-        HTTPBody(#"{"success": true}"#.data(using: .utf8)!)
-      )
-    }
-
-    #expect(capture.verboseLogs[1].contains("Content-Length: 17"))
-  }
-
-  @Test
-  func interceptorLogsDashWhenContentLengthIsMissing() async throws {
-    let (logger, capture) = makeLogger()
-    let interceptor = LoggerInterceptor(logger: logger)
-
-    let _ = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
-      (self.createTestResponse(), nil)
-    }
-
-    #expect(capture.verboseLogs[1].contains("Content-Length: -"))
-  }
-
-  @Test
-  func interceptorLogsError() async throws {
-    let (logger, capture) = makeLogger()
-    let interceptor = LoggerInterceptor(logger: logger)
-
-    let request = createTestRequest()
 
     struct TestError: Error {}
 
-    do {
-      let _ = try await interceptor.intercept(request, body: nil) { _, _ in
+    await #expect(throws: TestError.self) {
+      _ = try await interceptor.intercept(self.createTestRequest(), body: nil) { _, _ in
         throw TestError()
       }
-      Issue.record("Should have thrown error")
-    } catch {
     }
 
-    #expect(capture.errorLogs.count == 1)
-    #expect(capture.errorLogs[0].contains("Response: Failure"))
+    #expect(capture.lines.count == 1)
+    #expect(capture.lines.first?.level == .debug)
+    #expect(
+      capture.messages.first?.hasPrefix("GET https://api.example.com/test failed in ") == true)
   }
 
   @Test
@@ -173,12 +123,13 @@ struct LoggerInterceptorTests {
       }
     }
 
-    #expect(
-      capture.errorLogs == ["Response: Failure (NSURLErrorDomain \(URLError.timedOut.rawValue))"])
+    let line = try #require(capture.messages.first)
+    #expect(line.hasSuffix(": NSURLErrorDomain \(URLError.timedOut.rawValue)"))
+    #expect(!line.contains("st-secret"))
   }
 
   @Test
-  func theRequestLineDropsTheQueryAndFragment() async throws {
+  func theLineDropsTheQueryAndFragment() async throws {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
     let request = createTestRequest(
@@ -189,265 +140,99 @@ struct LoggerInterceptorTests {
     }
 
     #expect(
-      capture.verboseLogs[0].hasPrefix("Request: GET https://api.example.com/rest/v1/my invites\n"))
-    #expect(!capture.verboseLogs.contains { $0.contains("secret") || $0.contains("frag") })
+      capture.messages.first?.hasPrefix("GET https://api.example.com/rest/v1/my invites -> 200")
+        == true)
+    #expect(!capture.messages.contains { $0.contains("secret") || $0.contains("frag") })
   }
 
   @Test
-  func belowTraceTheBodiesPassThroughUnread() async throws {
-    var (logger, capture) = makeLogger()
-    logger.logLevel = .debug
-    let interceptor = LoggerInterceptor(logger: logger)
-
-    let (_, body) = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
-      (self.createTestResponse(), HTTPBody(Data("ok".utf8)))
-    }
-
-    #expect(capture.verboseLogs.isEmpty)
-    #expect(try await Data(collecting: try #require(body), upTo: 10) == Data("ok".utf8))
-  }
-
-  @Test
-  func stringifyRedactsSignedURLs() {
-    let data = Data(
-      #"{"signedURL":"/object/sign/b/f?token=s-1","signedUrl":"/x?token=s-2","url":"/y?token=s-3"}"#
-        .utf8)
-
-    let result = stringify(data)
-
-    #expect(!result.contains("s-1"))
-    #expect(!result.contains("s-2"))
-    #expect(!result.contains("s-3"))
-  }
-
-  @Test
-  func interceptorWithJSONBody() async throws {
+  func noBodyOrHeaderValueReachesTheLog() async throws {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
+    var request = createTestRequest(method: .post)
+    request.headerFields[.authorization] = "Bearer header-secret"
 
-    let jsonBody = #"{"name": "test", "value": 123}"#.data(using: .utf8)!
-    let request = createTestRequest(method: .post)
-
-    let _ = try await interceptor.intercept(request, body: HTTPBody(jsonBody)) { _, _ in
-      (self.createTestResponse(), nil)
-    }
-
-    #expect(capture.verboseLogs[0].contains("Body:"))
-    #expect(capture.verboseLogs[0].contains("name"))
-  }
-
-  @Test
-  func interceptorWithEmptyBody() async throws {
-    let (logger, capture) = makeLogger()
-    let interceptor = LoggerInterceptor(logger: logger)
-
-    let request = createTestRequest(method: .get)
-
-    let _ = try await interceptor.intercept(request, body: nil) { _, _ in
-      (self.createTestResponse(), nil)
-    }
-
-    #expect(capture.verboseLogs[0].contains("<none>"))
-  }
-
-  @Test
-  func interceptorWithDifferentMethods() async throws {
-    let methods: [(Method, String)] = [
-      (.get, "GET"),
-      (.post, "POST"),
-      (.put, "PUT"),
-      (.delete, "DELETE"),
-      (.patch, "PATCH"),
-    ]
-
-    for (method, methodString) in methods {
-      let (logger, capture) = makeLogger()
-      let interceptor = LoggerInterceptor(logger: logger)
-
-      let request = createTestRequest(method: method)
-
-      let _ = try await interceptor.intercept(request, body: nil) { _, _ in
-        (self.createTestResponse(), nil)
-      }
-
-      #expect(
-        capture.verboseLogs[0].contains("Request: \(methodString)"),
-        "Should log \(methodString) request"
+    _ = try await interceptor.intercept(
+      request, body: HTTPBody(Data(#"{"name":"request-payload"}"#.utf8))
+    ) { _, _ in
+      (
+        HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+        HTTPBody(Data(#"{"name":"response-payload"}"#.utf8))
       )
     }
+
+    let logged = capture.messages.joined(separator: "\n")
+    #expect(!logged.isEmpty)
+    for secret in ["header-secret", "request-payload", "response-payload", "application/json"] {
+      #expect(!logged.contains(secret))
+    }
   }
 
   @Test
-  func interceptorWithDifferentStatusCodes() async throws {
-    let statusCodes = [200, 201, 400, 401, 404, 500]
+  func belowDebugNothingIsLogged() async throws {
+    let (logger, capture) = makeLogger(level: .info)
+    let interceptor = LoggerInterceptor(logger: logger)
 
-    for statusCode in statusCodes {
+    _ = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
+      (self.createTestResponse(), nil)
+    }
+
+    #expect(capture.lines.isEmpty)
+  }
+
+  @Test
+  func interceptorWithDifferentMethodsAndStatusCodes() async throws {
+    let cases: [(Method, String, Int)] = [
+      (.get, "GET", 200),
+      (.post, "POST", 201),
+      (.put, "PUT", 400),
+      (.delete, "DELETE", 404),
+      (.patch, "PATCH", 500),
+    ]
+
+    for (method, methodString, statusCode) in cases {
       let (logger, capture) = makeLogger()
       let interceptor = LoggerInterceptor(logger: logger)
 
-      let request = createTestRequest()
-
-      let _ = try await interceptor.intercept(request, body: nil) { _, _ in
+      _ = try await interceptor.intercept(createTestRequest(method: method), body: nil) { _, _ in
         (self.createTestResponse(statusCode: statusCode), nil)
       }
 
       #expect(
-        capture.verboseLogs[1].contains("Status code: \(statusCode)"),
-        "Should log status code \(statusCode)"
-      )
+        capture.messages.first?.hasPrefix(
+          "\(methodString) https://api.example.com/test -> \(statusCode) in ") == true)
     }
   }
 
   @Test
-  func stringifyWithNilData() {
-    let result = stringify(nil)
-    #expect(result == "<none>")
-  }
-
-  @Test
-  func stringifyWithJSONData() {
-    let jsonData = #"{"key": "value", "number": 42}"#.data(using: .utf8)!
-    let result = stringify(jsonData)
-
-    #expect(result.contains("key"))
-    #expect(result.contains("value"))
-    #expect(result.contains("number"))
-  }
-
-  @Test
-  func stringifyWithNonJSONData() {
-    let textData = "Plain text content".data(using: .utf8)!
-    let result = stringify(textData)
-
-    #expect(result == "Plain text content")
-  }
-
-  @Test
-  func stringifyWithInvalidUTF8Data() {
-    let invalidData = Data([0xFF, 0xFE, 0xFD])
-    let result = stringify(invalidData)
-
-    #expect(result == "<failed>")
-  }
-
-  @Test
-  func stringifyWithEmptyData() {
-    let emptyData = Data()
-    let result = stringify(emptyData)
-
-    #expect(result.isEmpty)
-  }
-
-  @Test
-  func stringifyWithComplexJSON() {
-    let complexJSON = """
-      {
-        "users": [
-          {"id": 1, "name": "Alice"},
-          {"id": 2, "name": "Bob"}
-        ],
-        "total": 2,
-        "nested": {
-          "key": "value"
-        }
-      }
-      """.data(using: .utf8)!
-
-    let result = stringify(complexJSON)
-
-    #expect(result.contains("users"))
-    #expect(result.contains("Alice"))
-    #expect(result.contains("nested"))
-  }
-
-  @Test
-  func stringifyWithArrayJSON() {
-    let arrayJSON = #"[1, 2, 3, 4, 5]"#.data(using: .utf8)!
-    let result = stringify(arrayJSON)
-
-    #expect(result.contains("1"))
-    #expect(result.contains("5"))
-  }
-
-  @Test
-  func stringifyWithBooleanJSON() {
-    let boolJSON = #"{"active": true, "deleted": false}"#.data(using: .utf8)!
-    let result = stringify(boolJSON)
-
-    #expect(result.contains("active"))
-    #expect(result.contains("true") || result.contains("1"))
-  }
-
-  @Test
-  func stringifyRedactsSecretsAtAnyDepth() {
-    let json = """
-      {
-        "name": "Acme",
-        "client_secret": "provider-secret",
-        "users": [{"email": "a@example.com", "password": "hunter2"}],
-        "session": {"access_token": "jwt", "refresh_token": "rt"},
-        "verify": {"token": "123456", "token_hash": "th"},
-        "properties": {
-          "email_otp": "654321", "hashed_token": "ht", "action_link": "https://link.example"
-        }
-      }
-      """.data(using: .utf8)!
-
-    let result = stringify(json)
-
-    #expect(result.contains("Acme"))
-    #expect(result.contains("a@example.com"))
-    let secrets = [
-      "provider-secret", "hunter2", "\"jwt\"", "\"rt\"", "123456", "\"th\"", "654321",
-      "\"ht\"", "link.example",
-    ]
-    for secret in secrets {
-      #expect(!result.contains(secret))
-    }
-    #expect(result.contains("<redacted>"))
-  }
-
-  @Test
-  func stringifyWithNullJSON() {
-    let nullJSON = #"{"value": null}"#.data(using: .utf8)!
-    let result = stringify(nullJSON)
-
-    #expect(result.contains("value"))
-  }
-
-  @Test
-  func interceptorPassesThroughResponse() async throws {
+  func theResponseBodyPassesThroughUnread() async throws {
     let (logger, _) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
+    let body = HTTPBody(Data("Test Response".utf8))
 
-    let request = createTestRequest()
-    let testData = "Test Response".data(using: .utf8)!
-
-    let (head, body) = try await interceptor.intercept(request, body: nil) { _, _ in
-      (self.createTestResponse(statusCode: 201), HTTPBody(testData))
+    let (head, returned) = try await interceptor.intercept(createTestRequest(), body: nil) {
+      _, _ in
+      (self.createTestResponse(statusCode: 201), body)
     }
 
     #expect(head.status.code == 201)
-    #expect(try await Data(collecting: try #require(body), upTo: .max) == testData)
+    #expect(returned === body)
   }
 
   @Test
-  func interceptorPassesThroughRequestBody() async throws {
+  func theRequestBodyPassesThroughUnread() async throws {
     let (logger, _) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
+    let body = HTTPBody(Data(#"{"name": "test"}"#.utf8))
+    let forwarded = LockIsolated<HTTPBody?>(nil)
 
-    let requestBody = #"{"name": "test"}"#.data(using: .utf8)!
-    let seen = LockIsolated<Data?>(nil)
-
-    let _ = try await interceptor.intercept(
-      createTestRequest(method: .post), body: HTTPBody(requestBody)
-    ) { _, body in
-      let collected = try await Data(collecting: try #require(body), upTo: .max)
-      seen.setValue(collected)
+    _ = try await interceptor.intercept(createTestRequest(method: .post), body: body) {
+      _, next in
+      forwarded.setValue(next)
       return (self.createTestResponse(), nil)
     }
 
-    #expect(seen.value == requestBody)
+    #expect(forwarded.value === body)
   }
 
   @Test
@@ -461,146 +246,10 @@ struct LoggerInterceptorTests {
 
     let expectedError = CustomError(message: "Test error")
 
-    do {
-      let _ = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
+    await #expect(throws: expectedError) {
+      _ = try await interceptor.intercept(self.createTestRequest(), body: nil) { _, _ in
         throw expectedError
       }
-      Issue.record("Should have thrown error")
-    } catch let error as CustomError {
-      #expect(error == expectedError)
-    } catch {
-      Issue.record("Wrong error type thrown")
     }
-  }
-
-  @Test
-  func unknownLengthBodyPassesThroughUnconsumed() async throws {
-    let (logger, _) = makeLogger()
-    let sut = LoggerInterceptor(logger: logger)
-    let body = HTTPBody(
-      AsyncStream<ArraySlice<UInt8>> {
-        $0.yield(ArraySlice([1, 2]))
-        $0.finish()
-      },
-      length: .unknown, iterationBehavior: .single)
-
-    let (_, returned) = try await sut.intercept(
-      HTTPTypes.HTTPRequest(method: .get, url: URL(string: "https://example.com")!),
-      body: nil
-    ) { _, _ in (HTTPTypes.HTTPResponse(status: .ok), body) }
-
-    #expect(returned === body)
-    #expect(try await Data(collecting: try #require(returned), upTo: 10) == Data([1, 2]))
-  }
-
-  @Test
-  func bufferedBodyKeepsItsUploadProgressHook() async throws {
-    let (logger, _) = makeLogger()
-    let sut = LoggerInterceptor(logger: logger)
-    let seen = LockIsolated<[Int64]>([])
-    let body = HTTPBody(Data("small".utf8)).reportingProgress { bytes in
-      seen.withValue { $0.append(bytes) }
-    }
-
-    let forwarded = LockIsolated<HTTPBody?>(nil)
-    _ = try await sut.intercept(
-      HTTPTypes.HTTPRequest(method: .post, url: URL(string: "https://example.com")!),
-      body: body
-    ) { _, next in
-      forwarded.setValue(next)
-      return (HTTPTypes.HTTPResponse(status: .ok), nil)
-    }
-
-    let hook = try #require(forwarded.value?.onUploadProgress)
-    hook(5)
-    #expect(seen.value == [5])
-  }
-
-  @Test
-  func underDeclaredBodyStillReachesTheNextHandlerWhole() async throws {
-    // Transparent gzip makes `Content-Length` the *compressed* size while the body yields the
-    // decoded bytes, so a body can deliver more than it declares. Logging must not fail the
-    // request over it.
-    let (logger, _) = makeLogger()
-    let sut = LoggerInterceptor(logger: logger)
-    let body = HTTPBody(
-      AsyncStream<ArraySlice<UInt8>> {
-        $0.yield(ArraySlice(repeating: 7, count: 100))
-        $0.finish()
-      },
-      length: .known(10), iterationBehavior: .single)
-
-    let seen = LockIsolated<Data?>(nil)
-    _ = try await sut.intercept(
-      HTTPTypes.HTTPRequest(method: .post, url: URL(string: "https://example.com")!),
-      body: body
-    ) { _, forwarded in
-      let collected = try await Data(collecting: try #require(forwarded), upTo: 1000)
-      seen.setValue(collected)
-      return (HTTPTypes.HTTPResponse(status: .ok), nil)
-    }
-
-    #expect(seen.value == Data(repeating: 7, count: 100))
-  }
-
-  @Test
-  func aSmallDeclaredBodyThatDecodesPastTheCeilingStillReachesTheCallerWhole() async throws {
-    let (logger, capture) = makeLogger()
-    let sut = LoggerInterceptor(logger: logger)
-    let chunk = ArraySlice(repeating: UInt8(7), count: 64 * 1024)
-    let body = HTTPBody(
-      AsyncStream<ArraySlice<UInt8>> {
-        for _ in 0..<32 { $0.yield(chunk) }
-        $0.finish()
-      },
-      length: .known(10), iterationBehavior: .single)
-
-    let (head, returned) = try await sut.intercept(
-      HTTPTypes.HTTPRequest(method: .get, url: URL(string: "https://example.com")!),
-      body: nil
-    ) { _, _ in (HTTPTypes.HTTPResponse(status: .ok), body) }
-
-    #expect(head.status == .ok)
-    #expect(returned?.length == .unknown)
-    #expect(
-      try await Data(collecting: try #require(returned), upTo: .max)
-        == Data(repeating: 7, count: 2 * 1024 * 1024))
-    #expect(capture.verboseLogs[1].contains("<truncated"))
-  }
-
-  @Test
-  func aRepeatableBodyPastTheCeilingIsHandedOnUnchanged() async throws {
-    let (logger, capture) = makeLogger()
-    let sut = LoggerInterceptor(logger: logger)
-    let bytes = [UInt8](repeating: 7, count: 2 * 1024 * 1024)
-    let body = HTTPBody(
-      ReplayedChunk(chunk: ArraySlice(bytes)), length: .known(10), iterationBehavior: .multiple)
-
-    let forwarded = LockIsolated<HTTPBody?>(nil)
-    _ = try await sut.intercept(
-      HTTPTypes.HTTPRequest(method: .post, url: URL(string: "https://example.com")!),
-      body: body
-    ) { _, next in
-      forwarded.setValue(next)
-      return (HTTPTypes.HTTPResponse(status: .ok), nil)
-    }
-
-    let handedOn = try #require(forwarded.value)
-    #expect(handedOn === body)
-    #expect(try await Data(collecting: handedOn, upTo: .max) == Data(bytes))
-    #expect(capture.verboseLogs[0].contains("<truncated"))
-  }
-}
-
-/// Yields the same chunk on every iteration, like a re-readable source.
-private struct ReplayedChunk: AsyncSequence, Sendable {
-  let chunk: ArraySlice<UInt8>
-
-  func makeAsyncIterator() -> AsyncStream<ArraySlice<UInt8>>.Iterator {
-    let chunk = chunk
-    return AsyncStream {
-      $0.yield(chunk)
-      $0.finish()
-    }.makeAsyncIterator()
   }
 }

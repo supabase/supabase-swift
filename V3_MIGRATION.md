@@ -42,8 +42,11 @@ that apply to every module and to `SupabaseClient`; each module has its own file
 
 Changes that still compile but behave differently. Check each one by hand.
 
-- **Debug builds log by default.** If you pass no `logger:`, debug builds now log warnings and
-  errors to stderr. Release builds stay silent. See [Logging](#logging-swift-log-replaces-supabaselogger).
+- **HTTP logs hold no bodies.** v2 logged each request and response body at `.verbose`, and a
+  failure at `.error`. v3 logs one `.debug` line per request: the method, the URL without its
+  query, the status code or a failure summary, and the duration. No line holds a body, a header
+  value, a query string, or a token. If you read bodies from the SDK's logs, log them in your own
+  `ClientMiddleware`. See [Logging](#logging-swift-log-replaces-supabaselogger).
 - **Network and decoding errors are wrapped.** A `URLError` or `DecodingError` no longer reaches
   you as itself. It arrives as the module error (`AuthError`, `PostgrestError`, `StorageError`,
   `FunctionsError`, `RealtimeError`) with the original in `underlyingError`. Search for
@@ -220,8 +223,7 @@ let client = try SupabaseClient(
 )
 ```
 
-To silence the debug-build default, pass
-`Logger(label: "myapp") { _ in SwiftLogNoOpLogHandler() }`.
+As in v2, the SDK is silent when you pass no logger, in every build configuration.
 
 #### OSLog parity
 

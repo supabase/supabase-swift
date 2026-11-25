@@ -185,6 +185,29 @@ struct RealtimeCoreInboundTests {
     #expect(logs.value.allSatisfy { $0.contains("'room'") })
   }
 
+  @Test
+  func aDroppedFrameLogsNoPayload() {
+    let logs = LockIsolated<[String]>([])
+    let logger = Logger(label: "RealtimeCoreInboundTests") { _ in CapturingLogHandler(logs: logs) }
+    var harness = CoreHarness.connected(logger: logger)
+    _ = harness.send(
+      .subscribe(
+        channel: .room, topic: Self.topic, configuration: RealtimeChannelConfiguration(),
+        waiter: harness.waiter(), snapshot: Self.noStreams))
+    _ = harness.send(.frame(Self.reply(ref: "1")))
+    logs.setValue([])
+
+    let secret: JSONObject = ["body": "payload-secret"]
+    _ = harness.send(.frame(Self.frame(event: "broadcast", payload: secret)))
+    _ = harness.send(.frame(Self.frame(event: "custom_event", payload: secret)))
+    _ = harness.send(
+      .frame(
+        Self.frame(event: "postgres_changes", payload: ["data": ["record": "payload-secret"]])))
+
+    #expect(logs.value.count == 3)
+    #expect(!logs.value.contains { $0.contains("payload-secret") })
+  }
+
   // MARK: Helpers
 
   static let aliceState: JSONObject = [

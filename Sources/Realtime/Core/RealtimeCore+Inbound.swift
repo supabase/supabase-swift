@@ -59,8 +59,7 @@ extension RealtimeCore {
     switch message.event {
     case ChannelEvent.broadcast:
       guard let broadcast = BroadcastMessage(message) else {
-        logger.debug(
-          "Dropping a broadcast without an event on '\(topic(of: channel))': \(message.payload)")
+        logger.debug("Dropping a broadcast without an event on '\(topic(of: channel))'")
         return []
       }
       return [.deliver(channel, .broadcast(broadcast))]
@@ -69,7 +68,7 @@ extension RealtimeCore {
     case ChannelEvent.presenceState, ChannelEvent.presenceDiff:
       return receivePresence(message, on: channel)
     default:
-      logger.debug("Received message with unhandled event type: \(message)")
+      logger.debug("Dropping '\(message.event)' on '\(topic(of: channel))': unhandled event type")
       return []
     }
   }
@@ -96,7 +95,8 @@ extension RealtimeCore {
       let matched = channels[channel]?.serverChanges.filter { ids.contains($0.id) } ?? []
       return [.deliver(channel, .postgres(PostgresDelivery(change: change, matched: matched)))]
     } catch {
-      logger.debug("Dropping a Postgres change on '\(topic(of: channel))': \(error)")
+      logger.debug(
+        "Dropping a Postgres change on '\(topic(of: channel))': \(LogRedaction.summary(of: error))")
       return []
     }
   }

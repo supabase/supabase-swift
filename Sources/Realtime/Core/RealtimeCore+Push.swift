@@ -70,8 +70,7 @@ extension RealtimeCore {
     -> [Effect]
   {
     guard let status = message.status else {
-      logger.debug(
-        "Dropping a reply without a status on '\(topic(of: channel))': \(message.payload)")
+      logger.debug("Dropping a reply without a status on '\(topic(of: channel))'")
       return []
     }
     let waiter = channels.update(channel) { record -> WaiterID? in

@@ -43,7 +43,8 @@ enum Refresher {
       } catch {
         attempt += 1
         delay = delayBeforeRetry(attempt: attempt, after: error, for: session, now: now())
-        driver.logger.debug("auto refresh failed, retrying in \(delay): \(error)")
+        driver.logger.debug(
+          "auto refresh failed, retrying in \(delay): \(LogRedaction.summary(of: error))")
       }
     }
   }

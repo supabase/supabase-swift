@@ -7,25 +7,15 @@ public import Logging
 
 /// Builds the default `Logging.Logger` used when a module's `logger:` parameter is omitted.
 ///
-/// - In debug builds, returns a logger at `.warning` level, so warnings and errors are visible
-///   during development without any manual setup.
-/// - In release builds, returns a logger backed by `SwiftLogNoOpLogHandler` with `logLevel`
-///   raised to `.critical`. `Logger.log(level:...)` checks `self.logLevel <= level` before
-///   evaluating the message autoclosure, so this is genuinely zero-overhead: no string
-///   interpolation happens for calls below `.critical`, which none of this package's own log
-///   call sites use.
+/// The default is silent in every build configuration: it uses `SwiftLogNoOpLogHandler`, so no
+/// line reaches any destination. Its `logLevel` is `.critical`, and `Logger.log(level:...)`
+/// checks `self.logLevel <= level` before it evaluates the message autoclosure, so the SDK's own
+/// call sites, which never log at `.critical`, cost no string interpolation.
 ///
-/// Callers who want different behavior pass their own configured `Logging.Logger` instead of
-/// relying on this default.
+/// To receive the SDK's log lines, pass your own configured `Logging.Logger`.
 @usableFromInline
 package func supabaseDefaultLogger(label: String) -> Logging.Logger {
-  #if DEBUG
-    var logger = Logging.Logger(label: label)
-    logger.logLevel = .warning
-    return logger
-  #else
-    var logger = Logging.Logger(label: label, factory: { _ in SwiftLogNoOpLogHandler() })
-    logger.logLevel = .critical
-    return logger
-  #endif
+  var logger = Logging.Logger(label: label, factory: { _ in SwiftLogNoOpLogHandler() })
+  logger.logLevel = .critical
+  return logger
 }

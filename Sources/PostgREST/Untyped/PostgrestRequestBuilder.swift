@@ -422,7 +422,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
       do {
         return try decoder.decode(T.self, from: data)
       } catch {
-        configuration.logger.error(
+        configuration.logger.debug(
           "Failed to decode type '\(T.self)' with error: \(LogRedaction.summary(of: error))")
         throw PostgrestError(
           kind: .decoding,

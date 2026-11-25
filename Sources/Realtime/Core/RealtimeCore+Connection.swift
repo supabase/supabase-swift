@@ -266,7 +266,8 @@ extension RealtimeCore {
     pendingHeartbeat = nil
     // Any reply proves the socket is alive, which is all a heartbeat checks.
     if message.status != .ok {
-      logger.warning("The server answered the heartbeat with: \(message.payload)")
+      logger.warning(
+        "The server answered the heartbeat with status '\(message.status?.rawValue ?? "<none>")'")
     }
     var effects: [Effect] = [
       .publishHeartbeat(.acknowledged(latency: now.elapsed - pending.sentAt))

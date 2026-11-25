@@ -83,6 +83,22 @@ The timeout in ``SupabaseClient/Configuration/Global/http`` applies to every req
 Functions use 150 seconds when you leave it `nil`. For one longer call, use
 `PostgrestRequestBuilder.timeout(_:)` or `FunctionInvokeOptions.timeout`.
 
+### Receive the SDK's logs
+
+The SDK is silent by default: without a logger, it emits nothing in any build configuration.
+Pass a swift-log `Logger` to receive its lines. Each HTTP request logs one `.debug` line with
+the method, the URL without its query, the status code or a failure summary, and the duration.
+No line holds a credential, a token, a header value, a query string, or
+a request or response body.
+
+```swift
+import Logging
+
+var logger = Logger(label: "io.supabase")
+logger.logLevel = .debug
+configuration.global.logger = logger
+```
+
 ### Filter the logs of one sub-client
 
 Each sub-client sets the `system` metadata key on its log messages. A `LogHandler` can keep the

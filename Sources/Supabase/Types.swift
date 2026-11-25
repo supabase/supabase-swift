@@ -158,8 +158,10 @@ extension SupabaseClient {
       /// Optional headers for initializing the client, it will be passed down to all sub-clients.
       public var headers: HTTPFields
 
-      /// The logger to use across all Supabase sub-packages. Defaults to a build-config-aware
-      /// logger: visible (warning+) in debug builds, silent in release builds.
+      /// The logger to use across all Supabase sub-packages. Defaults to a silent logger that
+      /// emits nothing, in every build configuration. Pass your own `Logging.Logger` to receive
+      /// the SDK's log lines. The SDK never logs credentials, tokens, header values, query
+      /// strings, or request and response bodies.
       public var logger: Logging.Logger
 
       /// The transport, middleware chain and request timeout every sub-client sends through.

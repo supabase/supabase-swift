@@ -67,7 +67,8 @@ extension StorageClient {
     /// `Authorization` header in ``headers`` wins over the middleware.
     public var http: HTTPClientConfiguration
 
-    /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
+    /// The logger used for debugging HTTP interactions. Defaults to a silent logger that emits
+    /// nothing.
     ///
     /// The client removes tokens, secrets, and URL query strings from each line before your handler
     /// sees it, and tags the logger with the `system` metadata key set to `storage`.
@@ -99,8 +100,8 @@ extension StorageClient {
     ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads
     ///     over 50 GB.
     ///   - http: The transport and middleware chain every request goes through.
-    ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed
-    ///     by `SwiftLogNoOpLogHandler` to disable logging entirely.
+    ///   - logger: The logger to use. Defaults to a silent logger; pass your own to receive the
+    ///     SDK's log lines.
     ///   - retryEnabled: Whether transient failures of reads are retried.
     public init(
       url: URL,

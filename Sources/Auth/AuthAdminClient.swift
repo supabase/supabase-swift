@@ -70,7 +70,7 @@ public struct AuthAdminClient: Sendable {
     /// The transport and middleware chain every request goes through.
     public var http: HTTPClientConfiguration
 
-    /// The logger to use. Defaults to a build-config-aware logger. The client redacts secrets
+    /// The logger to use. Defaults to a silent logger that emits nothing. The client redacts secrets
     /// and tags it with the `system` metadata key set to `auth`.
     public var logger: Logging.Logger
 
@@ -90,7 +90,7 @@ public struct AuthAdminClient: Sendable {
     ///   - secretKey: The project's secret key.
     ///   - headers: Headers sent with every request.
     ///   - http: The transport and middleware chain every request goes through.
-    ///   - logger: The logger to use. Defaults to a build-config-aware logger.
+    ///   - logger: The logger to use. Defaults to a silent logger.
     ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
     public init(
       url: URL,
