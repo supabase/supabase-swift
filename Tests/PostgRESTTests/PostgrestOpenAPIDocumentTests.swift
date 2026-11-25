@@ -142,7 +142,7 @@ struct PostgrestOpenAPIDocumentTests {
   }
 
   @Test
-  func throwsADecodingErrorWhenTheBodyIsNotAJSONObject() async throws {
+  func throwsADecodingErrorWhenTheBodyIsNotJSON() async throws {
     let transport = RecordingTransport()
     transport.stub(.get, rootURL, data: Data("not json".utf8))
 

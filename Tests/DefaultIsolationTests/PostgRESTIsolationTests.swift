@@ -104,6 +104,8 @@ enum PostgRESTIsolationTests {
     try await client.rpc("search_todos", params: payload, head: true, count: .exact).execute()
     let result: [Row] = try await client.rpc("search_todos", params: payload).execute().value
     _ = result
+    _ = try await client.openAPIDocument()
+    _ = try await client.schema("billing").openAPIDocument()
   }
 
   static func typed(_ client: PostgrestClient) async throws {

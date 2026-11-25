@@ -30,6 +30,7 @@ enum SupabaseIsolationTests {
     _ = try await client.handleRedirect(url)
     await client.removeChannel(channel)
     await client.removeAllChannels()
+    _ = try await client.openAPIDocument()
   }
 
   static func typedStream(_ client: SupabaseClient) async throws {
