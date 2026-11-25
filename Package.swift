@@ -21,6 +21,7 @@ let package = Package(
     .library(name: "PostgrestMacros", targets: ["PostgrestMacros"]),
     .library(name: "Realtime", targets: ["Realtime"]),
     .library(name: "Storage", targets: ["Storage"]),
+    .library(name: "StorageIceberg", targets: ["StorageIceberg"]),
     .library(name: "Supabase", targets: ["Supabase"]),
   ],
   traits: [
@@ -116,6 +117,7 @@ let package = Package(
         .product(name: "P256K", package: "swift-secp256k1"),
         "Helpers",
         "PostgrestMacros",
+        "StorageIceberg",
         "Supabase",
         "TestHelpers",
       ],
@@ -238,6 +240,23 @@ let package = Package(
       resources: [
         .copy("sadcat.jpg"),
         .process("Fixtures"),
+      ]
+    ),
+    .target(
+      name: "StorageIceberg",
+      dependencies: [
+        .product(name: "HTTPTypes", package: "swift-http-types"),
+        "Helpers",
+        "Storage",
+      ]
+    ),
+    .testTarget(
+      name: "StorageIcebergTests",
+      dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+        "Storage",
+        "StorageIceberg",
+        "TestHelpers",
       ]
     ),
     .target(
