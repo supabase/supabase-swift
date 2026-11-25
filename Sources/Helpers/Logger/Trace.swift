@@ -5,7 +5,6 @@
 
 public import Logging
 
-@inlinable
 @discardableResult
 package func trace<R: Sendable>(
   using logger: Logging.Logger,
@@ -20,7 +19,9 @@ package func trace<R: Sendable>(
   do {
     return try await operation()
   } catch {
-    logger.debug("error: \(error)", file: "\(fileID)", function: "\(function)", line: line)
+    logger.debug(
+      "error: \(LogRedaction.summary(of: error))", file: "\(fileID)", function: "\(function)",
+      line: line)
     throw error
   }
 }

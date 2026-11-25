@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import Logging
 import TestHelpers
 import Testing
@@ -124,22 +125,35 @@ struct LogRedactionSummaryTests {
   }
 
   @Test
-  func keepsTheDescriptionOfAnErrorThatDoesNotLeak() {
-    struct Closed: Error, CustomStringConvertible {
-      var description: String { "closed with code 4000" }
+  func summarizesAnSDKErrorWithoutItsMessageOrHeaders() {
+    struct ModuleError: SupabaseError {
+      var message: String
+      var response: HTTPErrorResponse?
+      var underlyingError: (any Error)?
+      var description: String { message }
+    }
+    let error = ModuleError(
+      message: "upstream body: private-record",
+      response: HTTPErrorResponse(
+        status: .badRequest, headers: [.sbRequestID: "private-request-id"],
+        body: Data("private-record".utf8)),
+      underlyingError: URLError(.timedOut))
+
+    #expect(
+      LogRedaction.summary(of: error)
+        == "ModuleError [status 400] caused by NSURLErrorDomain \(URLError.timedOut.rawValue)"
+    )
+  }
+
+  @Test
+  func summarizesAForeignErrorByItsTypeAndCodeWithoutItsDescription() {
+    struct CallbackError: Error, CustomStringConvertible {
+      var description: String { "upstream body: private-record" }
     }
 
-    #expect(LogRedaction.summary(of: Closed()) == "closed with code 4000")
-  }
-
-  @Test(arguments: ["signedURL", "signedUrl", "url", "action_link", "refresh_token", "otp"])
-  func redactsSensitiveAndLinkKeysInJSON(key: String) {
-    #expect(LogRedaction.isSensitive(jsonKey: key))
-  }
-
-  @Test(arguments: ["path", "id", "status"])
-  func keepsOtherJSONKeys(key: String) {
-    #expect(!LogRedaction.isSensitive(jsonKey: key))
+    let summary = LogRedaction.summary(of: CallbackError())
+    #expect(summary.hasPrefix("CallbackError "))
+    #expect(!summary.contains("private-record"))
   }
 }
 

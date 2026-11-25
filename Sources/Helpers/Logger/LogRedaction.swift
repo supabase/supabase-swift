@@ -33,15 +33,13 @@ package enum LogRedaction {
     return result
   }
 
-  /// JSON keys that hold a signed URL or a sign-in link. A response body redacts them on top of
-  /// ``sensitiveKeys``; a log message does not, because a URL in text loses only its query.
-  package static let linkKeys: Set<String> = ["actionlink", "signedurl", "url"]
-
   /// A description of `error` for an `.error` line that leaves out what is known to leak.
   ///
   /// A URL loading error keeps only its domain and code: its description holds the failing URL.
-  /// A coding error keeps its case and coding path: its description can echo the value. Any
-  /// other error keeps its description, which the redacting handler cleans.
+  /// A coding error keeps its case and coding path: its description can echo the value. An SDK
+  /// error keeps its type, HTTP status, and the code of the error it wraps: its message and
+  /// headers can hold a server's or a caller's text. Any other error, such as one a caller's
+  /// callback, storage, or transport throws, keeps only a label and its code: see ``code(of:)``.
   package static func summary(of error: any Error) -> String {
     switch error {
     case let error as DecodingError:
@@ -53,9 +51,40 @@ package enum LogRedaction {
       return "\(NSURLErrorDomain) \(error.errorCode)"
     case let error as NSError where error.domain == NSURLErrorDomain:
       return "\(error.domain) \(error.code)"
+    case let error as any SupabaseError:
+      return summary(of: error)
     default:
-      return String(describing: error)
+      return code(of: error)
     }
+  }
+
+  /// The domains ``code(of:)`` logs as they are: the system's own, which carry no caller text.
+  private static let systemErrorDomains: Set<String> = [
+    NSURLErrorDomain, NSPOSIXErrorDomain, NSCocoaErrorDomain, NSOSStatusErrorDomain,
+  ]
+
+  /// A label and the code of `error`, and never its description.
+  ///
+  /// For an error that comes from outside the SDK, such as one a custom transport throws. Its
+  /// description, and the domain of a custom `NSError`, can hold a body or a URL. So the label is
+  /// the domain only for a system domain, and the error's type name otherwise.
+  package static func code(of error: any Error) -> String {
+    let nsError = error as NSError
+    let label =
+      systemErrorDomains.contains(nsError.domain)
+      ? nsError.domain : String(describing: type(of: error))
+    return "\(label) \(nsError.code)"
+  }
+
+  private static func summary(of error: any SupabaseError) -> String {
+    var text = String(describing: type(of: error))
+    if let response = error.response {
+      text += " [status \(response.status.code)]"
+    }
+    if let underlying = error.underlyingError {
+      text += " caused by \(summary(of: underlying))"
+    }
+    return text
   }
 
   private static func path(of context: DecodingError.Context?) -> String {
@@ -80,12 +109,6 @@ package enum LogRedaction {
 
   package static func isSensitive(key: String) -> Bool {
     sensitiveKeys.contains(normalized(key))
-  }
-
-  /// Whether a response body redacts the value of `key`: a sensitive key or a link key.
-  package static func isSensitive(jsonKey key: String) -> Bool {
-    let key = normalized(key)
-    return sensitiveKeys.contains(key) || linkKeys.contains(key)
   }
 
   private static func normalized(_ key: String) -> String {

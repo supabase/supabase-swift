@@ -65,7 +65,8 @@ public struct FunctionsClient: Sendable {
     /// or in ``FunctionInvokeOptions/headers`` wins over the middleware.
     public var http: HTTPClientConfiguration
 
-    /// A logger for request and response diagnostics.
+    /// A logger for request and response diagnostics. Defaults to a silent logger that emits
+    /// nothing.
     ///
     /// The client removes tokens, secrets, and URL query strings from each line before your handler
     /// sees it.

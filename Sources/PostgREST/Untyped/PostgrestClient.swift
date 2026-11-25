@@ -104,8 +104,8 @@ public struct PostgrestClient: Sendable {
     /// ```
     public var http: HTTPClientConfiguration
 
-    /// The logger for request and response diagnostics. Defaults to a build-config-aware
-    /// logger. The client removes tokens, secrets, and URL query strings from each line before
+    /// The logger for request and response diagnostics. Defaults to a silent logger that emits
+    /// nothing. The client removes tokens, secrets, and URL query strings from each line before
     /// your handler sees it, and tags the logger with the `system` metadata key set to `postgrest`.
     public var logger: Logging.Logger
 
@@ -176,7 +176,7 @@ public struct PostgrestClient: Sendable {
     ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
     ///   - headers: Additional HTTP headers sent with every request.
     ///   - http: The transport and middleware chain every request goes through.
-    ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
+    ///   - logger: A logger for diagnostic output. Defaults to a silent logger.
     ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to a new
     ///     `JSONEncoder.supabase()`.
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to a new

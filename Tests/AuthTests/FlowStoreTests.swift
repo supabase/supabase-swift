@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import Foundation
 import Logging
+import TestHelpers
 import Testing
 
 @testable import Auth
@@ -8,15 +9,25 @@ import Testing
 private actor RecordingStorage: AuthStorage {
   struct SaveFailure: Error {}
 
+  /// A storage error whose description holds text that must not reach a log.
+  struct RemoveFailure: Error, CustomStringConvertible {
+    var description: String { "storage said: private-record" }
+  }
+
   private var values: [String: Data] = [:]
   private(set) var savedKeys: [String] = []
   private(set) var removedKeys: [String] = []
   private var failingSave: Int?
+  private var failsRemoves = false
   private var saveCount = 0
   private var indexOverwrites = 0
 
   func failSave(number: Int) {
     failingSave = number
+  }
+
+  func failRemoves() {
+    failsRemoves = true
   }
 
   /// Makes the next `count` index saves lost: each one is replaced by an empty index right after
@@ -41,6 +52,7 @@ private actor RecordingStorage: AuthStorage {
   }
 
   func remove(key: String) async throws {
+    if failsRemoves { throw RemoveFailure() }
     removedKeys.append(key)
     values[key] = nil
   }
@@ -53,6 +65,7 @@ struct FlowStoreTests {
   private func makeStore(
     storage: RecordingStorage,
     clock: LockIsolated<Date>,
+    logger: Logger = Logger(label: "test"),
     pkce: PKCE = PKCE(
       generateCodeVerifier: { "verifier" },
       generateCodeChallenge: { "challenge-of-\($0)" }
@@ -63,7 +76,7 @@ struct FlowStoreTests {
       storageKey: Self.storageKey,
       pkce: pkce,
       now: { clock.value },
-      logger: Logger(label: "test")
+      logger: logger
     )
   }
 
@@ -122,6 +135,39 @@ struct FlowStoreTests {
     #expect(
       await storage.removedKeys == [PendingFlowRecord.key(id: ids[0], storageKey: Self.storageKey)])
     #expect(try await store.flow(id: ids[5]) != nil)
+  }
+
+  @Test func aFailedEvictionIsLoggedWithoutTheStorageErrorText() async throws {
+    let storage = RecordingStorage()
+    let recorder = LogRecorder()
+    let clock = LockIsolated(Date(timeIntervalSince1970: 1000))
+    let store = makeStore(storage: storage, clock: clock, logger: recorder.makeLogger())
+    await storage.failRemoves()
+
+    var ids: [UUID] = []
+    for _ in 0..<6 {
+      ids.append(try await store.start(purpose: .signIn, redirectTo: nil).flow.id)
+      advance(clock, by: 1)
+    }
+
+    #expect(try await store.flow(id: ids[5]) != nil)
+    #expect(recorder.entries.contains { $0.hasPrefix("Failure removing a dropped flow record") })
+    #expect(!recorder.entries.contains { $0.contains("private-record") })
+  }
+
+  @Test func aFailedRemoveAllIsLoggedWithoutTheStorageErrorText() async throws {
+    let storage = RecordingStorage()
+    let recorder = LogRecorder()
+    let store = makeStore(
+      storage: storage, clock: LockIsolated(Date()), logger: recorder.makeLogger())
+    _ = try await store.start(purpose: .signIn, redirectTo: nil)
+    await storage.failRemoves()
+
+    try await store.removeAll()
+
+    #expect(try await store.pendingFlows().isEmpty)
+    #expect(recorder.entries.contains { $0.hasPrefix("Failure removing a pending flow record") })
+    #expect(!recorder.entries.contains { $0.contains("private-record") })
   }
 
   @Test func anExpiredFlowIsNotReturned() async throws {

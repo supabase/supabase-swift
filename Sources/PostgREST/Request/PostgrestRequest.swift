@@ -136,7 +136,7 @@ public struct _PostgrestRequest: Sendable {
       } catch let error as PostgrestError {
         throw error
       } catch {
-        configuration.logger.error(
+        configuration.logger.debug(
           "Failed to decode type '\(T.self)' with error: \(LogRedaction.summary(of: error))")
         throw PostgrestError(
           kind: .decoding,

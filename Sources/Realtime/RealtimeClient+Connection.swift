@@ -41,7 +41,7 @@ extension RealtimeClient {
     switch input {
     case .socket(let input, let generation):
       guard generation == self.generation else {
-        logger.debug("Ignoring event from a stale connection: \(input)")
+        logger.debug("Ignoring an event from a stale connection")
         return
       }
       switch input {
@@ -50,9 +50,7 @@ extension RealtimeClient {
       case .binaryBroadcast(let broadcast):
         apply(.binaryBroadcast(broadcast))
       case .closed(let code, let reason):
-        logger.debug(
-          "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason ?? "<none>")"
-        )
+        logger.debug("WebSocket closed. Code: \(code?.description ?? "<none>")")
         apply(.socketClosed(code: code, reason: reason))
       }
 

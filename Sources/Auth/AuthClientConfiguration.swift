@@ -75,9 +75,9 @@ extension AuthClient {
     /// requested.
     public var acceptsImplicitTokens: Bool
 
-    /// The logger used by the Auth library. Defaults to a build-config-aware logger: visible
-    /// (warning+) in debug builds, silent in release builds. Pass your own `Logging.Logger` for
-    /// custom behavior — see swift-log's documentation for available `LogHandler`s.
+    /// The logger used by the Auth library. Defaults to a silent logger that emits nothing, in
+    /// every build configuration. Pass your own `Logging.Logger` to receive the SDK's log lines —
+    /// see swift-log's documentation for available `LogHandler`s.
     ///
     /// The client removes tokens, secrets, and URL query strings from each line before your handler
     /// sees it, and tags the logger with the `system` metadata key set to `auth`.
@@ -169,7 +169,7 @@ extension AuthClient {
     ///   - initialRefreshTimeout: How long to wait for the refresh of an expired stored session
     ///     before ``AuthEvent/initialSession``. Defaults to 5 seconds.
     ///   - http: The transport and middleware chain every request goes through.
-    ///   - logger: The logger to use. Defaults to a build-config-aware logger — see ``logger``.
+    ///   - logger: The logger to use. Defaults to a silent logger — see ``logger``.
     ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
     public init(
       url: URL,

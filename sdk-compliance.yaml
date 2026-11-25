@@ -1571,8 +1571,8 @@ features:
     no_public_symbols: true
     note: "Every module sends X-Client-Info as name/version; platform; platform-version; runtime=swift; runtime-version, built by Helpers.clientInfo. PostgREST adds a features parameter for the typed API. No public API."
   client.observability.diagnostic_logging:
-    status: partially_implemented
-    note: "Each client takes a swift-log Logger at construction. The default logger is not silent: it emits warning and above in debug builds, and is silent only in release builds."
+    status: implemented
+    note: "Each client takes a swift-log Logger at construction. Without one the SDK is silent in every build configuration (a SwiftLogNoOpLogHandler at .critical, so disabled calls build no message). Each HTTP request logs one .debug line: method, URL without query, status or failure summary, and duration. No line holds a credential, token, header value, query string, or request, response, or Realtime payload; a redacting handler wraps every SDK logger as a backstop."
     symbols:
       - SupabaseClient.Configuration.Global.logger
 

@@ -91,9 +91,10 @@ Every module that retries also retries the transient `URLError`s in `RetryReques
 
 ### Logging
 
-- Every SDK logger comes from `supabaseDefaultLogger(label: "io.supabase.<module>")`, and the configuration init sets the `system` metadata. The logger is non-optional.
-- A redacting handler in Helpers wraps every SDK logger when the client is created. It removes JWTs, URL query strings and fragments, and secret JSON keys (tokens, passwords, signed URLs). This is the target; SDK-2876 tracks it. Today only Auth redacts, and only in `Configuration.init`, so a logger set on the configuration after init is not wrapped.
-- HTTP traffic logs at `.trace`. At `.error`, log an SDK-written summary, never a raw `URLError` or a message that can carry a token.
+- Every SDK logger comes from `supabaseDefaultLogger(label: "io.supabase.<module>")`, and the configuration init sets the `system` metadata. The logger is non-optional. The default is silent in every build configuration: a `SwiftLogNoOpLogHandler` at `.critical`, so a disabled call costs no string interpolation. A caller who wants logs passes a logger.
+- A redacting handler in Helpers wraps every SDK logger when the client is created. It removes JWTs, URL query strings and fragments, and secret JSON keys (tokens, passwords, signed URLs). It is a backstop: a log line never interpolates a credential, a header value, a query string, or a request, response, or Realtime message payload in the first place.
+- `LoggerInterceptor` logs one `.debug` line per HTTP request: method, URL without query, status or failure summary, and duration. It never reads a body.
+- Routine per-request lines are `.debug`. Use `.warning` or `.error` only when nothing else reports the problem, such as a failure in background work with no caller to throw to. For an error line, log an SDK-written summary (`LogRedaction.summary(of:)`), never a raw `URLError` or a message that can carry a token.
 
 ### Configuration
 

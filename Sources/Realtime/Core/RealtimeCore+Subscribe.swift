@@ -189,8 +189,7 @@ extension RealtimeCore {
       effects = joinAccepted(message, ref: ref, attempt: attempt, on: channel)
     } else if message.status == .error {
       let reason = message.replyReason(default: "The server rejected the join.")
-      logger.debug(
-        "Server refused the join for channel '\(topic(of: channel))' (ref: \(ref)): \(reason)")
+      logger.debug("Server refused the join for channel '\(topic(of: channel))' (ref: \(ref))")
       effects = joinAttemptFailed(channel, attempt: attempt, error: .joinError(reason: reason))
     } else {
       return []
@@ -259,7 +258,7 @@ extension RealtimeCore {
     case .error:
       // The join stands, so broadcast and presence keep working.
       let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
-      logger.error("Channel '\(topic(of: channel))' reported an error: \(reason)")
+      logger.error("Channel '\(topic(of: channel))' reported an error")
       if isPostgresChanges {
         return [.deliver(channel, .event(.postgresChangesFailed(reason)))]
       } else if isReplication {
@@ -347,7 +346,9 @@ extension RealtimeCore {
       logger.debug("Token expired for channel '\(topic(of: channel))', rejoining with a fresh one")
       return rejoinWithFreshToken(channel, attempt: attempt + 1)
     case .fail, .refreshToken:
-      logger.error("Failed to subscribe to channel '\(topic(of: channel))': \(error.message)")
+      logger.error(
+        "Failed to subscribe to channel '\(topic(of: channel))': \(LogRedaction.summary(of: error))"
+      )
       return failSubscribe(channel, with: error)
     case .backOff:
       return waitToRejoin(
@@ -386,7 +387,8 @@ extension RealtimeCore {
   mutating func setPhase(_ phase: ChannelRecord.Phase, for channel: ChannelID) -> [Effect] {
     guard let previous = channels[channel]?.phase else { return [] }
     channels.update(channel) { $0.phase = phase }
-    logger.debug("Channel '\(topic(of: channel))': \(previous) → \(phase)")
+    logger.debug(
+      "Channel '\(topic(of: channel))': \(caseName(of: previous)) → \(caseName(of: phase))")
     guard !phase.status.isSame(as: previous.status) else { return [] }
     return [.publishChannelStatus(channel, phase.status)]
   }

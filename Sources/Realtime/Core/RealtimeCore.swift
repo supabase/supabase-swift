@@ -324,3 +324,11 @@ struct RealtimeCore {
     return []
   }
 }
+
+/// The case name of an enum value, for a log line.
+///
+/// It leaves out the associated values: a state or an event can hold a ``RealtimeError`` whose
+/// message is a server's or a transport's text.
+func caseName(of value: Any) -> String {
+  Mirror(reflecting: value).children.first?.label ?? String(describing: value)
+}

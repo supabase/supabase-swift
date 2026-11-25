@@ -36,7 +36,7 @@ extension RealtimeCore {
     }
     guard connection != previous else { return effects }
 
-    logger.debug("Connection → \(connection) on \(event)")
+    logger.debug("Connection → \(caseName(of: connection)) on \(caseName(of: event))")
     switch connection {
     case .connecting:
       lastAttemptStart = now.elapsed
@@ -266,7 +266,7 @@ extension RealtimeCore {
     pendingHeartbeat = nil
     // Any reply proves the socket is alive, which is all a heartbeat checks.
     if message.status != .ok {
-      logger.warning("The server answered the heartbeat with: \(message.payload)")
+      logger.warning("The server answered the heartbeat with a status other than ok")
     }
     var effects: [Effect] = [
       .publishHeartbeat(.acknowledged(latency: now.elapsed - pending.sentAt))

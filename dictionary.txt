@@ -145,6 +145,7 @@ Nlci
 nonisolated
 nosec
 NSEC
+NSOS
 NSPOSIX
 NSURL
 nullable
