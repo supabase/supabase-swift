@@ -29,7 +29,9 @@ extension IcebergCatalog {
   /// Creates a namespace, or updates it when it already exists.
   ///
   /// Supabase Storage does not reject a name that is in use. It merges `properties` into the
-  /// properties of the existing namespace and returns the result.
+  /// properties of the existing namespace and returns the result. At the namespace limit of the
+  /// project, the catalog refuses the call with code `IcebergMaximumResourceLimit`, even for a
+  /// name that exists.
   ///
   /// - Warning: Experimental. See ``IcebergCatalog``.
   ///
