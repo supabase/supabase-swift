@@ -105,6 +105,7 @@ struct RealtimeBroadcastPersistenceTests {
       try await channel.broadcast(
         event: "message", payload: ["text": "hi"] as JSONObject, persist: BroadcastPersistence())
     }
+    defer { send.cancel() }
     let frame = try await lastBroadcastFrame(on: host)
     host.server?.send(
       RealtimeMessage(
@@ -126,6 +127,7 @@ struct RealtimeBroadcastPersistenceTests {
       try await channel.broadcast(
         event: "message", payload: ["text": "hi"] as JSONObject, persist: BroadcastPersistence())
     }
+    defer { send.cancel() }
     let frame = try await lastBroadcastFrame(on: host)
     host.server?.send(
       RealtimeMessage(
