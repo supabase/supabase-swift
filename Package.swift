@@ -257,7 +257,8 @@ let package = Package(
         "Storage",
         "StorageIceberg",
         "TestHelpers",
-      ]
+      ],
+      resources: [.process("Fixtures")]
     ),
     .target(
       name: "Supabase",
