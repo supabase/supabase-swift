@@ -41,7 +41,7 @@ extension RealtimeCore {
   /// `metadata` goes in the frame's metadata.
   mutating func broadcast(
     _ channel: ChannelID, event: String, payload: BroadcastPushPayload,
-    metadata: JSONObject? = nil, waiter: WaiterID
+    metadata: JSONObject?, waiter: WaiterID
   ) -> [Effect] {
     guard let record = channels[channel], let joinRef = subscribedJoinRef(channel) else {
       logger.debug(

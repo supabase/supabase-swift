@@ -186,11 +186,6 @@ public struct RealtimeError: SupabaseError {
     /// the broadcast.
     public static let persistenceInvalidTTL: Code = "persistence_invalid_ttl"
 
-    /// The codes of an acknowledged broadcast that asked to be stored and was not.
-    static let persistence: Set<Code> = [
-      .persistenceUnauthorized, .persistenceFailed, .persistenceInvalidTTL,
-    ]
-
     /// Codes the server emits for conditions the caller must fix: a bad token, a denied
     /// policy, a disabled tenant, invalid replay parameters. Retrying as-is cannot succeed.
     ///
@@ -361,21 +356,18 @@ extension RealtimeError {
         isRetryable: false)
     }
     let code = Code(rawValue: reason)
-    if Code.persistence.contains(code) {
-      return RealtimeError(kind: .server, message: persistenceMessage(code), code: code)
-    }
-    return RealtimeError(kind: .server, message: reason, code: Code.parse(reason))
-  }
-
-  private static func persistenceMessage(_ code: Code) -> String {
+    let message: String
     switch code {
     case .persistenceUnauthorized:
-      "The broadcast was delivered but not stored: the sender has no persistence policy."
+      message = "The broadcast was delivered but not stored: the sender has no persistence policy."
     case .persistenceFailed:
-      "The broadcast was delivered but not stored: the server could not store it."
+      message = "The broadcast was delivered but not stored: the server could not store it."
+    case .persistenceInvalidTTL:
+      message = "The broadcast was neither delivered nor stored: the server refused its ttl."
     default:
-      "The broadcast was neither delivered nor stored: the server refused its ttl."
+      return RealtimeError(kind: .server, message: reason, code: Code.parse(reason))
     }
+    return RealtimeError(kind: .server, message: message, code: code)
   }
 
   /// The error for a WebSocket that closed while the client still needed it.

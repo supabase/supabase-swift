@@ -51,7 +51,6 @@ extension RealtimeChannel {
     timeout: Duration? = nil,
     encoder: JSONEncoder? = nil
   ) async throws {
-    try checkCanPersist(persist)
     let body: Data
     do {
       body = try (encoder ?? JSONValue.encoder).encode(payload)
@@ -97,7 +96,6 @@ extension RealtimeChannel {
     persist: BroadcastPersistence? = nil,
     timeout: Duration? = nil
   ) async throws {
-    try checkCanPersist(persist)
     try await httpSend(
       event: event, body: data, contentType: "application/octet-stream", persist: persist,
       timeout: timeout)
@@ -110,6 +108,7 @@ extension RealtimeChannel {
     persist: BroadcastPersistence?,
     timeout: Duration?
   ) async throws {
+    try checkCanPersist(persist)
     let client = try clientForAction()
     try await client.checkUsable(self)
     var headers = client.headers

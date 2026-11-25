@@ -97,44 +97,16 @@ struct RealtimeBroadcastPersistenceTests {
   func acknowledgedBroadcastThatWasNotStoredThrowsTheServerCode(
     reply: String, code: RealtimeError.Code
   ) async throws {
-    let host = await RealtimeTestHost()
-    let channel = try await subscribedChannel(
-      on: host, isPrivate: true, acknowledgesMessages: true)
-
-    let send = Task {
-      try await channel.broadcast(
-        event: "message", payload: ["text": "hi"] as JSONObject, persist: BroadcastPersistence())
+    let error = await #expect(throws: RealtimeError.self) {
+      try await sendPersistedBroadcast(replying: .error, response: ["error": .string(reply)])
     }
-    defer { send.cancel() }
-    let frame = try await lastBroadcastFrame(on: host)
-    host.server?.send(
-      RealtimeMessage(
-        joinRef: frame.joinRef, ref: frame.ref, topic: channel.wireTopic, event: "phx_reply",
-        payload: ["status": "error", "response": ["error": .string(reply)]]))
-
-    let error = await #expect(throws: RealtimeError.self) { try await acknowledgement(of: send) }
     #expect(error?.kind == .server)
     #expect(error?.code == code)
   }
 
   @Test
   func acknowledgedBroadcastThatWasStoredReturns() async throws {
-    let host = await RealtimeTestHost()
-    let channel = try await subscribedChannel(
-      on: host, isPrivate: true, acknowledgesMessages: true)
-
-    let send = Task {
-      try await channel.broadcast(
-        event: "message", payload: ["text": "hi"] as JSONObject, persist: BroadcastPersistence())
-    }
-    defer { send.cancel() }
-    let frame = try await lastBroadcastFrame(on: host)
-    host.server?.send(
-      RealtimeMessage(
-        joinRef: frame.joinRef, ref: frame.ref, topic: channel.wireTopic, event: "phx_reply",
-        payload: ["status": "ok", "response": [:]]))
-
-    try await acknowledgement(of: send)
+    try await sendPersistedBroadcast(replying: .ok)
   }
 
   // MARK: REST
@@ -266,6 +238,28 @@ struct RealtimeBroadcastPersistenceTests {
   private func lastBroadcastFrame(on host: RealtimeTestHost) async throws -> BroadcastFrame {
     let socket = try #require(host.sockets.last)
     return BroadcastFrame(try #require(await socket.sentBinaryFrames().last))
+  }
+
+  /// Sends a persisted broadcast on an acknowledged private channel and answers it from the
+  /// server with `status` and `response`.
+  private func sendPersistedBroadcast(
+    replying status: PushStatus, response: JSONObject = [:]
+  ) async throws {
+    let host = await RealtimeTestHost()
+    let channel = try await subscribedChannel(
+      on: host, isPrivate: true, acknowledgesMessages: true)
+    let send = Task {
+      try await channel.broadcast(
+        event: "message", payload: ["text": "hi"] as JSONObject, persist: BroadcastPersistence())
+    }
+    defer { send.cancel() }
+    let frame = try await lastBroadcastFrame(on: host)
+    host.reply(
+      to: RealtimeMessage(
+        joinRef: frame.joinRef, ref: frame.ref, topic: channel.wireTopic, event: "broadcast",
+        payload: [:]),
+      status: status, response: response)
+    try await acknowledgement(of: send)
   }
 
   /// Waits for `send` to finish, bounded on the wall clock: the push deadline runs on the host's
