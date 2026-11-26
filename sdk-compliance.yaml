@@ -3301,9 +3301,6 @@ features:
     status: implemented
     symbols:
       - IcebergCatalog.deleteNamespace
-  storage.analytics.update_namespace_properties:
-    status: not_implemented
-    note: "Supabase Storage serves no route for this call."
   storage.analytics.create_table:
     status: implemented
     symbols:
@@ -3528,16 +3525,10 @@ features:
       - IcebergCommittedTable.init
       - IcebergCommittedTable.metadataLocation
       - IcebergCommittedTable.metadata
-  storage.analytics.rename_table:
-    status: not_implemented
-    note: "Supabase Storage serves no route for this call."
   storage.analytics.delete_table:
     status: implemented
     symbols:
       - IcebergCatalog.deleteTable
-  storage.analytics.register_table:
-    status: not_implemented
-    note: "Supabase Storage serves no route for this call."
 
   # ── Storage — Errors ───────────────────────────────────────────────────────
 
