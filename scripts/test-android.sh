@@ -12,7 +12,7 @@ CONFIG="${CONFIG-debug}"
 SCRATCH_PATH="${SCRATCH_PATH-.build-android}"
 # IntegrationTests needs a live Supabase instance, and PostgrestMacrosTests runs a compiler
 # plugin on the host, so neither belongs in an on-device run.
-TARGETS="${TARGETS-AuthTests DefaultIsolationTests FunctionsTests HelpersTests PostgRESTTests RealtimeTests StorageTests SupabaseTests}"
+TARGETS="${TARGETS-AuthTests DefaultIsolationTests FunctionsTests HelpersTests PostgRESTTests RealtimeTests StorageIcebergTests StorageTests SupabaseTests}"
 FILTER="${FILTER-}"
 
 DEVICE_DIR=/data/local/tmp/supabase-swift-tests

@@ -17,9 +17,9 @@ A value stays an `enum` when the set of cases is fixed by design:
 - The cases carry associated values, so a struct cannot express them: `AuthStatus`, `SignUpResult`,
   `RedirectResult`, `VerifyOTPResult`, `SSOTarget`, `OAuthAuthorizationDetailsResult`, `SignedURLResult`,
   `DownloadBehavior`, `BroadcastPayload`, `RealtimePostgresFilter`, `JSONValue`,
-  `RealtimeClientStatus`, `RealtimeChannelStatus`. The two status enums are not `Equatable`,
-  because their cases carry errors: match a case, or use `isConnected`, `isSubscribed` and
-  `error`.
+  `RealtimeClientStatus`, `RealtimeChannelStatus`, `IcebergType`. The two status enums are not
+  `Equatable`, because their cases carry errors: match a case, or use `isConnected`,
+  `isSubscribed` and `error`. `IcebergType` keeps a type it does not know in its `unknown` case.
 - The client produces the value and never reads it from the server, so only an SDK release can
   add a case: `RealtimeChannelEvent`, `HeartbeatEvent`.
 - The SDK has to implement each case, so a value it has no code for is meaningless:
@@ -47,6 +47,11 @@ A value is a `RawRepresentable` struct when the set can grow without a major rel
   `PostgrestError.Code`, `StorageError.Code`, `FunctionsError.Code`, `RealtimeError.Code`.
 - The SDK expects to add members in minor releases: `AuthEvent`, and the error kind of every
   module (`AuthError.Kind`, `StorageError.Kind`, and so on).
+- The Apache Iceberg table format defines it, so a catalog can send or accept a value that the
+  SDK has no member for: `IcebergPrimitiveType`, `IcebergTransform`, `IcebergSortDirection`,
+  `IcebergNullOrder`, and the two names that `StorageIceberg` sends in a table commit,
+  `IcebergTableUpdate.Action` and `IcebergTableRequirement.Kind`. These are experimental: import
+  them with `@_spi(Experimental) import StorageIceberg`.
 
 These types conform to `RawRepresentable`, `Hashable`, `Sendable` and `ExpressibleByStringLiteral`
 (`ExpressibleByIntegerLiteral` for `WebSocketCloseCode`). Each has a `let rawValue`,

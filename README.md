@@ -75,7 +75,8 @@ let package = Package(
 
 If you're using Xcode, [use this guide](https://developer.apple.com/documentation/swift_packages/adding_package_dependencies_to_your_app) to add `supabase-swift` to your project. Use `https://github.com/supabase/supabase-swift.git` for the URL when Xcode asks.
 
-You can also add individual libraries (`Auth`, `Functions`, `PostgREST`, `PostgrestMacros`, `Realtime`, `Storage`) instead of the full `Supabase` product.
+You can also add individual libraries (`Auth`, `Functions`, `PostgREST`, `PostgrestMacros`, `Realtime`, `Storage`, `StorageIceberg`) instead of the full `Supabase` product.
+`PostgrestMacros` and `StorageIceberg` are opt-in: the `Supabase` product does not include them. `StorageIceberg` manages the Apache Iceberg tables in Storage analytics buckets. It is experimental: import it with `@_spi(Experimental) import StorageIceberg`.
 
 ### Initialize the client
 

@@ -345,10 +345,11 @@ several local projects"), because the native stack picks its own ports.
 
 The CLI starts Storage without object lifecycles, object versioning, analytics (Iceberg) buckets
 or a CDN purge endpoint, and has no setting for them. On the Docker stack (Linux, and CI's Linux job),
-`./scripts/enable-storage-test-features.sh` recreates the storage container with them on and a stub
-that records each CDN purge; then `STORAGE_TEST_FEATURES=1` runs their full integration tests. The
-native stack cannot, so without the variable those suites check that Storage refuses each call
-instead. To run the full tests on macOS, start the Docker stack (unset
+`./scripts/enable-storage-test-features.sh` recreates the storage container with them on, a stub
+that records each CDN purge, and an Iceberg REST fixture (`apache/iceberg-rest-fixture`) as the
+upstream catalog for analytics buckets; then `STORAGE_TEST_FEATURES=1` runs their full integration
+tests. The native stack cannot, so without the variable those suites check that Storage refuses
+each call instead. To run the full tests on macOS, start the Docker stack (unset
 `SUPABASE_EXPERIMENTAL_STACK` and drop `--runtime native --eager`) and run the script after
 `supabase start`.
 

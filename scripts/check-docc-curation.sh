@@ -24,7 +24,7 @@ for catalog in Sources/*/*.docc; do
   done < <(find "$catalog" -name '*.md' | sort)
 done
 
-for module in Auth Functions PostgREST Realtime Storage Supabase; do
+for module in Auth Functions PostgREST Realtime Storage StorageIceberg Supabase; do
   if [[ ! -d "Sources/$module/$module.docc" ]]; then
     echo "Sources/$module: no DocC catalog"
     status=1

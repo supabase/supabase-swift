@@ -90,6 +90,20 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "StorageIceberg"
+               BuildableName = "StorageIceberg"
+               BlueprintName = "StorageIceberg"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -133,6 +147,13 @@
             BlueprintIdentifier = "Storage"
             BuildableName = "Storage"
             BlueprintName = "Storage"
+            ReferencedContainer = "container:">
+         </BuildableReference>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "StorageIceberg"
+            BuildableName = "StorageIceberg"
+            BlueprintName = "StorageIceberg"
             ReferencedContainer = "container:">
          </BuildableReference>
          <BuildableReference
@@ -207,6 +228,17 @@
                BlueprintIdentifier = "StorageTests"
                BuildableName = "StorageTests"
                BlueprintName = "StorageTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "StorageIcebergTests"
+               BuildableName = "StorageIcebergTests"
+               BlueprintName = "StorageIcebergTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>

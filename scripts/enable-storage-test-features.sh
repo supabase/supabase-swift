@@ -49,6 +49,12 @@ class Handler(BaseHTTPRequestHandler):
 HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
 ' >/dev/null
 
+docker rm -f supabase_iceberg_rest_fixture >/dev/null 2>&1 || true
+docker run -d --name supabase_iceberg_rest_fixture "${LABELS[@]}" \
+  --network "$NETWORK" --network-alias iceberg-rest \
+  -e CATALOG_WAREHOUSE=file:///tmp/warehouse \
+  apache/iceberg-rest-fixture:1.10.1 >/dev/null
+
 ARGS=()
 while IFS= read -r variable; do
   [[ -n "$variable" ]] && ARGS+=(-e "$variable")
@@ -57,6 +63,10 @@ ARGS+=(
   -e STORAGE_LIFECYCLE_ENABLED=true
   -e STORAGE_VERSIONING_ENABLED=true
   -e ICEBERG_ENABLED=true
+  -e ICEBERG_CATALOG_URL=http://iceberg-rest:8181/v1
+  -e ICEBERG_CATALOG_AUTH_TYPE=token
+  -e ICEBERG_CATALOG_AUTH_TOKEN=token
+  -e ICEBERG_WAREHOUSE=.
   -e CDN_PURGE_ENDPOINT_URL=http://cdn-purge-stub:8080
 )
 
@@ -67,11 +77,14 @@ docker run -d --name "$STORAGE" "${LABELS[@]}" --network "$NETWORK" --network-al
 
 for _ in $(seq 1 60); do
   if [[ "$(docker inspect "$STORAGE" --format '{{.State.Health.Status}}')" == healthy ]] \
-    && curl -fsS http://127.0.0.1:54329/requests >/dev/null 2>&1; then
-    echo "Storage restarted with lifecycles, versioning, Iceberg and a CDN purge stub."
+    && curl -fsS http://127.0.0.1:54329/requests >/dev/null 2>&1 \
+    && docker exec "$STORAGE" wget -q -T 2 --tries=1 -O /dev/null http://iceberg-rest:8181/v1/config 2>/dev/null; then
+    echo "Storage restarted with lifecycles, versioning, an Iceberg REST catalog and a CDN purge stub."
     exit 0
   fi
   sleep 1
 done
-docker logs "$STORAGE" | tail -20
+echo "Storage, the CDN purge stub or the Iceberg REST catalog did not come up in 60 seconds." >&2
+docker logs supabase_iceberg_rest_fixture 2>&1 | tail -20
+docker logs "$STORAGE" 2>&1 | tail -20
 exit 1

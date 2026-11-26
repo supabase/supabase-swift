@@ -3245,8 +3245,9 @@ features:
   # ── Storage — Analytics Buckets ────────────────────────────────────────────
 
   # StorageAnalyticsClient is @_spi(Experimental) (analytics buckets are a public
-  # alpha of Supabase Storage). The Iceberg REST catalog (namespaces, tables) is
-  # not wrapped: there is no Swift Iceberg client to hand it to.
+  # alpha of Supabase Storage). The Iceberg REST catalog (namespaces, tables) is in
+  # the opt-in StorageIceberg module, also @_spi(Experimental), and is reached with
+  # StorageAnalyticsClient.catalog(bucket:).
   storage.analytics.create_analytics_bucket:
     status: implemented
     symbols:
@@ -3268,21 +3269,266 @@ features:
     status: implemented
     symbols:
       - StorageAnalyticsClient.deleteBucket
-  storage.analytics.create_namespace: not_implemented
-  storage.analytics.list_namespaces: not_implemented
-  storage.analytics.delete_namespace: not_implemented
-  storage.analytics.create_table: not_implemented
-  storage.analytics.list_tables: not_implemented
-  storage.analytics.load_table: not_implemented
-  storage.analytics.update_table: not_implemented
-  storage.analytics.rename_table: not_implemented
-  storage.analytics.delete_table: not_implemented
-  storage.analytics.access_catalog: not_implemented
-  storage.analytics.load_namespace_metadata: not_implemented
-  storage.analytics.namespace_exists: not_implemented
-  storage.analytics.register_table: not_implemented
-  storage.analytics.table_exists: not_implemented
-  storage.analytics.update_namespace_properties: not_implemented
+  storage.analytics.access_catalog:
+    status: implemented
+    symbols:
+      - StorageAnalyticsClient.catalog
+    supporting_symbols:
+      - IcebergCatalog
+      - IcebergCatalog.bucket
+  storage.analytics.create_namespace:
+    status: implemented
+    symbols:
+      - IcebergCatalog.createNamespace
+    supporting_symbols:
+      - IcebergNamespace
+      - IcebergNamespace.init
+      - IcebergNamespace.name
+      - IcebergNamespace.properties
+  storage.analytics.list_namespaces:
+    status: implemented
+    symbols:
+      - IcebergCatalog.listNamespaces
+  storage.analytics.load_namespace_metadata:
+    status: implemented
+    symbols:
+      - IcebergCatalog.namespaceProperties
+  storage.analytics.namespace_exists:
+    status: implemented
+    symbols:
+      - IcebergCatalog.namespaceExists
+  storage.analytics.delete_namespace:
+    status: implemented
+    symbols:
+      - IcebergCatalog.deleteNamespace
+  storage.analytics.create_table:
+    status: implemented
+    symbols:
+      - IcebergCatalog.createTable
+    supporting_symbols:
+      - IcebergTableCreation
+      - IcebergTableCreation.init
+      - IcebergTableCreation.name
+      - IcebergTableCreation.schema
+      - IcebergTableCreation.partitionSpec
+      - IcebergTableCreation.writeOrder
+      - IcebergTableCreation.properties
+      - IcebergTableCreation.location
+      - IcebergSchema
+      - IcebergSchema.init
+      - IcebergSchema.encode
+      - IcebergSchema.schemaID
+      - IcebergSchema.fields
+      - IcebergSchema.identifierFieldIDs
+      - IcebergField
+      - IcebergField.init
+      - IcebergField.id
+      - IcebergField.name
+      - IcebergField.type
+      - IcebergField.isRequired
+      - IcebergField.doc
+      - IcebergType
+      - IcebergType.init
+      - IcebergType.encode
+      - IcebergType.primitive
+      - IcebergType.struct
+      - IcebergType.list
+      - IcebergType.map
+      - IcebergType.unknown
+      - IcebergType.boolean
+      - IcebergType.int
+      - IcebergType.long
+      - IcebergType.float
+      - IcebergType.double
+      - IcebergType.date
+      - IcebergType.time
+      - IcebergType.timestamp
+      - IcebergType.timestamptz
+      - IcebergType.string
+      - IcebergType.uuid
+      - IcebergType.binary
+      - IcebergType.decimal
+      - IcebergType.fixed
+      - IcebergPrimitiveType
+      - IcebergPrimitiveType.init
+      - IcebergPrimitiveType.rawValue
+      - IcebergPrimitiveType.boolean
+      - IcebergPrimitiveType.int
+      - IcebergPrimitiveType.long
+      - IcebergPrimitiveType.float
+      - IcebergPrimitiveType.double
+      - IcebergPrimitiveType.date
+      - IcebergPrimitiveType.time
+      - IcebergPrimitiveType.timestamp
+      - IcebergPrimitiveType.timestamptz
+      - IcebergPrimitiveType.timestampNs
+      - IcebergPrimitiveType.timestamptzNs
+      - IcebergPrimitiveType.string
+      - IcebergPrimitiveType.uuid
+      - IcebergPrimitiveType.binary
+      - IcebergPrimitiveType.decimal
+      - IcebergPrimitiveType.fixed
+      - IcebergListType
+      - IcebergListType.init
+      - IcebergListType.encode
+      - IcebergListType.elementID
+      - IcebergListType.element
+      - IcebergListType.isElementRequired
+      - IcebergMapType
+      - IcebergMapType.init
+      - IcebergMapType.encode
+      - IcebergMapType.keyID
+      - IcebergMapType.key
+      - IcebergMapType.valueID
+      - IcebergMapType.value
+      - IcebergMapType.isValueRequired
+      - IcebergPartitionSpec
+      - IcebergPartitionSpec.init
+      - IcebergPartitionSpec.specID
+      - IcebergPartitionSpec.fields
+      - IcebergPartitionField
+      - IcebergPartitionField.init
+      - IcebergPartitionField.fieldID
+      - IcebergPartitionField.sourceID
+      - IcebergPartitionField.name
+      - IcebergPartitionField.transform
+      - IcebergTransform
+      - IcebergTransform.init
+      - IcebergTransform.rawValue
+      - IcebergTransform.identity
+      - IcebergTransform.year
+      - IcebergTransform.month
+      - IcebergTransform.day
+      - IcebergTransform.hour
+      - IcebergTransform.void
+      - IcebergTransform.bucket
+      - IcebergTransform.truncate
+      - IcebergSortOrder
+      - IcebergSortOrder.init
+      - IcebergSortOrder.orderID
+      - IcebergSortOrder.fields
+      - IcebergSortField
+      - IcebergSortField.init
+      - IcebergSortField.sourceID
+      - IcebergSortField.transform
+      - IcebergSortField.direction
+      - IcebergSortField.nullOrder
+      - IcebergSortDirection
+      - IcebergSortDirection.init
+      - IcebergSortDirection.rawValue
+      - IcebergSortDirection.ascending
+      - IcebergSortDirection.descending
+      - IcebergNullOrder
+      - IcebergNullOrder.init
+      - IcebergNullOrder.rawValue
+      - IcebergNullOrder.nullsFirst
+      - IcebergNullOrder.nullsLast
+  storage.analytics.list_tables:
+    status: implemented
+    symbols:
+      - IcebergCatalog.listTables
+    supporting_symbols:
+      - IcebergTableIdentifier
+      - IcebergTableIdentifier.init
+      - IcebergTableIdentifier.namespace
+      - IcebergTableIdentifier.name
+  storage.analytics.load_table:
+    status: implemented
+    symbols:
+      - IcebergCatalog.table
+    supporting_symbols:
+      - IcebergLoadedTable
+      - IcebergLoadedTable.init
+      - IcebergLoadedTable.metadataLocation
+      - IcebergLoadedTable.metadata
+      - IcebergLoadedTable.config
+      - IcebergTableMetadata
+      - IcebergTableMetadata.init
+      - IcebergTableMetadata.formatVersion
+      - IcebergTableMetadata.tableUUID
+      - IcebergTableMetadata.location
+      - IcebergTableMetadata.lastUpdated
+      - IcebergTableMetadata.properties
+      - IcebergTableMetadata.schemas
+      - IcebergTableMetadata.currentSchemaID
+      - IcebergTableMetadata.currentSchema
+      - IcebergTableMetadata.partitionSpecs
+      - IcebergTableMetadata.defaultSpecID
+      - IcebergTableMetadata.sortOrders
+      - IcebergTableMetadata.defaultSortOrderID
+      - IcebergTableMetadata.currentSnapshotID
+      - IcebergTableMetadata.raw
+  storage.analytics.table_exists:
+    status: implemented
+    symbols:
+      - IcebergCatalog.tableExists
+  storage.analytics.update_table:
+    status: implemented
+    symbols:
+      - IcebergCatalog.updateTable
+    supporting_symbols:
+      - IcebergTableUpdate
+      - IcebergTableUpdate.action
+      - IcebergTableUpdate.fields
+      - IcebergTableUpdate.encode
+      - IcebergTableUpdate.custom
+      - IcebergTableUpdate.assignUUID
+      - IcebergTableUpdate.upgradeFormatVersion
+      - IcebergTableUpdate.addSchema
+      - IcebergTableUpdate.setCurrentSchema
+      - IcebergTableUpdate.addPartitionSpec
+      - IcebergTableUpdate.setDefaultPartitionSpec
+      - IcebergTableUpdate.addSortOrder
+      - IcebergTableUpdate.setDefaultSortOrder
+      - IcebergTableUpdate.setLocation
+      - IcebergTableUpdate.setProperties
+      - IcebergTableUpdate.removeProperties
+      - IcebergTableUpdate.Action
+      - IcebergTableUpdate.Action.init
+      - IcebergTableUpdate.Action.rawValue
+      - IcebergTableUpdate.Action.assignUUID
+      - IcebergTableUpdate.Action.upgradeFormatVersion
+      - IcebergTableUpdate.Action.addSchema
+      - IcebergTableUpdate.Action.setCurrentSchema
+      - IcebergTableUpdate.Action.addPartitionSpec
+      - IcebergTableUpdate.Action.setDefaultPartitionSpec
+      - IcebergTableUpdate.Action.addSortOrder
+      - IcebergTableUpdate.Action.setDefaultSortOrder
+      - IcebergTableUpdate.Action.setLocation
+      - IcebergTableUpdate.Action.setProperties
+      - IcebergTableUpdate.Action.removeProperties
+      - IcebergTableRequirement
+      - IcebergTableRequirement.kind
+      - IcebergTableRequirement.fields
+      - IcebergTableRequirement.encode
+      - IcebergTableRequirement.custom
+      - IcebergTableRequirement.assertCreate
+      - IcebergTableRequirement.assertTableUUID
+      - IcebergTableRequirement.assertRefSnapshotID
+      - IcebergTableRequirement.assertCurrentSchemaID
+      - IcebergTableRequirement.assertLastAssignedFieldID
+      - IcebergTableRequirement.assertLastAssignedPartitionID
+      - IcebergTableRequirement.assertDefaultSpecID
+      - IcebergTableRequirement.assertDefaultSortOrderID
+      - IcebergTableRequirement.Kind
+      - IcebergTableRequirement.Kind.init
+      - IcebergTableRequirement.Kind.rawValue
+      - IcebergTableRequirement.Kind.assertCreate
+      - IcebergTableRequirement.Kind.assertTableUUID
+      - IcebergTableRequirement.Kind.assertRefSnapshotID
+      - IcebergTableRequirement.Kind.assertCurrentSchemaID
+      - IcebergTableRequirement.Kind.assertLastAssignedFieldID
+      - IcebergTableRequirement.Kind.assertLastAssignedPartitionID
+      - IcebergTableRequirement.Kind.assertDefaultSpecID
+      - IcebergTableRequirement.Kind.assertDefaultSortOrderID
+      - IcebergCommittedTable
+      - IcebergCommittedTable.init
+      - IcebergCommittedTable.metadataLocation
+      - IcebergCommittedTable.metadata
+  storage.analytics.delete_table:
+    status: implemented
+    symbols:
+      - IcebergCatalog.deleteTable
 
   # ── Storage — Errors ───────────────────────────────────────────────────────
 
