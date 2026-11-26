@@ -3282,7 +3282,6 @@ features:
   storage.analytics.namespace_exists: not_implemented
   storage.analytics.register_table: not_implemented
   storage.analytics.table_exists: not_implemented
-  storage.analytics.update_namespace_properties: not_implemented
 
   # ── Storage — Errors ───────────────────────────────────────────────────────
 
