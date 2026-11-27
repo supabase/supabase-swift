@@ -351,7 +351,7 @@ jobs:
       # Sticky disks are Linux-only, so macOS keeps actions/cache.
       - name: "Mount Swift build disk"
         if: runner.os == 'Linux'
-        uses: useblacksmith/stickydisk@3f6be1451e3cad893b778bc93495c80452a5da26 # v1.7.2
+        uses: useblacksmith/stickydisk@61dac6a8aa5927f7d3343d9dbdc8153787d08a1c # v1.8.0
         with:
           key: ${{ github.repository }}-integration-${{ matrix.name }}
           path: .build
