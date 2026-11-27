@@ -119,7 +119,7 @@ install it like this (the README has the same steps):
 
 <!-- x-release-please-start-version -->
 ```bash
-VERSION=3.0.0-alpha.2 # the supabase-swift version the project uses
+VERSION=3.0.0-alpha.3 # the supabase-swift version the project uses
 ASSET=supabase-typegen-macos-universal.tar.gz # or supabase-typegen-linux-x86_64.tar.gz
 mkdir -p ~/.local/bin
 curl -fsSL "https://github.com/supabase/supabase-swift/releases/download/v$VERSION/$ASSET" | tar -xz -C ~/.local/bin

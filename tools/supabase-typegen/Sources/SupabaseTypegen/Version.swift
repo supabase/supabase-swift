@@ -6,4 +6,4 @@
 //
 
 /// The supabase-swift release this generator ships with. release-please bumps it.
-let version = "3.0.0-alpha.2"  // {x-release-please-version}
+let version = "3.0.0-alpha.3"  // {x-release-please-version}

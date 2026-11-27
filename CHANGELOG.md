@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.0.0-alpha.3](https://github.com/supabase/supabase-swift/compare/v3.0.0-alpha.2...v3.0.0-alpha.3) (2026-11-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **realtime:** a channel the server shuts down for a reason now becomes `.failed(error)` with `error.kind == .channelClosed` instead of `.unsubscribed`, and `events()` no longer emits `replicationFailed` for shutdowns that are not a replication timeout.
+* **realtime:** store broadcast messages with persist ([#1890](https://github.com/supabase/supabase-swift/issues/1890))
+
+### Features
+
+* **auth:** add admin SSO provider and MFA factor update APIs ([#1888](https://github.com/supabase/supabase-swift/issues/1888)) ([d11c405](https://github.com/supabase/supabase-swift/commit/d11c4056cdf48a76ba52aa13fe4ab988e3f1ca99))
+* **realtime:** store broadcast messages with persist ([#1890](https://github.com/supabase/supabase-swift/issues/1890)) ([c1a238c](https://github.com/supabase/supabase-swift/commit/c1a238c81109d390c4f57a3e6bf2fd44af9c411d))
+* **storage:** add StorageIceberg, a client for the analytics Iceberg catalog ([#1892](https://github.com/supabase/supabase-swift/issues/1892)) ([7333bc2](https://github.com/supabase/supabase-swift/commit/7333bc21668daebfa0abb34e77eb64a9bdedc59e))
+
+
+### Bug Fixes
+
+* **functions:** send a query string in the function name as the URL query ([#1878](https://github.com/supabase/supabase-swift/issues/1878)) ([1bdb5c4](https://github.com/supabase/supabase-swift/commit/1bdb5c47b939ab450c1921d2924a0099cd669b56))
+* **helpers:** keep the SDK silent by default and log no payloads ([#1887](https://github.com/supabase/supabase-swift/issues/1887)) ([c7e4d28](https://github.com/supabase/supabase-swift/commit/c7e4d28a9755363ec356b440161ac860bca37635))
+* **postgrest:** merge a Prefer header set with settingHeader instead of replacing it ([#1877](https://github.com/supabase/supabase-swift/issues/1877)) ([e4a5cd7](https://github.com/supabase/supabase-swift/commit/e4a5cd77f1200c15fbc6c8bdf168f3f3e0b91290))
+* **realtime:** fail a channel the server shuts down with the server's reason ([#1896](https://github.com/supabase/supabase-swift/issues/1896)) ([a45b4db](https://github.com/supabase/supabase-swift/commit/a45b4db86252caaeb3110a61eee434556a4d7654))
+* **realtime:** rejoin subscribed channels on the next connect() after disconnect() ([#1884](https://github.com/supabase/supabase-swift/issues/1884)) ([b5b18c3](https://github.com/supabase/supabase-swift/commit/b5b18c33436d946bd8526118e40cb37e94d421e9))
+
 ## [3.0.0-alpha.2](https://github.com/supabase/supabase-swift/compare/v3.0.0-alpha.1...v3.0.0-alpha.2) (2026-11-23)
 
 

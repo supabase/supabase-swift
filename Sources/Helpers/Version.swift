@@ -1,7 +1,7 @@
 import Foundation
 import IssueReporting
 
-private let _version = "3.0.0-alpha.2"  // {x-release-please-version}
+private let _version = "3.0.0-alpha.3"  // {x-release-please-version}
 
 #if DEBUG
   package let version = isTesting ? "0.0.0" : _version
