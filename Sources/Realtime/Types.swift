@@ -213,9 +213,11 @@ public enum RealtimeChannelEvent: Hashable, Sendable {
   /// when you opt in with ``RealtimeChannelConfiguration/Broadcast-swift.struct/waitsForReplication``. The value is the server's
   /// message.
   ///
-  /// The server then shuts the channel down: ``RealtimeChannel/statusChanges()`` emits
-  /// ``RealtimeChannelStatus/failed(_:)`` with the same message, then ends. A shutdown for any
-  /// other reason emits no event here; read its reason from that status.
+  /// The server reports it by shutting the channel down: ``RealtimeChannel/statusChanges()``
+  /// emits ``RealtimeChannelStatus/failed(_:)`` with the same message, then ends. A shutdown
+  /// for another reason, such as the project's messages-per-second limit, also emits this event
+  /// when it comes before the replication is ready, with that reason as its value. After
+  /// ``replicationReady``, a shutdown emits no event here; read its reason from that status.
   case replicationFailed(String)
 }
 

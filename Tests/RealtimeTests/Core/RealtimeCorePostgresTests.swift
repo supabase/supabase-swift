@@ -142,6 +142,26 @@ struct RealtimeCorePostgresTests {
       ])
   }
 
+  /// The replication ready of a join that rejoins at once for a new binding leaves the new join
+  /// waiting for its own report.
+  @Test
+  func rejoinForNewBindingsWaitsForItsOwnReplicationReport() {
+    var configuration = RealtimeChannelConfiguration()
+    configuration.broadcast.waitsForReplication = true
+    var harness = CoreHarness.connected()
+    _ = harness.send(
+      Self.subscribe(harness.waiter(), configuration: configuration, snapshot: Self.noStreams))
+    _ = harness.send(.bindingsChanged(channel: .room, bindings: [Self.messages]))
+
+    _ = harness.send(.frame(Self.system(joinRef: "1", extension: "system")))
+    guard case .joining(let ref, _)? = harness.core.channels[.room]?.phase, ref != "1" else {
+      Issue.record("Expected a rejoin for the new binding")
+      return
+    }
+
+    #expect(harness.core.channels[.room]?.awaitsReplication == true)
+  }
+
   /// Once the replication is ready, a `system` error is a shutdown, not a replication failure.
   @Test
   func systemErrorAfterReplicationReadyIsNotAReplicationFailure() {

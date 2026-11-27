@@ -256,11 +256,14 @@ extension RealtimeCore {
 
     switch message.status {
     case .ok where isForCurrentJoin:
+      // Before the confirmation: it may start a join for new bindings, which waits anew.
+      if isReplication {
+        channels.update(channel) { $0.awaitsReplication = false }
+      }
       var effects = confirmJoinBySystem(channel)
       if isPostgresChanges {
         effects.append(.deliver(channel, .event(.postgresChangesReady)))
       } else if isReplication {
-        channels.update(channel) { $0.awaitsReplication = false }
         effects.append(.deliver(channel, .event(.replicationReady)))
       }
       return effects

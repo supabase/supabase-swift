@@ -251,6 +251,17 @@ struct RealtimeCoreLeaveTests {
     #expect(harness.core.channels[.room]?.shutdownError == nil)
   }
 
+  /// `phx_error` without `join_ref` on a channel that left has no join to end.
+  @Test
+  func channelErrorOnUnsubscribedChannelChangesNothing() {
+    var harness = Self.subscribed()
+    _ = harness.send(.unsubscribe(channel: .room, waiter: harness.waiter()))
+    _ = harness.send(.timerFired(.leaveTimeout(channel: .room, ref: "2")))
+
+    #expect(harness.send(.frame(Self.error(joinRef: nil))) == [])
+    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
+  }
+
   @Test
   func serverShutdownReasonKeepsItsCode() {
     let error = RealtimeError.channelClosed(reason: "TenantNotFound: Tenant not found")

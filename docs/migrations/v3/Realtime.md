@@ -346,9 +346,10 @@ for await event in await channel.events() where event == .postgresChangesReady {
 `events()` also emits `.resubscribed` when a channel joins again after a reconnect or to add a
 Postgres changes binding. Events sent while it was away are missed, so reload any state built
 from them. With `broadcast.waitsForReplication` on, it emits `.replicationReady` or
-`.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`. Any
-other `system` error with that extension announces a shutdown: read the reason from the
-last status of `statusChanges()`, `.failed`, not from `events()`.
+`.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`. That
+error announces a shutdown, so any shutdown before `.replicationReady` emits
+`.replicationFailed(_:)` with its reason. Read the reason of a later shutdown from the last
+status of `statusChanges()`, `.failed`, not from `events()`.
 
 ## Streams replace callbacks
 
