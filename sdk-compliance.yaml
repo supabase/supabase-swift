@@ -2028,6 +2028,10 @@ features:
     symbols:
       - HTTPClientConfiguration.timeout
       - PostgrestRequestBuilder.timeout
+  database.observability.client_spans:
+    status: implemented
+    no_public_symbols: true
+    note: "One client span and one http.client.request.duration measurement per PostgREST call, from the supabase.postgrest tracer and meter, gated behind the OpenTelemetry SPM trait. The span is made active only when it records, so the no-op tracer sends no traceparent of its own. The unit and description are set only with the official OpenTelemetrySdk: the Swift metrics API cannot set them (open-telemetry/opentelemetry-swift#1315)."
 
   # ── Functions ──────────────────────────────────────────────────────────────
 

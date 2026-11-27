@@ -71,7 +71,17 @@ import Logging
 ///
 /// No further configuration is needed — the trait is the only toggle. With it enabled, whatever
 /// span is active (via `opentelemetry-swift`) when a request is made gets propagated; with no
-/// active span, or with the trait disabled, requests go out unchanged.
+/// active span, or with the trait disabled, requests go out unchanged. PostgREST calls are the
+/// exception, below.
+///
+/// The trait also makes every PostgREST call emit one client span and one
+/// `http.client.request.duration` measurement, from the `supabase.postgrest` tracer and meter, to
+/// the providers registered with `OpenTelemetry`. The span carries `supabase.postgrest.operation`
+/// and the table or function the call targets. Its `url.full` keeps the values of `select`,
+/// `order`, `limit` and `offset` and replaces every other query value with `REDACTED`, because
+/// filters carry your data. When the tracer records, `traceparent` names this span instead of the
+/// active one, as the parent of the server's spans. So a PostgREST call carries `traceparent` even
+/// when no span is active.
 public final class SupabaseClient: Sendable {
   /// Derives the default auth storage key from the project ref in `url`'s host, so two projects
   /// in the same app do not share a stored session.

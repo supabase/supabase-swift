@@ -158,7 +158,8 @@ public struct PostgrestClient: Sendable {
       retryableMethods: [.get, .head]
     )
 
-    /// The clock the waits between retries sleep on.
+    /// The clock the waits between retries sleep on, and that times a call's
+    /// `http.client.request.duration` measurement with the `OpenTelemetry` trait.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive retries deterministically in
     /// tests instead of waiting out real seconds. `TestClock` comes from

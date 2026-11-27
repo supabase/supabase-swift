@@ -118,7 +118,9 @@ public struct _PostgrestRequest: Sendable {
     let response: HTTPTypes.HTTPResponse
     let data: Data
     do {
-      (response, data) = try await http.send(request, body: body, timeout: timeout)
+      (response, data) = try await instrument(request, clock: configuration.clock) {
+        try await http.send(request, body: body, timeout: timeout)
+      }
     } catch let urlError as URLError {
       throw PostgrestError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
