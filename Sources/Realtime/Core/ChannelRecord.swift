@@ -45,6 +45,12 @@ struct ChannelRecord {
   var isRemoving = false
   /// The pushes that wait for a reply, by ref.
   var pendingPushes: [Ref: WaiterID] = [:]
+  /// Whether the current join asked the server to report its replication connection, and no
+  /// report came yet.
+  var awaitsReplication = false
+  /// The error for the server's `system` error on the current join. The server sends one right
+  /// before it stops the channel, so the `phx_close` that follows fails the channel with it.
+  var shutdownError: RealtimeError?
 
   init(topic: String, configuration: RealtimeChannelConfiguration) {
     self.topic = topic

@@ -157,7 +157,8 @@ extension RealtimeCore {
 
   // MARK: Server close and error
 
-  /// Applies `phx_close` for the current join (see ``endJoinClosedByServer(_:)``). Unless it
+  /// Applies `phx_close` for the current join (see ``endJoinClosedByServer(_:shutdown:)``),
+  /// with the reason of the `system` error that came before it, if any. Unless it
   /// answers `phx_leave`, it also finishes the channel's streams and drops the channel, as
   /// today's `client.remove(self)`. The message goes to the channel its `join_ref` names, or to
   /// the live channel of its topic when it has none. A close for an older join matches no
@@ -167,7 +168,7 @@ extension RealtimeCore {
       let record = channels[channel]
     else { return [] }
     logger.debug("Server closed channel '\(topic(of: channel))'")
-    let effects = endJoinClosedByServer(channel)
+    let effects = endJoinClosedByServer(channel, shutdown: record.shutdownError)
     // The answer to `phx_leave`: the channel stays, so it can subscribe again.
     if case .leaving = record.phase { return effects }
     return effects + dropChannel(channel)
@@ -197,7 +198,7 @@ extension RealtimeCore {
       // No join is on the server yet, so the one about to go out is not affected.
       return []
     case .unsubscribed, .leaving, .failed:
-      return endJoinClosedByServer(channel)
+      return endJoinClosedByServer(channel, shutdown: nil)
     }
     let timer = record.phase.timer(for: channel)
     return failPendingPushes(channel, with: .channelError)
@@ -205,21 +206,31 @@ extension RealtimeCore {
       + (timer.map { [.cancel($0)] } ?? [])
   }
 
-  /// Ends the join the server closed: a leave is over, a join in flight fails with
-  /// ``RealtimeError/channelClosedByServer``, and any other join ends.
-  private mutating func endJoinClosedByServer(_ channel: ChannelID) -> [Effect] {
+  /// Ends the join the server closed: a leave is over, and any other join ends.
+  ///
+  /// `shutdown` is the error for the server's `system` error on the current join: the server
+  /// shut the channel down, so the channel fails with the server's reason, and so do its
+  /// subscribe callers and pushes. Without one, a join in flight fails with
+  /// ``RealtimeError/channelClosedByServer``, and a subscribed channel is unsubscribed, as the
+  /// capability spec says of `phx_close`.
+  private mutating func endJoinClosedByServer(
+    _ channel: ChannelID, shutdown: RealtimeError?
+  ) -> [Effect] {
     switch channels[channel]?.phase {
     case .leaving?:
-      leaveEnded(channel, pushes: .channelClosedByServer, cancelTimer: true)
+      return leaveEnded(channel, pushes: .channelClosedByServer, cancelTimer: true)
     case .waitingForSocket?, .refreshingToken?, .joining?, .waitingToRetry?:
-      endJoin(
-        channel, subscribers: .failure(.channelClosedByServer), pushes: .channelClosedByServer,
-        phase: .failed(.channelClosedByServer))
+      let error = shutdown ?? .channelClosedByServer
+      return endJoin(channel, subscribers: .failure(error), pushes: error, phase: .failed(error))
     case .subscribed?, .failed?:
-      endJoin(
+      if let shutdown {
+        return endJoin(
+          channel, subscribers: .failure(shutdown), pushes: shutdown, phase: .failed(shutdown))
+      }
+      return endJoin(
         channel, subscribers: .cancelled, pushes: .channelClosedByServer, phase: .unsubscribed)
     case .unsubscribed?, nil:
-      []
+      return []
     }
   }
 

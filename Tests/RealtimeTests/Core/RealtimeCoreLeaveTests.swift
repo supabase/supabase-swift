@@ -197,6 +197,133 @@ struct RealtimeCoreLeaveTests {
     #expect(harness.core.channels[.room] == nil)
   }
 
+  /// The server shuts a channel down with a `system` error, then `phx_close`, as on the tenant's
+  /// events-per-second limit. The channel fails with the server's reason, and so do its pushes.
+  @Test
+  func serverShutdownOfSubscribedChannelFailsWithTheReason() {
+    var harness = Self.subscribed()
+    let w = harness.waiter()
+    _ = harness.send(.push(channel: .room, event: "x", payload: [:], waiter: w))
+    let shutdown = RealtimeError.channelClosed(reason: "Too many messages per second")
+
+    // Not a replication failure: the channel did not ask for replication.
+    #expect(harness.send(.frame(Self.shutdown("Too many messages per second", joinRef: "1"))) == [])
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .resume(w, .failure(shutdown)),
+        .cancel(.pushTimeout(channel: .room, ref: "2")),
+        .publishChannelStatus(.room, .failed(shutdown)),
+        .finishChannel(.room),
+      ])
+    #expect(harness.core.channels[.room] == nil)
+  }
+
+  /// A rejoin starts clean: the reason the old join got does not fail the new one.
+  @Test
+  func rejoinClearsTheShutdownReason() {
+    var harness = Self.subscribed()
+    _ = harness.send(.frame(Self.shutdown("Too many messages per second", joinRef: "1")))
+    _ = harness.send(.frame(Self.error(joinRef: "1")))
+    _ = harness.send(.timerFired(.rejoin(channel: .room)))
+    guard case .joining(let ref, _)? = harness.core.channels[.room]?.phase else {
+      Issue.record("Expected a rejoin")
+      return
+    }
+    _ = harness.send(.frame(Self.reply(ref: ref)))
+
+    #expect(harness.core.channels[.room]?.shutdownError == nil)
+    #expect(
+      harness.send(.frame(Self.close(joinRef: ref))) == [
+        .publishChannelStatus(.room, .unsubscribed),
+        .finishChannel(.room),
+      ])
+  }
+
+  /// A `system` error without `join_ref` names no join when the channel has none.
+  @Test
+  func shutdownReasonWithoutJoinRefIsIgnoredWithoutAJoin() {
+    var harness = Self.subscribed()
+    _ = harness.send(.frame(Self.error(joinRef: "1")))
+    #expect(harness.core.channels[.room]?.currentJoinRef == nil)
+
+    _ = harness.send(.frame(Self.shutdown("Too many messages per second", joinRef: nil)))
+
+    #expect(harness.core.channels[.room]?.shutdownError == nil)
+  }
+
+  @Test
+  func serverShutdownReasonKeepsItsCode() {
+    let error = RealtimeError.channelClosed(reason: "TenantNotFound: Tenant not found")
+
+    #expect(error.kind == .channelClosed)
+    #expect(error.message == "TenantNotFound: Tenant not found")
+    #expect(error.code == .tenantNotFound)
+  }
+
+  @Test
+  func serverShutdownDuringJoinFailsTheSubscribeWithTheReason() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w))
+    let shutdown = RealtimeError.channelClosed(reason: "Node request timeout")
+
+    _ = harness.send(.frame(Self.shutdown("Node request timeout", joinRef: "1")))
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .resume(w, .failure(shutdown)),
+        .publishChannelStatus(.room, .failed(shutdown)),
+        .cancel(.joinTimeout(channel: .room, ref: "1")),
+        .finishChannel(.room),
+      ])
+  }
+
+  /// A `system` error for an older join says nothing about the current one.
+  @Test
+  func staleShutdownReasonIsIgnored() {
+    var harness = Self.subscribed()
+
+    _ = harness.send(.frame(Self.shutdown("Too many messages per second", joinRef: "9")))
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .publishChannelStatus(.room, .unsubscribed),
+        .finishChannel(.room),
+      ])
+  }
+
+  /// The answer to `phx_leave` ends the leave, even after a `system` error.
+  @Test
+  func shutdownReasonDuringLeaveStillUnsubscribes() {
+    var harness = Self.subscribed()
+    let w = harness.waiter()
+    _ = harness.send(.unsubscribe(channel: .room, waiter: w))
+
+    _ = harness.send(.frame(Self.shutdown("Too many messages per second", joinRef: "1")))
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .resume(w, .success),
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.leaveTimeout(channel: .room, ref: "2")),
+      ])
+  }
+
+  /// Without a reason, a push on a subscribed channel fails with an error that does not claim
+  /// the channel was subscribing.
+  @Test
+  func serverCloseWithoutReasonFailsPushesWithChannelClosedByServer() {
+    var harness = Self.subscribed()
+    let w = harness.waiter()
+    _ = harness.send(.push(channel: .room, event: "x", payload: [:], waiter: w))
+
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .resume(w, .failure(.channelClosedByServer)),
+        .cancel(.pushTimeout(channel: .room, ref: "2")),
+        .publishChannelStatus(.room, .unsubscribed),
+        .finishChannel(.room),
+      ])
+    #expect(!RealtimeError.channelClosedByServer.message.contains("subscribing"))
+  }
+
   /// `phx_error` on a subscribed channel fails its pushes, waits, and joins again, as
   /// supabase-js does. The confirmed rejoin emits `resubscribed`.
   @Test
@@ -931,6 +1058,15 @@ struct RealtimeCoreLeaveTests {
   static func close(joinRef: Ref?) -> RealtimeMessage {
     RealtimeMessage(
       joinRef: joinRef, ref: nil, topic: "realtime:\(topic)", event: "phx_close", payload: [:])
+  }
+
+  /// The `system` error the server pushes right before it stops the channel.
+  static func shutdown(_ reason: String, joinRef: Ref?) -> RealtimeMessage {
+    RealtimeMessage(
+      joinRef: joinRef, ref: nil, topic: "realtime:\(topic)", event: "system",
+      payload: [
+        "status": "error", "extension": "system", "message": .string(reason), "channel": "room",
+      ])
   }
 
   static func error(joinRef: Ref?) -> RealtimeMessage {
