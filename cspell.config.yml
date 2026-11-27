@@ -14,6 +14,7 @@ ignorePaths:
   - .serena/
   - CHANGELOG.md
   - Package.resolved
+  - docs/api-docs/
   - "**/*.xcworkspace/**"
   - "**/*.xcodeproj/**"
 

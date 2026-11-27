@@ -101,6 +101,21 @@ sits in a file listed in `release-please-config.json` `extra-files`, with an
 `x-release-please-version` marker. The README library list matches the
 `.library` products in `Package.swift`.
 
+## API Docs
+
+The API docs for supabase.com/docs are generated from the doc comments of the public API. To see
+them as the docs site will show them, run the preview with the path to a local checkout of
+[supabase/supabase](https://github.com/supabase/supabase):
+
+```bash
+./scripts/api-docs.sh --preview ../supabase
+```
+
+It generates the API docs, starts the docs site in that checkout and opens the page in your
+browser. Ctrl-C stops it.
+
+See [tools/api-docs/README.md](tools/api-docs/README.md) for the full details.
+
 ## Common Tasks
 
 ### Adding a New Feature
