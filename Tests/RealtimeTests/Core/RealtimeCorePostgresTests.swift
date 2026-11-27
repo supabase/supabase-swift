@@ -124,6 +124,57 @@ struct RealtimeCorePostgresTests {
     #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
   }
 
+  /// With `waitsForReplication`, a `system` error before the replication is ready is the
+  /// replication failure. The server then closes the channel, which fails with the same reason.
+  @Test
+  func replicationTimeoutDeliversReplicationFailedThenFailsTheChannel() {
+    var harness = Self.subscribedWaitingForReplication()
+    let reason = "Replication connection was not established in time"
+
+    #expect(
+      harness.send(.frame(Self.system(joinRef: "1", extension: "system", error: reason))) == [
+        .deliver(.room, .event(.replicationFailed(reason)))
+      ])
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .publishChannelStatus(.room, .failed(.channelClosed(reason: reason))),
+        .finishChannel(.room),
+      ])
+  }
+
+  /// The replication ready of a join that rejoins at once for a new binding leaves the new join
+  /// waiting for its own report.
+  @Test
+  func rejoinForNewBindingsWaitsForItsOwnReplicationReport() {
+    var configuration = RealtimeChannelConfiguration()
+    configuration.broadcast.waitsForReplication = true
+    var harness = CoreHarness.connected()
+    _ = harness.send(
+      Self.subscribe(harness.waiter(), configuration: configuration, snapshot: Self.noStreams))
+    _ = harness.send(.bindingsChanged(channel: .room, bindings: [Self.messages]))
+
+    _ = harness.send(.frame(Self.system(joinRef: "1", extension: "system")))
+    guard case .joining(let ref, _)? = harness.core.channels[.room]?.phase, ref != "1" else {
+      Issue.record("Expected a rejoin for the new binding")
+      return
+    }
+
+    #expect(harness.core.channels[.room]?.awaitsReplication == true)
+  }
+
+  /// Once the replication is ready, a `system` error is a shutdown, not a replication failure.
+  @Test
+  func systemErrorAfterReplicationReadyIsNotAReplicationFailure() {
+    var harness = Self.subscribedWaitingForReplication()
+    _ = harness.send(.frame(Self.system(joinRef: "1", extension: "system")))
+
+    #expect(
+      harness.send(
+        .frame(
+          Self.system(joinRef: "1", extension: "system", error: "Too many messages per second")))
+        == [])
+  }
+
   @Test
   func lateOkConfirmsATimedOutJoinWithBindings() {
     var harness = CoreHarness.connected()
@@ -410,6 +461,18 @@ struct RealtimeCorePostgresTests {
     return harness
   }
 
+  /// A connected harness whose channel joined with ref `"1"` and asked the server to report its
+  /// replication connection, which has not reported yet.
+  static func subscribedWaitingForReplication() -> CoreHarness {
+    var configuration = RealtimeChannelConfiguration()
+    configuration.broadcast.waitsForReplication = true
+    var harness = CoreHarness.connected()
+    _ = harness.send(
+      subscribe(harness.waiter(), configuration: configuration, snapshot: noStreams))
+    _ = harness.send(.frame(reply(ref: "1")))
+    return harness
+  }
+
   static func join(ref: Ref, snapshot: JoinSnapshot) throws -> RealtimeMessage {
     let payload = RealtimeJoinPayload(
       config: RealtimeJoinConfig(
@@ -430,6 +493,11 @@ struct RealtimeCorePostgresTests {
     RealtimeMessage(
       joinRef: ref, ref: ref, topic: "realtime:\(topic)", event: "phx_reply",
       payload: ["status": "ok", "response": .object(response)])
+  }
+
+  static func close(joinRef: Ref?) -> RealtimeMessage {
+    RealtimeMessage(
+      joinRef: joinRef, ref: nil, topic: "realtime:\(topic)", event: "phx_close", payload: [:])
   }
 
   static func system(joinRef: Ref?, extension: String, error: String? = nil) -> RealtimeMessage {

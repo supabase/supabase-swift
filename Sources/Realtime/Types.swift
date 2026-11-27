@@ -62,6 +62,13 @@ public enum RealtimeChannelStatus: Sendable {
 
   /// ``RealtimeChannel/subscribe()`` stopped because a retry cannot help. Call it again to
   /// start over.
+  ///
+  /// The server can also shut the channel down: the error then has kind
+  /// ``RealtimeError/Kind-swift.struct/channelClosed`` and the server's reason as its message.
+  /// That status is the last one ``RealtimeChannel/statusChanges()`` emits before it ends. The
+  /// channel is then spent: ``RealtimeChannel/status`` reads ``unsubscribed``, and
+  /// `subscribe()` throws ``RealtimeError/Kind-swift.struct/channelRemoved``. Get a new channel
+  /// from ``RealtimeClient/channel(_:configure:)``.
   case failed(RealtimeError)
 
   /// Whether the channel is ``subscribed``.
@@ -205,6 +212,12 @@ public enum RealtimeChannelEvent: Hashable, Sendable {
   /// The Postgres replication connection did not become ready in time. The server sends it only
   /// when you opt in with ``RealtimeChannelConfiguration/Broadcast-swift.struct/waitsForReplication``. The value is the server's
   /// message.
+  ///
+  /// The server reports it by shutting the channel down: ``RealtimeChannel/statusChanges()``
+  /// emits ``RealtimeChannelStatus/failed(_:)`` with the same message, then ends. A shutdown
+  /// for another reason, such as the project's messages-per-second limit, also emits this event
+  /// when it comes before the replication is ready, with that reason as its value. After
+  /// ``replicationReady``, a shutdown emits no event here; read its reason from that status.
   case replicationFailed(String)
 }
 

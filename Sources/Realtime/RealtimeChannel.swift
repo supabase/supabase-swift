@@ -180,7 +180,10 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// ``RealtimeClient/removeChannel(_:)``: a join in flight throws
   /// ``RealtimeError/Kind-swift.struct/channelClosedByServer``, and calling this method again on
   /// the same channel throws ``RealtimeError/Kind-swift.struct/channelRemoved``. Get a new
-  /// channel from ``RealtimeClient/channel(_:configure:)``.
+  /// channel from ``RealtimeClient/channel(_:configure:)``. When the server shuts the channel
+  /// down for a reason, such as the project's messages-per-second limit, a join in flight
+  /// throws ``RealtimeError/Kind-swift.struct/channelClosed`` with the reason, and
+  /// ``statusChanges()`` emits ``RealtimeChannelStatus/failed(_:)`` with it before it ends.
   ///
   /// There is no attempt limit. After a timeout, a lost connection, a transient join error, or
   /// a server channel error (`phx_error`), the channel joins again after 1, 2 and 5 s, then
@@ -197,7 +200,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   could not set up the channel's Postgres changes in time, or the client was released
   ///   (``RealtimeError/Kind-swift.struct/notConnected``).
   ///   ``RealtimeError/Kind-swift.struct/channelClosedByServer`` when the server closed the
-  ///   channel during the join, ``RealtimeError/Kind-swift.struct/channelRemoved`` when the
+  ///   channel during the join, ``RealtimeError/Kind-swift.struct/channelClosed`` when it shut
+  ///   the channel down for a reason, ``RealtimeError/Kind-swift.struct/channelRemoved`` when the
   ///   channel was removed or the server closed it earlier, and `CancellationError` when the
   ///   calling task is cancelled.
   public func subscribe() async throws {

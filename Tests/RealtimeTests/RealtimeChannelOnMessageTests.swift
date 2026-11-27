@@ -86,7 +86,7 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
-  func systemMessagesForReplicationEmitReadyOrFailed() async {
+  func systemErrorAfterReplicationReadyEmitsNoReplicationFailure() async {
     let events = await sut.events()
 
     await deliver(
@@ -101,12 +101,14 @@ struct RealtimeChannelOnMessageTests {
     await deliver(
       message(
         event: ChannelEvent.system,
-        payload: ["status": "error", "extension": "system", "message": "Replication not ready"]
+        payload: [
+          "status": "error", "extension": "system", "message": "Too many messages per second",
+        ]
       )
     )
 
-    #expect(
-      await collect(events) == [.replicationReady, .replicationFailed("Replication not ready")])
+    // After the ready, a `system` error announces a shutdown, not a replication failure.
+    #expect(await collect(events) == [.replicationReady])
   }
 
   @Test

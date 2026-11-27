@@ -78,7 +78,11 @@ Changes that still compile but behave differently. Check each one by hand.
 - **A removed channel is spent.** After `removeChannel(_:)`, `subscribe()`, `broadcast`,
   `track`, `untrack` and `httpSend` throw `RealtimeError` with `kind == .channelRemoved`, and a
   `subscribe()` in flight throws it too. A channel the server closes with `phx_close` is spent
-  the same way; a `subscribe()` in flight then throws `.channelClosedByServer`. `unsubscribe()`
+  the same way; a `subscribe()` in flight then throws `.channelClosedByServer`. When the server
+  shuts the channel down for a reason, such as the project's messages-per-second limit,
+  `statusChanges()` emits `.failed` with `kind == .channelClosed` and the server's reason in
+  `message` as its last status, and a waiting `subscribe()` or push throws that error. v2 went
+  to `.unsubscribed` with no reason. Once spent, `unsubscribe()`
   returns at once. `await channel.status` reads `.unsubscribed` and `await channel.presenceState`
   is empty. A new stream, including `statusChanges()` and
   `presenceStates()`, ends at once without a replay. Get a new channel from
@@ -342,7 +346,10 @@ for await event in await channel.events() where event == .postgresChangesReady {
 `events()` also emits `.resubscribed` when a channel joins again after a reconnect or to add a
 Postgres changes binding. Events sent while it was away are missed, so reload any state built
 from them. With `broadcast.waitsForReplication` on, it emits `.replicationReady` or
-`.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`.
+`.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`. That
+error announces a shutdown, so any shutdown before `.replicationReady` emits
+`.replicationFailed(_:)` with its reason. Read the reason of a later shutdown from the last
+status of `statusChanges()`, `.failed`, not from `events()`.
 
 ## Streams replace callbacks
 
@@ -423,7 +430,8 @@ still writes the frames queued before it, up to the client's `requestTimeout`. W
   `code` set when the reason starts with a code.
 - The channel left or the socket closed while waiting: `kind == .notSubscribed` or
   `.notConnected`.
-- The server closed the channel while waiting: `kind == .channelClosedByServer`.
+- The server closed the channel while waiting: `kind == .channelClosedByServer`, or
+  `.channelClosed` with the server's reason when it shut the channel down.
 
 Wrap the call in a `Task` to send without waiting. Cancelling that task stops the wait and
 throws `CancellationError`; the frame itself is not recalled.

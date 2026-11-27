@@ -60,12 +60,20 @@ public struct RealtimeError: SupabaseError {
     /// waits 30 s before it joins again. A WebSocket upgrade refused with 429 has this kind too,
     /// with ``RealtimeError/response`` set; the client then reconnects with its usual backoff.
     public static let rateLimited: Kind = "rateLimited"
-    /// The server closed the channel (`phx_close`) with a `system` error. The message carries
-    /// the server's reason.
+    /// The server shut the channel down: it sent a `system` error, then closed the channel
+    /// (`phx_close`), for example on the project's messages-per-second limit.
+    /// ``RealtimeChannel/statusChanges()`` emits ``RealtimeChannelStatus/failed(_:)`` with this
+    /// kind as its last status, and a subscribe in flight or a push that waits for a reply
+    /// throws it. ``RealtimeError/message`` is the server's reason, such as
+    /// `"Too many messages per second"`. The channel is spent, so its `status` then reads
+    /// ``RealtimeChannelStatus/unsubscribed``: get a new one from
+    /// ``RealtimeClient/channel(_:configure:)`` to subscribe again.
     public static let channelClosed: Kind = "channelClosed"
     /// A broadcast with `ack` was rejected because the payload is over the project's limit.
     public static let payloadTooLarge: Kind = "payloadTooLarge"
-    /// The server closed the channel while a subscribe was in flight.
+    /// The server closed the channel (`phx_close`) without a reason: a subscribe in flight, or a
+    /// push that waits for a reply, throws this kind. A subscribed channel becomes
+    /// ``RealtimeChannelStatus/unsubscribed``.
     public static let channelClosedByServer: Kind = "channelClosedByServer"
     /// The server reported an error on the channel (`phx_error`). The channel joins again on
     /// its own, and ``RealtimeChannelEvent/resubscribed`` follows the rejoin. Pushes that
@@ -290,9 +298,16 @@ public struct RealtimeError: SupabaseError {
 }
 
 extension RealtimeError {
-  /// The server closed the channel while a subscribe was in flight.
+  /// The server closed the channel (`phx_close`) without a reason: a subscribe in flight fails
+  /// with it, and so does a push that waits for a reply.
   public static let channelClosedByServer = RealtimeError(
-    kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
+    kind: .channelClosedByServer, message: "The server closed the channel.")
+
+  /// The server shut the channel down for `reason`: it sent a `system` error, then `phx_close`.
+  /// A `"<Code>: <message>"` reason sets ``code``.
+  static func channelClosed(reason: String) -> RealtimeError {
+    RealtimeError(kind: .channelClosed, message: reason, code: Code.parse(reason))
+  }
 
   /// The server reported an error on the channel (`phx_error`).
   static let channelError = RealtimeError(

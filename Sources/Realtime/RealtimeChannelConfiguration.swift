@@ -74,7 +74,8 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     ///
     /// Listen for it with ``RealtimeChannel/events()``: it emits
     /// ``RealtimeChannelEvent/replicationReady``, or ``RealtimeChannelEvent/replicationFailed(_:)``
-    /// when the connection is not ready in time. Defaults to `false`.
+    /// when the connection is not ready in time or the server shuts the channel down first.
+    /// Defaults to `false`.
     public var waitsForReplication = false
 
     /// Creates broadcast options with every option off.

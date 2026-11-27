@@ -89,6 +89,8 @@ extension RealtimeCore {
     record.hasTrackedSinceJoin = false
     record.pendingTracks = []
     record.sentAccessToken = tokens.token
+    record.awaitsReplication = config.broadcast.replicationReady
+    record.shutdownError = nil
     // A new join waits for its own first presence state.
     record.presence.waitForNextState()
     channels.setRecord(record, for: channel)
@@ -232,10 +234,16 @@ extension RealtimeCore {
   }
 
   /// Applies a `system` message: the server's report on the join's Postgres changes or on
-  /// replication. An `ok` confirms a join whose reply has not come yet. An error leaves the
-  /// channel as it is: the server may set up the Postgres changes on a later try. The message
-  /// goes to the channel its `join_ref` names, or to the live channel of its topic when it has
-  /// none.
+  /// replication. An `ok` confirms a join whose reply has not come yet. A Postgres changes error
+  /// leaves the channel as it is: the server may set up the Postgres changes on a later try.
+  ///
+  /// The server sends a `system` extension error right before it stops the channel, for example
+  /// on the tenant's events-per-second limit (`shutdown_response/2` in Realtime's
+  /// `realtime_channel.ex`). The channel keeps the reason for the `phx_close` that follows. It is
+  /// a replication failure only while a join that asked for the replication report waits for it.
+  ///
+  /// The message goes to the channel its `join_ref` names, or to the live channel of its topic
+  /// when it has none.
   mutating func receiveSystem(_ message: RealtimeMessage) -> [Effect] {
     guard let channel = routedChannel(message, joinRef: message.joinRef),
       let record = channels[channel]
@@ -244,9 +252,14 @@ extension RealtimeCore {
     let isPostgresChanges = `extension` == ChannelEvent.postgresChanges
     let isReplication = `extension` == ChannelEvent.system
     let isForCurrentJoin = message.joinRef == nil || message.joinRef == record.currentJoinRef
+    let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
 
     switch message.status {
     case .ok where isForCurrentJoin:
+      // Before the confirmation: it may start a join for new bindings, which waits anew.
+      if isReplication {
+        channels.update(channel) { $0.awaitsReplication = false }
+      }
       var effects = confirmJoinBySystem(channel)
       if isPostgresChanges {
         effects.append(.deliver(channel, .event(.postgresChangesReady)))
@@ -255,16 +268,20 @@ extension RealtimeCore {
       }
       return effects
 
-    case .error:
+    case .error where isPostgresChanges:
       // The join stands, so broadcast and presence keep working.
-      let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
       logger.error("Channel '\(topic(of: channel))' reported an error")
-      if isPostgresChanges {
-        return [.deliver(channel, .event(.postgresChangesFailed(reason)))]
-      } else if isReplication {
-        return [.deliver(channel, .event(.replicationFailed(reason)))]
+      return [.deliver(channel, .event(.postgresChangesFailed(reason)))]
+
+    case .error where isReplication && isForCurrentJoin && record.currentJoinRef != nil:
+      // A message without `join_ref` counts only while the channel has a join.
+      logger.error("Server is shutting down channel '\(topic(of: channel))'")
+      channels.update(channel) {
+        $0.shutdownError = .channelClosed(reason: reason)
+        $0.awaitsReplication = false
       }
-      return []
+      return record.awaitsReplication
+        ? [.deliver(channel, .event(.replicationFailed(reason)))] : []
 
     default:
       return []
