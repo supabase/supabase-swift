@@ -1,5 +1,5 @@
 {
-  "originHash" : "449373ef94d9ad3fe2c3f74148eea3e13e1c8d1d03785c1001ff19c154939736",
+  "originHash" : "c77e90708ecaff048d94ddd7f594a15dbc10daf0ccd03312b61aff151b831c0e",
   "pins" : [
     {
       "identity" : "swift-asn1",
@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/21-DOT-DEV/swift-secp256k1.git",
       "state" : {
-        "revision" : "e70a10e036a55fffea31568f0af92d69b6d449cd",
-        "version" : "0.23.2"
+        "revision" : "ba04e9db3567bf345af7334b8e9be5727a73cc42",
+        "version" : "0.25.1"
       }
     },
     {
